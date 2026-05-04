@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useDraggable } from '@dnd-kit/core';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { usePlaytestStore } from '@/store/playtestStore';
 import { getCardImageUrl, getFrontFaceTypeLine } from '@/services/scryfall/client';
 import { PlaytestCardMenu, type CardMenuTarget } from '@/components/playtest/PlaytestCardMenu';
@@ -15,6 +15,11 @@ export function Hand() {
 
   const display = sortedHand(hand, sort);
 
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: 'hand',
+    data: { kind: 'pile', zone: 'hand' },
+  });
+
   const playToBattlefield = (handIndex: number) => {
     moveCard({
       source: { kind: 'zone', zone: 'hand', index: handIndex },
@@ -23,7 +28,10 @@ export function Hand() {
   };
 
   return (
-    <div className="border-t border-border/50 bg-card/30 px-4 py-3 flex flex-col">
+    <div
+      ref={setDropRef}
+      className={`border-t border-border/50 bg-card/30 px-4 py-3 flex flex-col transition-shadow ${isOver ? 'ring-2 ring-primary/50 ring-inset' : ''}`}
+    >
       <div className="flex items-center justify-between mb-2 text-[10px] uppercase opacity-60">
         <span>Hand · {hand.length}</span>
         <select
