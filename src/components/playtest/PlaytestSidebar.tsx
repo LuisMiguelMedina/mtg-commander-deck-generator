@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Plus, Minus, Sparkles, BookOpen, Trash2, Crown } from 'lucide-react';
+import { Sparkles, BookOpen, Trash2, Crown } from 'lucide-react';
 import { useDroppable, useDraggable } from '@dnd-kit/core';
-import { Button } from '@/components/ui/button';
 import { usePlaytestStore } from '@/store/playtestStore';
 import { getCardImageUrl } from '@/services/scryfall/client';
 import type { ZoneKey } from '@/components/playtest/types';
@@ -22,46 +21,10 @@ const PILES: PileSpec[] = [
 ];
 
 export function PlaytestSidebar() {
-  const life = usePlaytestStore(s => s.life);
-  const adjustLife = usePlaytestStore(s => s.adjustLife);
-  const setLife = usePlaytestStore(s => s.setLife);
-
   return (
     <aside className="w-36 border-r border-border/50 p-3 flex flex-col gap-3 overflow-y-auto bg-card/30">
-      <LifePanel life={life} onAdjust={adjustLife} onSet={setLife} />
       {PILES.map(p => <Pile key={p.zone} spec={p} />)}
     </aside>
-  );
-}
-
-function LifePanel({ life, onAdjust, onSet }: { life: number; onAdjust: (d: number) => void; onSet: (n: number) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(String(life));
-  return (
-    <div className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 p-2 text-center">
-      <div className="text-[9px] uppercase opacity-60 tracking-wide">Life</div>
-      {editing ? (
-        <input
-          autoFocus
-          type="number"
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-          onBlur={() => { setEditing(false); const n = parseInt(draft, 10); if (!isNaN(n)) onSet(n); }}
-          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-          className="w-full text-2xl font-bold bg-transparent text-center outline-none"
-        />
-      ) : (
-        <button className="block w-full text-2xl font-bold" onClick={() => { setDraft(String(life)); setEditing(true); }}>
-          {life}
-        </button>
-      )}
-      <div className="grid grid-cols-2 gap-1 mt-1">
-        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => onAdjust(-1)}><Minus className="w-3 h-3" />1</Button>
-        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => onAdjust(1)}><Plus className="w-3 h-3" />1</Button>
-        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => onAdjust(-5)}><Minus className="w-3 h-3" />5</Button>
-        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => onAdjust(5)}><Plus className="w-3 h-3" />5</Button>
-      </div>
-    </div>
   );
 }
 

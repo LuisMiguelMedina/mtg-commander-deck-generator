@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Hand as HandIcon, Shuffle, RotateCcw, Search, Eye, Sparkles, Plus, Undo2, RefreshCw, X } from 'lucide-react';
+import { Hand as HandIcon, Heart, Shuffle, RotateCcw, Search, Eye, Sparkles, Plus, Undo2, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { usePlaytestStore } from '@/store/playtestStore';
@@ -18,8 +18,15 @@ export function PlaytestToolbar({ onExit }: { onExit: () => void }) {
   const reset = usePlaytestStore(s => s.reset);
   const openModal = usePlaytestStore(s => s.openModal);
   const historyLen = usePlaytestStore(s => s.history.length);
+  const life = usePlaytestStore(s => s.life);
+  const adjustLife = usePlaytestStore(s => s.adjustLife);
+  const setLife = usePlaytestStore(s => s.setLife);
 
   const [scryN, setScryN] = useState(1);
+  const [editingLife, setEditingLife] = useState(false);
+  const [draftLife, setDraftLife] = useState(String(life));
+
+  const tinyBtn = 'px-1.5 py-0.5 rounded bg-accent/40 hover:bg-accent text-[10px] font-medium';
 
   return (
     <div className="border-b border-border/50 bg-card/50 backdrop-blur px-4 py-2 flex items-center gap-2 text-sm flex-wrap">
@@ -35,6 +42,34 @@ export function PlaytestToolbar({ onExit }: { onExit: () => void }) {
         {PHASE_LABELS[phase]}
       </button>
       <span className="text-xs opacity-60">Turn {turn}</span>
+
+      {/* Life cluster */}
+      <div className="flex items-center gap-0.5 ml-2">
+        <button onClick={() => adjustLife(-5)} className={tinyBtn} title="-5 life">−5</button>
+        <button onClick={() => adjustLife(-1)} className={tinyBtn} title="-1 life">−1</button>
+        {editingLife ? (
+          <input
+            autoFocus
+            type="number"
+            value={draftLife}
+            onChange={e => setDraftLife(e.target.value)}
+            onBlur={() => { setEditingLife(false); const n = parseInt(draftLife, 10); if (!isNaN(n)) setLife(n); }}
+            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+            className="w-14 mx-1 bg-emerald-500/15 border border-emerald-400/40 rounded px-1.5 py-0.5 text-emerald-300 font-bold text-center text-sm outline-none"
+          />
+        ) : (
+          <button
+            onClick={() => { setDraftLife(String(life)); setEditingLife(true); }}
+            className="mx-1 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-bold text-sm min-w-[48px] justify-center"
+            title="Click to edit life"
+          >
+            <Heart className="w-3 h-3 fill-emerald-400/40" />
+            {life}
+          </button>
+        )}
+        <button onClick={() => adjustLife(1)} className={tinyBtn} title="+1 life">+1</button>
+        <button onClick={() => adjustLife(5)} className={tinyBtn} title="+5 life">+5</button>
+      </div>
 
       <div className="ml-auto flex items-center gap-1.5 flex-wrap justify-end">
         <Button variant="outline" size="sm" onClick={() => draw(1)}><Plus className="w-3.5 h-3.5 mr-1" />Draw</Button>
