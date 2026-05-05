@@ -97,11 +97,14 @@ export function PlaytestPage({ kind }: { kind: 'list' | 'generated' }) {
       const x = (active.rect.current.translated?.left ?? 0) - (rect?.left ?? 0);
       const y = (active.rect.current.translated?.top  ?? 0) - (rect?.top  ?? 0);
       if (source.kind === 'battlefield') {
-        // Reposition existing battlefield card — bypass moveCard (no zone change)
+        // Reposition existing battlefield card — bypass moveCard (no zone change).
+        // Move the card to the END of the array so later DOM order paints it
+        // on top of the other battlefield cards.
         const state = usePlaytestStore.getState();
-        const updated = state.battlefield.map(b =>
-          b.instanceId === source.instanceId ? { ...b, x, y } : b
-        );
+        const target = state.battlefield.find(b => b.instanceId === source.instanceId);
+        if (!target) return;
+        const others = state.battlefield.filter(b => b.instanceId !== source.instanceId);
+        const updated = [...others, { ...target, x, y }];
         usePlaytestStore.setState({
           history: [...state.history, {
             zones: state.zones,
