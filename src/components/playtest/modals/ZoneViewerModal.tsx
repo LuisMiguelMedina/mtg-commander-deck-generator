@@ -36,8 +36,8 @@ export function ZoneViewerModal() {
           {cards.map((card, i) => (
             <Popover key={`${card.id}-${i}`}>
               <PopoverTrigger asChild>
-                <button className="rounded hover:ring-2 hover:ring-primary transition-all">
-                  <img src={getCardImageUrl(card, 'small')} alt={card.name} className="w-full rounded shadow" />
+                <button className="rounded-sm hover:ring-2 hover:ring-primary transition-all">
+                  <img src={getCardImageUrl(card, 'small')} alt={card.name} className="w-full rounded-sm shadow" />
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-44 p-1">

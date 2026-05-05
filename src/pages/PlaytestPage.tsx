@@ -54,6 +54,7 @@ export function PlaytestPage({ kind }: { kind: 'list' | 'generated' }) {
 
   const [activeCard, setActiveCard] = useState<ScryfallCard | null>(null);
   const [activeFaceDown, setActiveFaceDown] = useState(false);
+  const [activeTapped, setActiveTapped] = useState(false);
 
   function onDragStart(event: DragStartEvent) {
     const data = event.active.data.current as { source?: MoveSource } | undefined;
@@ -62,6 +63,7 @@ export function PlaytestPage({ kind }: { kind: 'list' | 'generated' }) {
     const state = usePlaytestStore.getState();
     let card: ScryfallCard | undefined;
     let faceDown = false;
+    let tapped = false;
     if (source.kind === 'zone') {
       card = state.zones[source.zone][source.index];
       if (source.zone === 'library') faceDown = true;
@@ -69,16 +71,19 @@ export function PlaytestPage({ kind }: { kind: 'list' | 'generated' }) {
       const bf = state.battlefield.find(b => b.instanceId === source.instanceId);
       card = bf?.card;
       faceDown = bf?.faceDown ?? false;
+      tapped = bf?.tapped ?? false;
     }
     if (card) {
       setActiveCard(card);
       setActiveFaceDown(faceDown);
+      setActiveTapped(tapped);
     }
   }
 
   function onDragEnd(event: DragEndEvent) {
     setActiveCard(null);
     setActiveFaceDown(false);
+    setActiveTapped(false);
     const { active, over } = event;
     if (!over) return;
     const sourceData = active.data.current as { source?: MoveSource } | undefined;
@@ -143,7 +148,7 @@ export function PlaytestPage({ kind }: { kind: 'list' | 'generated' }) {
   if (!ready) return null;
 
   return (
-    <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => { setActiveCard(null); setActiveFaceDown(false); }}>
+    <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => { setActiveCard(null); setActiveFaceDown(false); setActiveTapped(false); }}>
       <div className="h-screen w-screen flex flex-col bg-background overflow-hidden">
         <PlaytestToolbar onExit={() => navigate(-1)} />
         <div className="flex-1 flex min-h-0">
@@ -160,13 +165,19 @@ export function PlaytestPage({ kind }: { kind: 'list' | 'generated' }) {
         {modal?.kind === 'zoneViewer' && <ZoneViewerModal />}
         {modal?.kind === 'tokens' && <TokenSpawnModal />}
       </div>
-      <DragOverlay dropAnimation={null}>
+      <DragOverlay dropAnimation={null} zIndex={9999}>
         {activeCard ? (
           <img
             src={activeFaceDown ? `${import.meta.env.BASE_URL}card-back.png` : getCardImageUrl(activeCard, 'normal')}
             alt={activeCard.name}
-            className="rounded-md shadow-2xl ring-2 ring-primary/40"
-            style={{ width: 110, cursor: 'grabbing' }}
+            className="rounded-sm shadow-2xl ring-2 ring-primary/40"
+            style={{
+              width: 110,
+              cursor: 'grabbing',
+              transform: activeTapped ? 'rotate(90deg)' : undefined,
+              transformOrigin: 'center',
+              filter: 'drop-shadow(0 12px 24px rgba(0,0,0,0.5))',
+            }}
             draggable={false}
           />
         ) : null}
