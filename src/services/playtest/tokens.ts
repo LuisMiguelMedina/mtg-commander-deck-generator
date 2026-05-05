@@ -1,36 +1,30 @@
 import type { ScryfallCard } from '@/types';
-
-const SCRYFALL_BASE = 'https://api.scryfall.com';
-const tokenCache = new Map<string, ScryfallCard[]>();
+import { searchCards } from '@/services/scryfall/client';
 
 /**
- * Resolves a list of Scryfall token cards filterable for the deck's color identity.
+ * Resolves a list of Scryfall token cards filtered for the deck's color identity.
  * Returns up to ~60 of the most popular tokens within the color identity.
  *
  * `colorIdentity` is a string like 'WUB' (subset of WUBRG). Empty string means colorless.
+ *
+ * Routes through the shared scryfall client so it inherits rate limiting,
+ * the search-result cache, and any future request middleware.
  */
 export async function resolveTokens(colorIdentity: string): Promise<ScryfallCard[]> {
-  const key = colorIdentity.toLowerCase().split('').sort().join('') || 'c';
-  if (tokenCache.has(key)) return tokenCache.get(key)!;
-
-  const colorPart = colorIdentity ? `id<=${colorIdentity.toLowerCase()}` : 'id:c';
-  const query = `is:token ${colorPart}`;
-  const url = `${SCRYFALL_BASE}/cards/search?q=${encodeURIComponent(query)}&unique=cards&order=edhrec`;
-
+  const ci = colorIdentity ? colorIdentity.toUpperCase().split('') : [];
+  // Tokens are not commander-legal, so skip the f:commander filter.
+  // For colorless decks, embed id:c directly since searchCards drops the
+  // color filter when the array is empty.
+  const query = ci.length === 0 ? 'is:token id:c' : 'is:token';
   try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      tokenCache.set(key, []);
-      return [];
-    }
-    const data = await res.json();
-    const cards: ScryfallCard[] = (data.data ?? [])
+    const response = await searchCards(query, ci, {
+      order: 'edhrec',
+      skipFormatFilter: true,
+    });
+    return (response.data ?? [])
       .filter((c: ScryfallCard & { set_type?: string }) => c.set_type === 'token')
       .slice(0, 60);
-    tokenCache.set(key, cards);
-    return cards;
   } catch {
-    tokenCache.set(key, []);
     return [];
   }
 }
