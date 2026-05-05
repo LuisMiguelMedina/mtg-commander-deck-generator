@@ -302,6 +302,20 @@
     to { opacity: 0; }
   }
 
+  .animate-jiggle {
+    animation: jiggle 450ms ease-in-out;
+  }
+
+  @keyframes jiggle {
+    0%   { transform: translate(0, 0) rotate(0deg); }
+    15%  { transform: translate(-2px, -1px) rotate(-3deg); }
+    30%  { transform: translate(2px, 1px) rotate(3deg); }
+    45%  { transform: translate(-2px, 0) rotate(-2deg); }
+    60%  { transform: translate(2px, -1px) rotate(2deg); }
+    75%  { transform: translate(-1px, 1px) rotate(-1deg); }
+    100% { transform: translate(0, 0) rotate(0deg); }
+  }
+
   .animate-slide-in-right {
     animation: slideInRight 0.25s ease-out;
   }

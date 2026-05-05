@@ -38,6 +38,8 @@ interface PlaytestState {
   battlefieldRect: { width: number; height: number };     // updated by Battlefield component on mount/resize
   // Mulligan state machine
   mulliganCount: number;
+  // Increments any time the library is shuffled — UI hooks observe this for animations
+  shuffleTick: number;
 }
 
 interface PlaytestActions {
@@ -100,6 +102,7 @@ const initial: PlaytestState = {
   hovered: null,
   battlefieldRect: { width: 0, height: 0 },
   mulliganCount: 0,
+  shuffleTick: 0,
 };
 
 function snapshotOf(s: PlaytestState): PlaytestSnapshot {
@@ -217,6 +220,7 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     return {
       history,
       zones: { ...state.zones, library: fisherYates(state.zones.library) },
+      shuffleTick: state.shuffleTick + 1,
       log: [...state.log, makeLogEntry('Shuffled library')],
     };
   }),
@@ -231,6 +235,7 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     return {
       mulliganCount: newCount,
       zones: { ...state.zones, hand: draw, library: rest },
+      shuffleTick: state.shuffleTick + 1,
       modal: { kind: 'mulligan', mulliganCount: newCount },
       log: [...state.log, makeLogEntry(`Mulligan to ${Math.max(0, 7 - newCount)} (drew 7)`)],
     };
@@ -565,6 +570,7 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     return {
       history,
       zones: { ...state.zones, library: shuffled, hand: [...state.zones.hand, card] },
+      shuffleTick: state.shuffleTick + 1,
       log: [...state.log, makeLogEntry(`Searched library: took ${card.name} (and shuffled)`)],
       modal: null,
     };

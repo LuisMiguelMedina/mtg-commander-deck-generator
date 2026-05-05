@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Minus, Sparkles, BookOpen, Trash2, Crown } from 'lucide-react';
 import { useDroppable, useDraggable } from '@dnd-kit/core';
 import { Button } from '@/components/ui/button';
@@ -69,6 +69,14 @@ function Pile({ spec }: { spec: PileSpec }) {
   const cards = usePlaytestStore(s => s.zones[spec.zone]);
   const openModal = usePlaytestStore(s => s.openModal);
   const moveCard = usePlaytestStore(s => s.moveCard);
+  const shuffleTick = usePlaytestStore(s => s.shuffleTick);
+  const [jiggle, setJiggle] = useState(false);
+  useEffect(() => {
+    if (spec.zone !== 'library' || shuffleTick === 0) return;
+    setJiggle(true);
+    const t = setTimeout(() => setJiggle(false), 500);
+    return () => clearTimeout(t);
+  }, [shuffleTick, spec.zone]);
   const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: `pile:${spec.zone}`,
     data: { kind: 'pile', zone: spec.zone },
@@ -110,7 +118,7 @@ function Pile({ spec }: { spec: PileSpec }) {
             ref={drag.setNodeRef}
             {...drag.attributes}
             {...drag.listeners}
-            className={`absolute inset-0 cursor-grab ${drag.isDragging ? 'opacity-0' : ''}`}
+            className={`absolute inset-0 cursor-grab ${drag.isDragging ? 'opacity-0' : ''} ${jiggle ? 'animate-jiggle' : ''}`}
           >
             <img
               src={spec.faceUp ? getCardImageUrl(top, 'small') : `${import.meta.env.BASE_URL}card-back.png`}
