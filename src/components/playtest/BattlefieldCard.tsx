@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import type { DraggableAttributes } from '@dnd-kit/core';
 import { usePlaytestStore } from '@/store/playtestStore';
 import { usePlaytestSettings } from '@/store/playtestSettingsStore';
 import { getCardImageUrl } from '@/services/scryfall/client';
 import { PlaytestCardMenu, type CardMenuTarget } from '@/components/playtest/PlaytestCardMenu';
+import { MagnifiedPreview } from '@/components/playtest/MagnifiedPreview';
+import { useMagnifyKey } from '@/hooks/useMagnifyKey';
 import type { BattlefieldCard as BfCard } from '@/components/playtest/types';
 
 const COUNTER_COLOR: Record<string, string> = {
@@ -81,6 +83,15 @@ interface PositionedProps {
 const PositionedCard = React.forwardRef<HTMLDivElement, PositionedProps>(function PositionedCard(props, ref) {
   const { card, xPx, yPx, transform, isDragging, attributes, listeners, onTap, onAdjust, onHover, onContextMenu } = props;
   const cardWidth = 100;
+  const localRef = useRef<HTMLDivElement | null>(null);
+  const setRefs = (node: HTMLDivElement | null) => {
+    localRef.current = node;
+    if (typeof ref === 'function') ref(node);
+    else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+  };
+  const [hovered, setHoveredLocal] = useState(false);
+  const magnify = useMagnifyKey();
+  const showPreview = magnify && hovered && !isDragging;
   const allCounterEntries = Object.entries(card.counters).filter(([, v]) => v > 0);
   const loyaltyValue = card.counters['loyalty'] ?? 0;
   const counterEntries = allCounterEntries.filter(([type]) => type !== 'loyalty');
@@ -105,13 +116,13 @@ const PositionedCard = React.forwardRef<HTMLDivElement, PositionedProps>(functio
 
   return (
     <div
-      ref={ref}
+      ref={setRefs}
       {...attributes}
       {...(listeners as Record<string, unknown>)}
       onClick={(e) => { e.stopPropagation(); onTap(); }}
       onContextMenu={onContextMenu}
-      onMouseEnter={() => onHover(true)}
-      onMouseLeave={() => onHover(false)}
+      onMouseEnter={() => { onHover(true); setHoveredLocal(true); }}
+      onMouseLeave={() => { onHover(false); setHoveredLocal(false); }}
       className={`absolute select-none touch-none ${isDragging ? 'opacity-0 z-50' : 'z-10'}`}
       style={{
         left: xPx,
@@ -179,6 +190,7 @@ const PositionedCard = React.forwardRef<HTMLDivElement, PositionedProps>(functio
           </div>
         )}
       </div>
+      {showPreview && <MagnifiedPreview card={card.card} anchorRef={localRef} faceDown={card.faceDown} />}
     </div>
   );
 });

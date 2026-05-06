@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { usePlaytestStore } from '@/store/playtestStore';
 import { usePlaytestSettings } from '@/store/playtestSettingsStore';
 import { getCardImageUrl, getFrontFaceTypeLine } from '@/services/scryfall/client';
 import { PlaytestCardMenu, type CardMenuTarget } from '@/components/playtest/PlaytestCardMenu';
+import { MagnifiedPreview } from '@/components/playtest/MagnifiedPreview';
+import { useMagnifyKey } from '@/hooks/useMagnifyKey';
 import type { ScryfallCard } from '@/types';
 
 type SortMode = 'none' | 'cmc' | 'type';
@@ -94,10 +96,15 @@ function HandCard({ card, indexInHand, fanIndex, total, onClickPlay, onContextMe
     id: `hand-slot:${indexInHand}`,
     data: { kind: 'hand-slot', index: indexInHand },
   });
+  const localRef = useRef<HTMLDivElement | null>(null);
   const composedRef = (node: HTMLDivElement | null) => {
     setDragRef(node);
     setDropRef(node);
+    localRef.current = node;
   };
+  const [hovered, setHovered] = useState(false);
+  const magnify = useMagnifyKey();
+  const showPreview = magnify && hovered && !isDragging;
 
   // Arrival grow: cards mount slightly smaller and transition up to full size
   // when they enter the hand (draw / return-to-hand / mulligan).
@@ -129,6 +136,8 @@ function HandCard({ card, indexInHand, fanIndex, total, onClickPlay, onContextMe
       {...listeners}
       onClick={onClickPlay}
       onContextMenu={onContextMenu}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       title={`Click to play ${card.name} · right-click for more options`}
       className={`relative shrink-0 rounded-[5px] select-none touch-none transition-transform ${
         isDragging ? '' : 'hover:-translate-y-2 hover:z-20'
@@ -142,6 +151,7 @@ function HandCard({ card, indexInHand, fanIndex, total, onClickPlay, onContextMe
         loading="lazy"
         draggable={false}
       />
+      {showPreview && <MagnifiedPreview card={card} anchorRef={localRef} />}
     </div>
   );
 }
