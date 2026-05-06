@@ -159,13 +159,13 @@ export function ZoneViewerModal() {
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-3">
+      <div className="flex-1 overflow-y-auto px-5 py-4">
         {filtered.length === 0 ? (
           <div className="text-sm text-muted-foreground italic text-center py-10">
             {cards.length === 0 ? `${ZONE_LABEL[zone]} is empty. Drag cards here to add them.` : 'No cards match the filter.'}
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(92px,1fr))] gap-2">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(92px,1fr))] gap-2.5">
             {filtered.map(({ card, originalIndex }) => (
               <ViewerCard
                 key={`${card.id}-${originalIndex}`}
