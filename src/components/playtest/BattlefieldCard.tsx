@@ -120,7 +120,7 @@ const PositionedCard = React.forwardRef<HTMLDivElement, PositionedProps>(functio
     >
       <div
         className="relative w-full"
-        style={{ transform: innerTransform, transformOrigin: 'center', transition: 'transform 220ms ease-out' }}
+        style={{ transform: innerTransform, transformOrigin: 'center', transition: 'transform 120ms ease-out' }}
       >
         <img
           src={card.faceDown ? `${import.meta.env.BASE_URL}card-back.png` : getCardImageUrl(card.card, 'normal')}

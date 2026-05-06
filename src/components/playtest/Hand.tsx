@@ -113,7 +113,7 @@ function HandCard({ card, indexInHand, fanIndex, total, onClickPlay, onContextMe
     marginLeft: fanIndex === 0 ? 0 : `-${overlap}px`,
     transform: dragTransform ?? arriveScale,
     zIndex: isDragging ? 50 : fanIndex,
-    transition: isDragging ? 'none' : 'transform 220ms ease-out',
+    transition: isDragging ? 'none' : 'transform 120ms ease-out',
     width: 'clamp(80px, 11vw, 130px)',
     cursor: isDragging ? 'grabbing' : 'pointer',
     opacity: isDragging ? 0 : 1,
