@@ -12,14 +12,8 @@ function ensureInit() {
     pressed = v;
     listeners.forEach(l => l(v));
   };
-  window.addEventListener('keydown', e => {
-    if (e.code !== 'Space' || e.repeat) return;
-    const t = e.target as HTMLElement | null;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-    e.preventDefault();
-    set(true);
-  });
-  window.addEventListener('keyup', e => { if (e.code === 'Space') set(false); });
+  window.addEventListener('keydown', e => { if (e.key === 'Control') set(true); });
+  window.addEventListener('keyup', e => { if (e.key === 'Control') set(false); });
   window.addEventListener('blur', () => set(false));
 }
 

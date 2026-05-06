@@ -72,7 +72,7 @@ export function ZoneViewerModal() {
   const dialogZone: Exclude<ZoneKey, 'hand'> = modal && modal.kind === 'zoneViewer' ? modal.zone : 'graveyard';
   const droppable = useDroppable({
     id: `zone-viewer:${dialogZone}`,
-    data: { kind: 'pile', zone: dialogZone },
+    data: { kind: 'pile', zone: dialogZone, floating: true },
   });
 
   useEffect(() => {

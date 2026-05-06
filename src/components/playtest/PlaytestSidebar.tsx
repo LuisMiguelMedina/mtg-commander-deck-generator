@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Sparkles, BookOpen, Trash2, Crown } from 'lucide-react';
 import { useDroppable, useDraggable } from '@dnd-kit/core';
 import { usePlaytestStore } from '@/store/playtestStore';
 import { getCardImageUrl } from '@/services/scryfall/client';
+import { MagnifiedPreview } from '@/components/playtest/MagnifiedPreview';
+import { useMagnifyKey } from '@/hooks/useMagnifyKey';
 import type { ZoneKey } from '@/components/playtest/types';
 
 interface PileSpec {
@@ -52,6 +54,10 @@ function Pile({ spec }: { spec: PileSpec }) {
   });
   const top = cards[0];
   const Icon = spec.Icon;
+  const imgRef = useRef<HTMLDivElement | null>(null);
+  const [hovered, setHovered] = useState(false);
+  const magnify = useMagnifyKey();
+  const showPreview = magnify && hovered && spec.faceUp && top && !drag.isDragging;
 
   const onClickPile = () => {
     if (cards.length === 0) return;
@@ -88,7 +94,12 @@ function Pile({ spec }: { spec: PileSpec }) {
       title={titleText}
       className={`relative rounded-lg border ${spec.bgClass} p-2 text-center transition-all select-none ${interactive ? 'hover:brightness-125 cursor-pointer' : 'opacity-60'} ${isOver ? 'ring-2 ring-primary' : ''}`}
     >
-      <div className="aspect-[5/7] w-full rounded-[5px] overflow-hidden bg-black/20 flex items-center justify-center relative">
+      <div
+        ref={imgRef}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        className="aspect-[5/7] w-full rounded-[5px] overflow-hidden bg-black/20 flex items-center justify-center relative"
+      >
         {cards.length > 0 ? (
           <div
             ref={drag.setNodeRef}
@@ -107,6 +118,7 @@ function Pile({ spec }: { spec: PileSpec }) {
           <Icon className="w-6 h-6 opacity-60" />
         )}
       </div>
+      {showPreview && top && <MagnifiedPreview card={top} anchorRef={imgRef} />}
       <div className="mt-1 text-[10px] flex items-center justify-between">
         <span>{spec.label}</span>
         <span className="font-bold">{cards.length}</span>

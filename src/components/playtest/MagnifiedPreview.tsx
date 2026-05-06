@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { getCardImageUrl } from '@/services/scryfall/client';
 import type { ScryfallCard } from '@/types';
@@ -16,6 +16,11 @@ const VIEWPORT_PAD = 8;
 
 export function MagnifiedPreview({ card, anchorRef, faceDown }: Props) {
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   useLayoutEffect(() => {
     const compute = () => {
@@ -48,7 +53,15 @@ export function MagnifiedPreview({ card, anchorRef, faceDown }: Props) {
   return createPortal(
     <div
       className="fixed z-[200] pointer-events-none"
-      style={{ left: pos.left, top: pos.top, width: PREVIEW_WIDTH }}
+      style={{
+        left: pos.left,
+        top: pos.top,
+        width: PREVIEW_WIDTH,
+        opacity: shown ? 1 : 0,
+        transform: shown ? 'scale(1)' : 'scale(0.92)',
+        transformOrigin: 'center',
+        transition: 'opacity 100ms ease-out, transform 100ms ease-out',
+      }}
     >
       <img
         src={src}

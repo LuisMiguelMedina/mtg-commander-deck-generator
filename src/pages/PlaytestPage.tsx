@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { DndContext, DragOverlay, PointerSensor, KeyboardSensor, TouchSensor, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
+import { DndContext, DragOverlay, PointerSensor, KeyboardSensor, TouchSensor, useSensor, useSensors, pointerWithin, rectIntersection, type CollisionDetection, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
 import { useStore } from '@/store';
 import { useUserLists } from '@/hooks/useUserLists';
 import { usePlaytestStore } from '@/store/playtestStore';
@@ -51,6 +51,20 @@ export function PlaytestPage({ kind }: { kind: 'list' | 'generated' }) {
     useSensor(TouchSensor,   { activationConstraint: { delay: 120, tolerance: 5 } }),
     useSensor(KeyboardSensor),
   );
+
+  // Custom collision detection: when the pointer is over multiple droppables,
+  // prefer ones marked `floating: true` (e.g. the zone viewer popup) so they
+  // visually-on-top droppables also win the drop logically.
+  const collisionDetection: CollisionDetection = (args) => {
+    const pointerHits = pointerWithin(args);
+    const floating = pointerHits.filter((c) => {
+      const d = args.droppableContainers.find((x) => x.id === c.id);
+      return d?.data.current?.floating === true;
+    });
+    if (floating.length > 0) return floating;
+    if (pointerHits.length > 0) return pointerHits;
+    return rectIntersection(args);
+  };
 
   const [activeCard, setActiveCard] = useState<ScryfallCard | null>(null);
   const [activeFaceDown, setActiveFaceDown] = useState(false);
@@ -151,7 +165,7 @@ export function PlaytestPage({ kind }: { kind: 'list' | 'generated' }) {
   if (!ready) return null;
 
   return (
-    <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => { setActiveCard(null); setActiveFaceDown(false); setActiveTapped(false); }}>
+    <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => { setActiveCard(null); setActiveFaceDown(false); setActiveTapped(false); }}>
       <div className="h-screen w-screen flex flex-col bg-background overflow-hidden">
         <PlaytestToolbar onExit={() => navigate(-1)} />
         <div className="flex-1 flex min-h-0">
