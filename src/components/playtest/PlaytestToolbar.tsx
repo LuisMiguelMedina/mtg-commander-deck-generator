@@ -73,10 +73,6 @@ export function PlaytestToolbar({ onExit }: { onExit: () => void }) {
         <button onClick={() => adjustLife(5)} className={tinyBtn} title="+5 life">+5</button>
       </div>
 
-      <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)} title="Playtest settings" className="ml-1">
-        <SettingsIcon className="w-4 h-4" />
-      </Button>
-
       <span
         className="hidden lg:inline-flex items-center gap-1 text-[10px] text-muted-foreground/70 ml-2 select-none"
         title="Hold Ctrl while hovering a card for a larger preview"
@@ -108,6 +104,9 @@ export function PlaytestToolbar({ onExit }: { onExit: () => void }) {
         <Button variant="outline" size="sm" onClick={() => openModal({ kind: 'tokens' })}><Sparkles className="w-3.5 h-3.5 mr-1" />Tokens</Button>
         <Button variant="ghost" size="sm" disabled={historyLen === 0} onClick={undo}><Undo2 className="w-3.5 h-3.5 mr-1" />Undo</Button>
         <Button variant="ghost" size="sm" onClick={reset}><RefreshCw className="w-3.5 h-3.5 mr-1" />Reset</Button>
+        <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)} title="Playtest settings">
+          <SettingsIcon className="w-4 h-4" />
+        </Button>
       </div>
       <PlaytestSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
