@@ -435,6 +435,16 @@ export const usePlaytestStore = create<Store>((set, get) => ({
       const counters = { ...b.counters };
       if (value <= 0) delete counters[type];
       else counters[type] = value;
+      // MTG state-based action: +1/+1 and -1/-1 counters cancel pairwise.
+      const plus = counters['+1/+1'] ?? 0;
+      const minus = counters['-1/-1'] ?? 0;
+      if (plus > 0 && minus > 0) {
+        const cancel = Math.min(plus, minus);
+        const np = plus - cancel;
+        const nm = minus - cancel;
+        if (np > 0) counters['+1/+1'] = np; else delete counters['+1/+1'];
+        if (nm > 0) counters['-1/-1'] = nm; else delete counters['-1/-1'];
+      }
       return { ...b, counters };
     });
     return { history, battlefield };

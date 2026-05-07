@@ -157,8 +157,13 @@ const PositionedCard = React.forwardRef<HTMLDivElement, PositionedProps>(functio
                   else if (e.shiftKey) onAdjust(type, -1);
                   else onAdjust(type, 1);
                 }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onAdjust(type, -1);
+                }}
                 className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${COUNTER_COLOR[type] ?? 'bg-zinc-600/80 text-white'}`}
-                title={`${type} (click +1, shift -1, alt remove)`}
+                title={`${type} (click +1, right-click −1, alt remove)`}
               >
                 {n} {type}
               </button>
@@ -173,17 +178,21 @@ const PositionedCard = React.forwardRef<HTMLDivElement, PositionedProps>(functio
           >
             <button
               onClick={(e) => { e.stopPropagation(); onAdjust('loyalty', -1); }}
+              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onAdjust('loyalty', -1); }}
               className="w-5 h-5 rounded-full bg-black/70 text-white text-xs font-bold flex items-center justify-center hover:bg-red-600/80"
               title="−1 loyalty"
             >−</button>
             <div
-              className="min-w-[28px] h-7 px-1.5 rounded-md bg-blue-600 text-white font-bold flex items-center justify-center shadow-md ring-2 ring-blue-300/60 text-sm"
-              title={`${loyaltyValue} loyalty`}
+              onClick={(e) => e.stopPropagation()}
+              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onAdjust('loyalty', -1); }}
+              className="min-w-[28px] h-7 px-1.5 rounded-md bg-blue-600 text-white font-bold flex items-center justify-center shadow-md ring-2 ring-blue-300/60 text-sm cursor-default"
+              title={`${loyaltyValue} loyalty (right-click −1)`}
             >
               {loyaltyValue}
             </div>
             <button
               onClick={(e) => { e.stopPropagation(); onAdjust('loyalty', 1); }}
+              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onAdjust('loyalty', 1); }}
               className="w-5 h-5 rounded-full bg-black/70 text-white text-xs font-bold flex items-center justify-center hover:bg-emerald-600/80"
               title="+1 loyalty"
             >+</button>
