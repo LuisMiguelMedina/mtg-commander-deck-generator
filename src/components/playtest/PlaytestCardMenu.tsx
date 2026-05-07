@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePlaytestStore } from '@/store/playtestStore';
+import { isDoubleFacedCard } from '@/services/scryfall/client';
 import type { ScryfallCard } from '@/types';
 
 export interface CardMenuTarget {
@@ -24,6 +25,7 @@ export function PlaytestCardMenu({ target, onClose }: Props) {
   const moveCard = usePlaytestStore(s => s.moveCard);
   const toggleTap = usePlaytestStore(s => s.toggleTap);
   const toggleFaceDown = usePlaytestStore(s => s.toggleFaceDown);
+  const toggleFlipped = usePlaytestStore(s => s.toggleFlipped);
   const adjustCounter = usePlaytestStore(s => s.adjustCounter);
   const copyCard = usePlaytestStore(s => s.copyCard);
   const unattach = usePlaytestStore(s => s.unattach);
@@ -111,7 +113,12 @@ export function PlaytestCardMenu({ target, onClose }: Props) {
         <>
           <Sep />
           <Item onClick={() => { toggleTap(bfCard.instanceId); onClose(); }}>{bfCard.tapped ? 'Untap' : 'Tap'}</Item>
-          <Item onClick={() => { toggleFaceDown(bfCard.instanceId); onClose(); }}>{bfCard.faceDown ? 'Flip face up' : 'Flip face down'}</Item>
+          {isDoubleFacedCard(bfCard.card) && (
+            <Item onClick={() => { toggleFlipped(bfCard.instanceId); onClose(); }}>
+              {bfCard.flipped ? 'Show front face' : 'Transform / show back face'}
+            </Item>
+          )}
+          <Item onClick={() => { toggleFaceDown(bfCard.instanceId); onClose(); }}>{bfCard.faceDown ? 'Flip face up' : 'Flip face down (morph)'}</Item>
           <Item onClick={() => { copyCard(bfCard.instanceId); onClose(); }}>Create copy</Item>
           {isAttached && <Item onClick={() => { unattach(bfCard.instanceId); onClose(); }}>Unattach</Item>}
           <Sep />

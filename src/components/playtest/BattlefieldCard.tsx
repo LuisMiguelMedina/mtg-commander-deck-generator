@@ -3,7 +3,7 @@ import { useDraggable } from '@dnd-kit/core';
 import type { DraggableAttributes } from '@dnd-kit/core';
 import { usePlaytestStore } from '@/store/playtestStore';
 import { usePlaytestSettings } from '@/store/playtestSettingsStore';
-import { getCardImageUrl } from '@/services/scryfall/client';
+import { getCardImageUrl, getCardBackFaceUrl, isDoubleFacedCard } from '@/services/scryfall/client';
 import { PlaytestCardMenu, type CardMenuTarget } from '@/components/playtest/PlaytestCardMenu';
 import { MagnifiedPreview } from '@/components/playtest/MagnifiedPreview';
 import { useMagnifyKey } from '@/hooks/useMagnifyKey';
@@ -137,7 +137,13 @@ const PositionedCard = React.forwardRef<HTMLDivElement, PositionedProps>(functio
         style={{ transform: innerTransform, transformOrigin: 'center', transition: 'transform 120ms ease-out' }}
       >
         <img
-          src={card.faceDown ? `${import.meta.env.BASE_URL}card-back.png` : getCardImageUrl(card.card, 'normal')}
+          src={
+            card.faceDown
+              ? `${import.meta.env.BASE_URL}card-back.png`
+              : (card.flipped && isDoubleFacedCard(card.card)
+                  ? (getCardBackFaceUrl(card.card, 'normal') ?? getCardImageUrl(card.card, 'normal'))
+                  : getCardImageUrl(card.card, 'normal'))
+          }
           alt={card.faceDown ? 'Face-down' : card.card.name}
           className="w-full rounded-[5px] shadow-lg pointer-events-none"
           draggable={false}

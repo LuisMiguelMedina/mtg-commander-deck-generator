@@ -23,6 +23,8 @@ export interface BattlefieldCard {
   y: number;
   tapped: boolean;
   faceDown: boolean;
+  /** For double-faced / transform / MDFC / battle cards: show the back face when true. */
+  flipped: boolean;
   counters: Record<string, number>;
   attachedTo?: string;
 }

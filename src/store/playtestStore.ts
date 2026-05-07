@@ -61,10 +61,12 @@ interface PlaytestActions {
   adjustLife: (delta: number) => void;
   setPhase: (phase: Phase) => void;
   advancePhase: () => void;
+  nextTurn: () => void;
 
   moveCard: (args: MoveArgs) => void;
   toggleTap: (instanceId: string) => void;
   toggleFaceDown: (instanceId: string) => void;
+  toggleFlipped: (instanceId: string) => void;
   setCounter: (instanceId: string, type: string, value: number) => void;
   adjustCounter: (instanceId: string, type: string, delta: number) => void;
   copyCard: (instanceId: string) => void;
@@ -286,6 +288,17 @@ export const usePlaytestStore = create<Store>((set, get) => ({
 
   setPhase: (phase) => set(state => ({ phase, log: [...state.log, makeLogEntry(`Phase: ${phase}`, 'turn')] })),
 
+  nextTurn: () => set(state => {
+    const history = pushHistory(state.history, snapshotOf(state));
+    const nextTurn = state.turn + 1;
+    return {
+      history,
+      turn: nextTurn,
+      phase: PHASES[0],
+      log: [...state.log, makeLogEntry(`Turn ${nextTurn} — ${PHASES[0]}`, 'turn')],
+    };
+  }),
+
   advancePhase: () => set(state => {
     const idx = PHASES.indexOf(state.phase);
     const nextIdx = (idx + 1) % PHASES.length;
@@ -388,6 +401,7 @@ export const usePlaytestStore = create<Store>((set, get) => ({
         y,
         tapped: false,
         faceDown: false,
+        flipped: false,
         counters,
       });
       targetLabel = 'battlefield';
@@ -425,6 +439,20 @@ export const usePlaytestStore = create<Store>((set, get) => ({
       history,
       battlefield,
       log: [...state.log, makeLogEntry(target ? `Flipped ${target.card.name} ${target.faceDown ? 'face up' : 'face down'}` : '', 'move')],
+    };
+  }),
+
+  toggleFlipped: (instanceId) => set(state => {
+    const history = pushHistory(state.history, snapshotOf(state));
+    const battlefield = state.battlefield.map(b =>
+      b.instanceId === instanceId ? { ...b, flipped: !b.flipped } : b
+    );
+    const target = state.battlefield.find(b => b.instanceId === instanceId);
+    const willShowBack = target ? !target.flipped : false;
+    return {
+      history,
+      battlefield,
+      log: [...state.log, makeLogEntry(target ? `${willShowBack ? 'Transformed' : 'Reverted'} ${target.card.name}` : '', 'move')],
     };
   }),
 
@@ -520,6 +548,7 @@ export const usePlaytestStore = create<Store>((set, get) => ({
       y: cy,
       tapped: false,
       faceDown: false,
+      flipped: false,
       counters: {},
     };
     return {

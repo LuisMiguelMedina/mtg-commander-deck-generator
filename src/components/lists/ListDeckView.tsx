@@ -499,6 +499,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
 
   // Destination picker state
   const [pendingCard, setPendingCard] = useState<ScryfallCard | null>(null);
+  const [pickerAnchor, setPickerAnchor] = useState<{ top: number; left: number } | null>(null);
 
   // Bulk add state
   const [showBulkAdd, setShowBulkAdd] = useState(false);
@@ -913,6 +914,8 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
 
   const handleShowBoardPicker = useCallback((card: ScryfallCard, event: React.MouseEvent) => {
     event.stopPropagation();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    setPickerAnchor({ top: rect.bottom, left: rect.left });
     setPendingCard(card);
   }, []);
 
@@ -923,6 +926,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
     const historyAction = destination === 'sideboard' ? 'sideboard' as const : destination === 'maybeboard' ? 'maybeboard' as const : 'add' as const;
     pushDeckHistory({ action: historyAction, cardName });
     setPendingCard(null);
+    setPickerAnchor(null);
     setSearchQuery('');
     setSearchResults([]);
     setShowSearchResults(false);
@@ -935,6 +939,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
 
   const handleCancelPicker = useCallback(() => {
     setPendingCard(null);
+    setPickerAnchor(null);
   }, []);
 
   const handleBulkImport = useCallback((validatedNames: string[]) => {
@@ -1257,11 +1262,17 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
                       </div>
                     </>
                   )}
-                  {/* Board Picker — sideboard/maybeboard */}
-                  {pendingCard && (
+                  {/* Board Picker — rendered via portal & anchored to clicked button */}
+                  {pendingCard && pickerAnchor && createPortal(
                     <>
-                      <div className="fixed inset-0 z-[998]" onClick={handleCancelPicker} />
-                      <div className="absolute bottom-full left-0 mb-1 z-[999] bg-card border border-border rounded-lg shadow-2xl py-1 w-44">
+                      <div className="fixed inset-0 z-[1000]" onClick={handleCancelPicker} />
+                      <div
+                        className="fixed z-[1001] bg-card border border-border rounded-lg shadow-2xl py-1 w-44"
+                        style={{
+                          top: Math.max(8, pickerAnchor.top - 124),
+                          left: Math.min(pickerAnchor.left, window.innerWidth - 184),
+                        }}
+                      >
                         <p className="px-3 py-1.5 text-xs text-muted-foreground truncate border-b border-border/50">{pendingCard.name}</p>
                         <button
                           onClick={() => handleDestinationPick('sideboard')}
@@ -1276,7 +1287,8 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
                           Add to Maybeboard
                         </button>
                       </div>
-                    </>
+                    </>,
+                    document.body
                   )}
                 </div>
                 {/* Bulk Add — manual positioning (Radix Popover breaks inside createPortal) */}

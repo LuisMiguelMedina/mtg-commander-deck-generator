@@ -8,6 +8,7 @@ import type { MoveSource } from '@/components/playtest/types';
 import { getCardImageUrl } from '@/services/scryfall/client';
 import type { ScryfallCard } from '@/types';
 import { PlaytestToolbar } from '@/components/playtest/PlaytestToolbar';
+import { PlaytestActionsBar } from '@/components/playtest/PlaytestActionsBar';
 import { PlaytestSidebar } from '@/components/playtest/PlaytestSidebar';
 import { Battlefield } from '@/components/playtest/Battlefield';
 import { Hand } from '@/components/playtest/Hand';
@@ -172,6 +173,7 @@ export function PlaytestPage({ kind }: { kind: 'list' | 'generated' }) {
           <PlaytestSidebar />
           <main className="flex-1 flex flex-col min-w-0">
             <Battlefield />
+            <PlaytestActionsBar />
             <Hand />
           </main>
           <GameLog />
