@@ -326,12 +326,7 @@ export function LandCountDetail({
   }), [analysis.landCards, nonLandCardsInDeck, analysis.colorFixing, colorIdentity,
        effectiveTarget, mb.currentLands, menuProps?.mustIncludeNames]);
 
-  const cutCandidates: AnalyzedCard[] = useMemo(
-    () => [...cutSelection.topN, ...cutSelection.others].map(c => c.ac),
-    [cutSelection],
-  );
-
-  const cutSortMode = 'score' as 'inclusion' | 'score';
+  const cutSortMode: 'inclusion' | 'score' = 'score';
 
   const [showCuts, setShowCuts] = useState(isOverTarget);
   const [removedCards, setRemovedCards] = useState<Set<string>>(new Set());
@@ -351,7 +346,7 @@ export function LandCountDetail({
     }
   }, [cutSelection.topN, handleRemoveLandCut]);
 
-  const hasRightColumn = hasSuggestions || (isOverTarget && cutCandidates.length > 0);
+  const hasRightColumn = hasSuggestions || (isOverTarget && cutSelection.topN.length > 0);
 
   // Group basics by name with count, including ×0 entries for all colors in identity
   const COLOR_TO_BASIC: Record<string, string> = { W: 'Plains', U: 'Island', B: 'Swamp', R: 'Mountain', G: 'Forest' };
@@ -489,13 +484,13 @@ export function LandCountDetail({
         </div>
 
         {/* Vertical divider */}
-        {(hasSuggestions || (isOverTarget && cutCandidates.length > 0)) && <div className="hidden md:block w-px bg-border/30 shrink-0 -my-3" />}
+        {(hasSuggestions || (isOverTarget && cutSelection.topN.length > 0)) && <div className="hidden md:block w-px bg-border/30 shrink-0 -my-3" />}
 
         {/* Right: cut candidates or land suggestions */}
-        {(hasSuggestions || (isOverTarget && cutCandidates.length > 0)) && (
+        {(hasSuggestions || (isOverTarget && cutSelection.topN.length > 0)) && (
           <div className="flex-1 min-w-0">
             {/* Toggle header (Cuts / Suggestions) — only show when both panels available */}
-            {isOverTarget && cutCandidates.length > 0 && hasSuggestions ? (
+            {isOverTarget && cutSelection.topN.length > 0 && hasSuggestions ? (
               <div className="mb-2 px-0.5">
                 <div className="flex items-center gap-2">
                   {showCuts && <span className="text-xs text-red-400/60">{excess} over target</span>}
@@ -520,7 +515,7 @@ export function LandCountDetail({
               </div>
             ) : null}
             {/* Content */}
-            {showCuts && cutCandidates.length > 0 ? (
+            {showCuts && cutSelection.topN.length > 0 ? (
               <>
                 {cutSelection.topN.length > 0 && (
                   <div className="rounded-lg border border-red-500/25 bg-red-500/5 p-2 mb-3">

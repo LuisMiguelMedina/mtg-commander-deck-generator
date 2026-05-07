@@ -4,6 +4,7 @@ import {
   Shield, Ban, LayoutDashboard,
   Lightbulb, Tag, ArrowUpDown, Pencil, Gauge,
   RotateCcw, Loader2, Info, Zap, Mountain, BarChart3,
+  AlertTriangle,
 } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import type { ScryfallCard, UserCardList, EDHRECTheme } from '@/types';
@@ -445,10 +446,9 @@ export function CutCardItem({
         )}
       </div>
       {warning && (
-        <div className="px-1 -mt-0.5">
-          <span className="text-[9px] text-amber-400/80 block" title={warning}>
-            ⚠ {warning}
-          </span>
+        <div className="px-1 -mt-0.5 flex items-center gap-1" title={warning}>
+          <AlertTriangle className="w-2.5 h-2.5 text-amber-400/80 shrink-0" />
+          <span className="text-[9px] text-amber-400/80 truncate">{warning}</span>
         </div>
       )}
     </div>
