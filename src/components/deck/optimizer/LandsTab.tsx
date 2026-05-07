@@ -19,7 +19,7 @@ import {
 import { AnalyzedCardRow, AnimatedCollapse, CollapsibleCardGroups, type CardAction, type CardRowMenuProps } from './shared';
 import { SuggestionCardGrid, CutCardGrid } from './OverviewTab';
 import { ManaTrajectorySparkline } from './CurveTab';
-import { selectLandCuts } from '@/services/deckBuilder/landCutSelection';
+import { selectLandCuts, type LandCut } from '@/services/deckBuilder/landCutSelection';
 
 // ═══════════════════════════════════════════════════════════════════════
 // LANDS TAB Components
@@ -336,7 +336,7 @@ export function LandCountDetail({
   const [showCuts, setShowCuts] = useState(isOverTarget);
   const [removedCards, setRemovedCards] = useState<Set<string>>(new Set());
 
-  const handleRemoveLandCut = useCallback((cut: import('@/services/deckBuilder/landCutSelection').LandCut) => {
+  const handleRemoveLandCut = useCallback((cut: LandCut) => {
     if (cut.kind === 'basic') {
       onRemoveBasicLand?.(cut.ac.card.name);
     } else {
@@ -549,6 +549,16 @@ export function LandCountDetail({
                       menuProps={menuProps}
                       cardInclusionMap={resolvedInclusionMap}
                       sortMode={cutSortMode}
+                      getBadges={(ac) => {
+                        const cut = cutSelection.topN.find(c => c.ac.card.name === ac.card.name);
+                        if (!cut) return undefined;
+                        return {
+                          countLabel: cut.kind === 'basic' && cut.beforeCount != null && cut.afterCount != null
+                            ? `${cut.beforeCount} → ${cut.afterCount}`
+                            : undefined,
+                          warning: cut.warning,
+                        };
+                      }}
                     />
                     <p className="text-[10px] text-muted-foreground/60 mt-1.5 px-1">
                       Deck will be {currentCards.length - cutSelection.topN.length} cards after cuts. Use Suggestions to backfill.

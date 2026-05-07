@@ -278,7 +278,7 @@ export function SuggestionCardItem({
 // ─── Shared: Cut Card Grid (for lands to remove) ─────────────────────
 
 export function CutCardGrid({
-  cards, onRemove, onPreview, removedCards, excess, onCardAction, menuProps, cardInclusionMap, sortMode,
+  cards, onRemove, onPreview, removedCards, excess, onCardAction, menuProps, cardInclusionMap, sortMode, getBadges,
 }: {
   cards: AnalyzedCard[];
   onRemove: (card: ScryfallCard) => void;
@@ -289,24 +289,30 @@ export function CutCardGrid({
   menuProps?: { userLists: UserCardList[]; mustIncludeNames: Set<string>; bannedNames: Set<string>; sideboardNames: Set<string>; maybeboardNames: Set<string> };
   cardInclusionMap?: Record<string, number>;
   sortMode?: 'inclusion' | 'score';
+  getBadges?: (ac: AnalyzedCard) => { countLabel?: string; warning?: string } | undefined;
 }) {
   return (
     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 gap-3">
-      {cards.map((ac, i) => (
-        <CutCardItem
-          key={ac.card.name}
-          ac={ac}
-          index={i}
-          removed={removedCards.has(ac.card.name)}
-          highlighted={excess > 0 && i < excess && !removedCards.has(ac.card.name)}
-          onRemove={onRemove}
-          onPreview={onPreview}
-          onCardAction={onCardAction}
-          menuProps={menuProps}
-          cardInclusionMap={cardInclusionMap}
-          sortMode={sortMode}
-        />
-      ))}
+      {cards.map((ac, i) => {
+        const badges = getBadges?.(ac);
+        return (
+          <CutCardItem
+            key={ac.card.name}
+            ac={ac}
+            index={i}
+            removed={removedCards.has(ac.card.name)}
+            highlighted={excess > 0 && i < excess && !removedCards.has(ac.card.name)}
+            onRemove={onRemove}
+            onPreview={onPreview}
+            onCardAction={onCardAction}
+            menuProps={menuProps}
+            cardInclusionMap={cardInclusionMap}
+            sortMode={sortMode}
+            countLabel={badges?.countLabel}
+            warning={badges?.warning}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -314,7 +320,7 @@ export function CutCardGrid({
 // ─── Cut Card Item ────────────────────────────────────────────────────
 
 export function CutCardItem({
-  ac, index = 0, removed, highlighted, onRemove, onPreview, onCardAction, menuProps, cardInclusionMap, sortMode = 'inclusion',
+  ac, index = 0, removed, highlighted, onRemove, onPreview, onCardAction, menuProps, cardInclusionMap, sortMode = 'inclusion', countLabel, warning,
 }: {
   ac: AnalyzedCard;
   index?: number;
@@ -326,6 +332,8 @@ export function CutCardItem({
   menuProps?: { userLists: UserCardList[]; mustIncludeNames: Set<string>; bannedNames: Set<string>; sideboardNames: Set<string>; maybeboardNames: Set<string> };
   cardInclusionMap?: Record<string, number>;
   sortMode?: 'inclusion' | 'score';
+  countLabel?: string;
+  warning?: string;
 }) {
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const isBanned = menuProps?.bannedNames.has(ac.card.name);
@@ -424,6 +432,11 @@ export function CutCardItem({
           </span>
         )}
         <span className="text-[11px] truncate flex-1 min-w-0 text-muted-foreground text-center">{ac.card.name}</span>
+        {countLabel && (
+          <span className="text-[10px] font-semibold px-1.5 py-px rounded-full bg-amber-500/15 text-amber-400 shrink-0">
+            {countLabel}
+          </span>
+        )}
         {ac.card.isGameChanger && (
           <span className="text-[10px] font-bold text-amber-500/70 shrink-0" title="Game Changer (EDHREC)">GC</span>
         )}
@@ -431,6 +444,13 @@ export function CutCardItem({
           <span className="text-[10px] text-muted-foreground shrink-0">${price}</span>
         )}
       </div>
+      {warning && (
+        <div className="px-1 -mt-0.5">
+          <span className="text-[9px] text-amber-400/80 block" title={warning}>
+            ⚠ {warning}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
