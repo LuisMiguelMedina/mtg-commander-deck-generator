@@ -82,6 +82,7 @@ interface PlaytestActions {
   setHovered: (id: string | null) => void;
 
   appendLog: (text: string) => void;
+  clearLog: () => void;
 }
 
 type Store = PlaytestState & PlaytestActions;
@@ -617,6 +618,7 @@ export const usePlaytestStore = create<Store>((set, get) => ({
   setHovered: (id) => set({ hovered: id }),
 
   appendLog: (text) => set(state => ({ log: [...state.log, makeLogEntry(text)] })),
+  clearLog: () => set({ log: [] }),
 }));
 
 // Helper: serializable selector for zone counts (used by Sidebar to avoid re-rendering on every change)
