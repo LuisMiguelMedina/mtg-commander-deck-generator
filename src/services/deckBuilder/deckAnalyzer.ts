@@ -1354,6 +1354,51 @@ export function computeOptimizeSwaps(
   const additionRoom = Math.max(0, targetDeckSize - currentDeckSize + netRemoved) + landDeficitRoom;
   const additions = additionCandidates.slice(0, additionRoom);
 
+  // ── Balance pass ──
+  // Top priority: leave the deck at its target size (40/60/100). If accepting all
+  // suggested additions would push the deck over target, surface enough non-land
+  // cuts to compensate. Source: weakest non-land cards by inclusion, excluding
+  // anything already in `removals` and the usual protected set (must-include,
+  // commander, game changer, combo piece). Inclusion floor is dropped here —
+  // when nothing is "weak" we still need to surface SOMETHING the user can pick.
+  const projectedSize = currentDeckSize - removals.length + additions.length;
+  const sizeOverflow = projectedSize - targetDeckSize;
+  if (sizeOverflow > 0) {
+    const alreadyCut = new Set(removals.map(r => r.name));
+    const balanceCandidates: CandidateCard[] = [];
+    for (const card of currentCards) {
+      if (BASIC_LANDS.has(card.name)) continue;
+      if (card.name === commanderName || card.name === partnerCommanderName) continue;
+      if (mustIncludeNames.has(card.name)) continue;
+      if (card.isGameChanger) continue;
+      if (comboCountMap.has(card.name)) continue;
+      if (alreadyCut.has(card.name)) continue;
+
+      const typeLine = getFrontFaceTypeLine(card).split('—')[0].replace(/Legendary\s+/i, '').trim();
+      const isLand = typeLine.toLowerCase().includes('land');
+      if (isLand) continue; // we want MORE lands here, not fewer
+
+      const role = card.deckRole || getCardRole(card.name) || undefined;
+      const roleLabel = role ? (ROLE_LABELS_MAP[role] || role) : undefined;
+      const cmdInclusion = inclusionMap[card.name] ?? null;
+      const globalInclusion = card.edhrec_rank != null
+        ? Math.max(1, 100 - Math.floor(card.edhrec_rank / 100))
+        : null;
+      const inclusion = cmdInclusion ?? globalInclusion ?? null;
+      balanceCandidates.push({
+        name: card.name, inclusion, role, roleLabel, cmc: card.cmc ?? 0,
+        primaryType: typeLine || undefined,
+        imageUrl: getCardImageUrl(card, 'small'),
+        isGameChanger: card.isGameChanger || undefined,
+        isThemeSynergy: card.isThemeSynergyCard || undefined,
+        reason: 'Balance to deck size', reasonCategory: 'balance',
+        sortScore: inclusion ?? 50,
+      });
+    }
+    balanceCandidates.sort((a, b) => a.sortScore - b.sortScore);
+    removals.push(...balanceCandidates.slice(0, sizeOverflow));
+  }
+
   return { removals, additions };
 }
 

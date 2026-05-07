@@ -22,6 +22,7 @@ const REMOVAL_CATEGORY_LABELS: Record<string, string> = {
   'low-inclusion': 'Low Inclusion',
   'tapland': 'Taplands',
   'excess-land': 'Excess Lands',
+  'balance': 'Balance to Deck Size',
 };
 
 function getRemovalCategoryLabel(cat: string): string {
