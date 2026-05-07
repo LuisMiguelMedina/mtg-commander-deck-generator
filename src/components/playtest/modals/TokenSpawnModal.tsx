@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { useDraggable } from '@dnd-kit/core';
 import { Input } from '@/components/ui/input';
 import { usePlaytestStore } from '@/store/playtestStore';
 import { resolveDeckTokens, resolveTokens, deriveColorIdentity } from '@/services/playtest/tokens';
@@ -95,18 +96,34 @@ export function TokenSpawnModal() {
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(92px,1fr))] gap-2.5">
             {filtered.map(t => (
-              <button
+              <TokenTile
                 key={t.id}
-                onClick={() => { spawnToken(t); closeModal(); }}
-                className="rounded-[5px] hover:ring-2 hover:ring-primary transition-all"
-                title={`Spawn ${t.name}`}
-              >
-                <HoverPreviewImage card={t} size="small" className="w-full rounded-[5px] shadow" />
-              </button>
+                token={t}
+                onSpawn={() => { spawnToken(t); closeModal(); }}
+              />
             ))}
           </div>
         )}
       </div>
     </FloatingDialog>
+  );
+}
+
+function TokenTile({ token, onSpawn }: { token: ScryfallCard; onSpawn: () => void }) {
+  const { setNodeRef, attributes, listeners, isDragging } = useDraggable({
+    id: `token:${token.id}`,
+    data: { tokenCard: token },
+  });
+  return (
+    <button
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      onClick={onSpawn}
+      className={`rounded-[5px] hover:ring-2 hover:ring-primary transition-all touch-none ${isDragging ? 'opacity-0' : ''}`}
+      title={`Click or drag to spawn ${token.name}`}
+    >
+      <HoverPreviewImage card={token} size="small" className="w-full rounded-[5px] shadow pointer-events-none" />
+    </button>
   );
 }

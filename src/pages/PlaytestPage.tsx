@@ -8,7 +8,6 @@ import type { MoveSource } from '@/components/playtest/types';
 import { getCardImageUrl } from '@/services/scryfall/client';
 import type { ScryfallCard } from '@/types';
 import { PlaytestToolbar } from '@/components/playtest/PlaytestToolbar';
-import { PlaytestActionsBar } from '@/components/playtest/PlaytestActionsBar';
 import { PlaytestSidebar } from '@/components/playtest/PlaytestSidebar';
 import { Battlefield } from '@/components/playtest/Battlefield';
 import { Hand } from '@/components/playtest/Hand';
@@ -33,6 +32,7 @@ export function PlaytestPage({ kind }: { kind: 'list' | 'generated' }) {
   const error = usePlaytestStore(s => s.error);
   const modal = usePlaytestStore(s => s.modal);
   const moveCard = usePlaytestStore(s => s.moveCard);
+  const spawnToken = usePlaytestStore(s => s.spawnToken);
 
   useEffect(() => {
     if (kind === 'generated') {
@@ -72,7 +72,13 @@ export function PlaytestPage({ kind }: { kind: 'list' | 'generated' }) {
   const [activeTapped, setActiveTapped] = useState(false);
 
   function onDragStart(event: DragStartEvent) {
-    const data = event.active.data.current as { source?: MoveSource } | undefined;
+    const data = event.active.data.current as { source?: MoveSource; tokenCard?: ScryfallCard } | undefined;
+    if (data?.tokenCard) {
+      setActiveCard(data.tokenCard);
+      setActiveFaceDown(false);
+      setActiveTapped(false);
+      return;
+    }
     const source = data?.source;
     if (!source) return;
     const state = usePlaytestStore.getState();
@@ -101,8 +107,20 @@ export function PlaytestPage({ kind }: { kind: 'list' | 'generated' }) {
     setActiveTapped(false);
     const { active, over } = event;
     if (!over) return;
-    const sourceData = active.data.current as { source?: MoveSource } | undefined;
+    const sourceData = active.data.current as { source?: MoveSource; tokenCard?: ScryfallCard } | undefined;
     const overData   = over.data.current   as { kind?: string; zone?: string; position?: 'top' | 'bottom'; instanceId?: string; index?: number } | undefined;
+
+    // Token spawn from the token dialog → only valid drop is the battlefield
+    if (sourceData?.tokenCard) {
+      if (over.id === 'battlefield' && overData?.kind === 'battlefield') {
+        const rect = over.rect as DOMRect | undefined;
+        const x = (active.rect.current.translated?.left ?? 0) - (rect?.left ?? 0);
+        const y = (active.rect.current.translated?.top  ?? 0) - (rect?.top  ?? 0);
+        spawnToken(sourceData.tokenCard, { x, y });
+      }
+      return;
+    }
+
     const source = sourceData?.source;
     if (!source) return;
 
@@ -173,7 +191,6 @@ export function PlaytestPage({ kind }: { kind: 'list' | 'generated' }) {
           <PlaytestSidebar />
           <main className="flex-1 flex flex-col min-w-0">
             <Battlefield />
-            <PlaytestActionsBar />
             <Hand />
           </main>
           <GameLog />

@@ -4,6 +4,7 @@ import { usePlaytestStore } from '@/store/playtestStore';
 import { usePlaytestSettings } from '@/store/playtestSettingsStore';
 import { getCardImageUrl, getFrontFaceTypeLine } from '@/services/scryfall/client';
 import { PlaytestCardMenu, type CardMenuTarget } from '@/components/playtest/PlaytestCardMenu';
+import { PlaytestActionsBar } from '@/components/playtest/PlaytestActionsBar';
 import { MagnifiedPreview } from '@/components/playtest/MagnifiedPreview';
 import { useMagnifyKey } from '@/hooks/useMagnifyKey';
 import type { ScryfallCard } from '@/types';
@@ -35,12 +36,13 @@ export function Hand() {
       ref={setDropRef}
       className={`border-t border-border/50 bg-card/30 px-4 py-3 flex flex-col transition-shadow ${isOver ? 'ring-2 ring-primary/50 ring-inset' : ''}`}
     >
-      <div className="flex items-center justify-between mb-2 text-[10px] uppercase opacity-60">
-        <span>Hand · {hand.length}</span>
+      <div className="flex items-center gap-3 mb-2">
+        <span className="text-[10px] uppercase opacity-60 shrink-0">Hand · {hand.length}</span>
+        <PlaytestActionsBar />
         <select
           value={sort}
           onChange={e => setSort(e.target.value as SortMode)}
-          className="bg-transparent border border-border/50 rounded px-1.5 py-0.5"
+          className="ml-auto text-[10px] uppercase opacity-60 bg-transparent border border-border/50 rounded px-1.5 py-0.5"
         >
           <option value="none">None</option>
           <option value="cmc">CMC</option>
@@ -116,14 +118,36 @@ function HandCard({ card, indexInHand, fanIndex, total, onClickPlay, onContextMe
     return () => cancelAnimationFrame(id);
   }, [animations]);
 
+  // Deal-in: capture the lastDrawRange at MOUNT to detect cards that were
+  // freshly drawn (vs ones that arrived in the hand from other zones). Only
+  // freshly drawn cards run the deal-in keyframe.
+  const [drawRangeAtMount] = useState(() => usePlaytestStore.getState().lastDrawRange);
+  const isFreshlyDrawn =
+    animations &&
+    indexInHand >= drawRangeAtMount.start &&
+    indexInHand < drawRangeAtMount.end;
+  const [dealing, setDealing] = useState(isFreshlyDrawn);
+  useEffect(() => {
+    if (!isFreshlyDrawn) return;
+    const t = setTimeout(() => setDealing(false), 380);
+    return () => clearTimeout(t);
+  }, [isFreshlyDrawn]);
+
   const overlap = total <= 7 ? 24 : Math.min(24 + (total - 7) * 6, 88);
   const dragTransform = transform ? `translate3d(${transform.x}px, ${transform.y}px, 0) scale(1.05)` : undefined;
   const arriveScale = arrived ? 'scale(1)' : 'scale(0.85)';
+  // While dealing, let the CSS keyframe drive transform — don't set an inline
+  // transform (it would override the keyframe). Drag still wins if it starts.
+  const inlineTransform = isDragging
+    ? dragTransform
+    : dealing
+      ? undefined
+      : arriveScale;
   const style: React.CSSProperties = {
     marginLeft: fanIndex === 0 ? 0 : `-${overlap}px`,
-    transform: dragTransform ?? arriveScale,
+    transform: inlineTransform,
     zIndex: isDragging ? 50 : fanIndex,
-    transition: isDragging ? 'none' : 'transform 120ms ease-out',
+    transition: isDragging || dealing ? 'none' : 'transform 120ms ease-out',
     width: 'clamp(80px, 11vw, 130px)',
     cursor: isDragging ? 'grabbing' : 'pointer',
     opacity: isDragging ? 0 : 1,
@@ -141,7 +165,7 @@ function HandCard({ card, indexInHand, fanIndex, total, onClickPlay, onContextMe
       title={`Click to play ${card.name} · right-click for more options`}
       className={`relative shrink-0 rounded-[5px] select-none touch-none transition-transform ${
         isDragging ? '' : 'hover:-translate-y-2 hover:z-20'
-      } ${isOver && !isDragging ? 'ring-2 ring-primary' : ''}`}
+      } ${isOver && !isDragging ? 'ring-2 ring-primary' : ''} ${dealing && !isDragging ? 'animate-deal-in' : ''}`}
       style={style}
     >
       <img

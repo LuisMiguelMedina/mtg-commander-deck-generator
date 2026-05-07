@@ -41,6 +41,10 @@ interface PlaytestState {
   mulliganCount: number;
   // Increments any time the library is shuffled — UI hooks observe this for animations
   shuffleTick: number;
+  // Hand-index range of cards added by the most recent draw() call. The hand
+  // component checks this at HandCard mount-time to play the deal-in animation
+  // only on freshly drawn cards (not on cards returned from other zones).
+  lastDrawRange: { start: number; end: number };
 }
 
 interface PlaytestActions {
@@ -72,7 +76,7 @@ interface PlaytestActions {
   copyCard: (instanceId: string) => void;
   attach: (childId: string, parentId: string) => void;
   unattach: (instanceId: string) => void;
-  spawnToken: (card: ScryfallCard) => void;
+  spawnToken: (card: ScryfallCard, position?: { x: number; y: number }) => void;
 
   scryConfirm: (decisions: ('top' | 'bottom')[]) => void;
   surveilConfirm: (decisions: ('top' | 'graveyard')[]) => void;
@@ -107,6 +111,7 @@ const initial: PlaytestState = {
   battlefieldRect: { width: 0, height: 0 },
   mulliganCount: 0,
   shuffleTick: 0,
+  lastDrawRange: { start: -1, end: -1 },
 };
 
 function snapshotOf(s: PlaytestState): PlaytestSnapshot {
@@ -208,6 +213,7 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     if (drawn.length === 0) {
       return { log: [...state.log, makeLogEntry('Library is empty', 'library')] };
     }
+    const before = state.zones.hand.length;
     return {
       history,
       zones: {
@@ -215,6 +221,7 @@ export const usePlaytestStore = create<Store>((set, get) => ({
         hand: [...state.zones.hand, ...drawn],
         library: state.zones.library.slice(drawn.length),
       },
+      lastDrawRange: { start: before, end: before + drawn.length },
       log: [...state.log, makeLogEntry(drawn.length === 1 ? `Drew ${drawn[0].name}` : `Drew ${drawn.length} cards`, 'library')],
     };
   }),
@@ -537,15 +544,23 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     };
   }),
 
-  spawnToken: (card) => set(state => {
+  spawnToken: (card, position) => set(state => {
     const history = pushHistory(state.history, snapshotOf(state));
-    const cx = Math.floor(state.battlefieldRect.width / 2 - 50);
-    const cy = Math.floor(state.battlefieldRect.height / 2 - 70);
+    const cx = position?.x ?? Math.floor(state.battlefieldRect.width / 2 - 50);
+    const cy = position?.y ?? Math.floor(state.battlefieldRect.height / 2 - 70);
+    const slot = findArrivalSlot(
+      state.battlefield,
+      cx,
+      cy,
+      state.battlefieldRect.width,
+      state.battlefieldRect.height,
+      false,
+    );
     const token: BattlefieldCard = {
       instanceId: makeInstanceId(),
       card,
-      x: cx,
-      y: cy,
+      x: slot.x,
+      y: slot.y,
       tapped: false,
       faceDown: false,
       flipped: false,

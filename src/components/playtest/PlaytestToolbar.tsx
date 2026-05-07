@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Heart, X } from 'lucide-react';
+import { Heart, X, Undo2, RefreshCw, Settings as SettingsIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePlaytestStore } from '@/store/playtestStore';
 import { PHASE_LABELS } from '@/components/playtest/types';
+import { PlaytestSettingsModal } from '@/components/playtest/PlaytestSettingsModal';
 
 export function PlaytestToolbar({ onExit }: { onExit: () => void }) {
   const sourceName = usePlaytestStore(s => s.source?.name ?? '');
@@ -13,9 +14,13 @@ export function PlaytestToolbar({ onExit }: { onExit: () => void }) {
   const life = usePlaytestStore(s => s.life);
   const adjustLife = usePlaytestStore(s => s.adjustLife);
   const setLife = usePlaytestStore(s => s.setLife);
+  const undo = usePlaytestStore(s => s.undo);
+  const reset = usePlaytestStore(s => s.reset);
+  const historyLen = usePlaytestStore(s => s.history.length);
 
   const [editingLife, setEditingLife] = useState(false);
   const [draftLife, setDraftLife] = useState(String(life));
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const tinyBtn = 'px-1.5 py-0.5 rounded bg-accent/40 hover:bg-accent text-[10px] font-medium';
 
@@ -69,12 +74,21 @@ export function PlaytestToolbar({ onExit }: { onExit: () => void }) {
       </div>
 
       <span
-        className="hidden lg:inline-flex items-center gap-1 text-[10px] text-muted-foreground/70 ml-auto select-none"
+        className="hidden lg:inline-flex items-center gap-1 text-[10px] text-muted-foreground/70 mx-auto select-none"
         title="Hold Ctrl while hovering a card for a larger preview"
       >
         Hold <kbd className="px-1 py-0.5 rounded border border-border/60 bg-accent/30 font-mono text-[9px]">Ctrl</kbd>
         + hover to magnify
       </span>
+
+      <div className="flex items-center gap-1.5 flex-wrap justify-end lg:ml-0 ml-auto">
+        <Button variant="ghost" size="sm" disabled={historyLen === 0} onClick={undo} title="Undo last action (Ctrl+Z)"><Undo2 className="w-3.5 h-3.5 mr-1" />Undo</Button>
+        <Button variant="ghost" size="sm" onClick={reset} title="Reset playtest"><RefreshCw className="w-3.5 h-3.5 mr-1" />Reset</Button>
+        <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)} title="Playtest settings">
+          <SettingsIcon className="w-4 h-4" />
+        </Button>
+      </div>
+      <PlaytestSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

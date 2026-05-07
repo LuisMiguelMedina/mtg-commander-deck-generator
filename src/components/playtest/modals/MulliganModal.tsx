@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { Button } from '@/components/ui/button';
 import { usePlaytestStore } from '@/store/playtestStore';
 import { HoverPreviewImage } from '@/components/playtest/HoverPreviewImage';
+import type { ScryfallCard } from '@/types';
 
 export function MulliganModal() {
   const hand = usePlaytestStore(s => s.zones.hand);
@@ -56,19 +58,16 @@ export function MulliganModal() {
               : `London mulligan: ${mulliganCount} card(s) will go to the bottom of the library if you keep.`}
         </p>
         <div className="grid grid-cols-7 gap-2 mb-5">
-          {hand.map((card, i) => {
-            const sel = picked.has(i);
-            return (
-              <button
-                key={`${card.id}-${i}`}
-                onClick={() => picking && togglePick(i)}
-                className={`relative rounded-[5px] transition-all ${picking ? 'cursor-pointer' : 'cursor-default'} ${sel ? 'ring-4 ring-amber-400' : ''}`}
-              >
-                <HoverPreviewImage card={card} size="normal" className="w-full rounded-[5px] shadow" />
-                {sel && <span className="absolute top-1 right-1 bg-amber-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded">↓ bottom</span>}
-              </button>
-            );
-          })}
+          {hand.map((card, i) => (
+            <MulliganCard
+              key={`${card.id}-${i}`}
+              card={card}
+              index={i}
+              picking={picking}
+              selected={picked.has(i)}
+              onPick={() => togglePick(i)}
+            />
+          ))}
         </div>
         <div className="flex justify-end gap-2">
           {!picking ? (
@@ -86,5 +85,50 @@ export function MulliganModal() {
       </div>
     </div>,
     document.body,
+  );
+}
+
+interface MulliganCardProps {
+  card: ScryfallCard;
+  index: number;
+  picking: boolean;
+  selected: boolean;
+  onPick: () => void;
+}
+
+function MulliganCard({ card, index, picking, selected, onPick }: MulliganCardProps) {
+  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
+    id: `mulligan:${index}:${card.id}`,
+    data: { source: { kind: 'zone', zone: 'hand', index } },
+    disabled: picking,
+  });
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: `mulligan-slot:${index}`,
+    data: { kind: 'hand-slot', index },
+    disabled: picking,
+  });
+  const composedRef = (node: HTMLDivElement | null) => {
+    setDragRef(node);
+    setDropRef(node);
+  };
+  const style: React.CSSProperties = {
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0) scale(1.05)` : undefined,
+    opacity: isDragging ? 0 : 1,
+    transition: isDragging ? 'none' : 'transform 120ms ease-out',
+    cursor: picking ? 'pointer' : isDragging ? 'grabbing' : 'grab',
+    zIndex: isDragging ? 50 : undefined,
+  };
+  return (
+    <div
+      ref={composedRef}
+      {...(picking ? {} : attributes)}
+      {...(picking ? {} : listeners)}
+      onClick={() => picking && onPick()}
+      style={style}
+      className={`relative rounded-[5px] touch-none select-none transition-all ${selected ? 'ring-4 ring-amber-400' : ''} ${isOver && !isDragging ? 'ring-2 ring-primary' : ''}`}
+    >
+      <HoverPreviewImage card={card} size="normal" className="w-full rounded-[5px] shadow" />
+      {selected && <span className="absolute top-1 right-1 bg-amber-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded">↓ bottom</span>}
+    </div>
   );
 }
