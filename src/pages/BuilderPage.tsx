@@ -38,6 +38,7 @@ export function BuilderPage() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [previewCard, setPreviewCard] = useState<import('@/types').ScryfallCard | null>(null);
   const [savedToList, setSavedToList] = useState(false);
+  const [savedListId, setSavedListId] = useState<string | null>(null);
   const [showSaveInput, setShowSaveInput] = useState(false);
   const [saveListName, setSaveListName] = useState('');
   const saveInputRef = useRef<HTMLInputElement>(null);
@@ -579,6 +580,7 @@ export function BuilderPage() {
       // Scroll to top after view swaps from settings to deck display
       requestAnimationFrame(() => window.scrollTo({ top: 0 }));
       setSavedToList(false);
+      setSavedListId(null);
       trackEvent('deck_generated', {
         commanderName: cmd.name,
         partnerName: partner?.name,
@@ -1092,7 +1094,7 @@ export function BuilderPage() {
                         if (customization.scryfallQuery) summaryParts.push(`Query: ${customization.scryfallQuery}`);
                         const generationSummary = summaryParts.length > 0 ? summaryParts.join(' · ') : undefined;
 
-                        createList(deckName, allCards, '', {
+                        const newList = createList(deckName, allCards, '', {
                           type: 'deck',
                           commanderName: commander?.name,
                           partnerCommanderName: partnerCommander?.name,
@@ -1100,6 +1102,7 @@ export function BuilderPage() {
                           generationSummary,
                         });
                         trackEvent('list_created', { listName: deckName, cardCount: allCards.length });
+                        setSavedListId(newList.id);
                         setSavedToList(true);
                         setShowSaveInput(false);
                       }}
@@ -1182,10 +1185,13 @@ export function BuilderPage() {
           <Check className="w-4 h-4 shrink-0" />
           <span>Deck saved!</span>
           <button
-            onClick={() => { setSavedToList(false); navigate('/lists'); }}
+            onClick={() => {
+              setSavedToList(false);
+              navigate(savedListId ? `/lists/${savedListId}/deck-view` : '/lists');
+            }}
             className="underline underline-offset-2 hover:text-white/80 transition-colors font-medium"
           >
-            View in My Lists
+            View Deck
           </button>
         </div>,
         document.body

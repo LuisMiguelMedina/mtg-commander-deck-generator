@@ -228,14 +228,14 @@ export function OptimizeView({
   const checkedRemovals = useMemo(() => removals.filter(c => !uncheckedRemovals.has(c.name)), [removals, uncheckedRemovals]);
   const checkedAdditions = useMemo(() => additions.filter(c => !uncheckedAdditions.has(c.name)), [additions, uncheckedAdditions]);
 
-  // Deck size awareness: don't push over target
+  // Deck size awareness: warn when over target, but let the user apply what they checked.
+  // The user owns the deck size — overBy is informational, not a gate.
   const targetDeckSize = analysis.manaBase.deckSize; // e.g. 99 for commander
   const currentDeckSize = currentCards.length;
   const projectedSize = currentDeckSize - checkedRemovals.length + checkedAdditions.length;
   const overBy = Math.max(0, projectedSize - targetDeckSize);
-  // How many additions can actually be applied without exceeding target
-  const effectiveAdditions = checkedAdditions.length - overBy;
-  const totalChanges = checkedRemovals.length + Math.max(0, effectiveAdditions);
+  const effectiveAdditions = checkedAdditions.length;
+  const totalChanges = checkedRemovals.length + effectiveAdditions;
 
   const removalGroups = useMemo(() => groupByCategory(removals, getRemovalCategoryLabel), [removals]);
   const additionGroups = useMemo(() => groupByCategory(additions, getAdditionCategoryLabel), [additions]);
@@ -260,11 +260,9 @@ export function OptimizeView({
     if (totalChanges === 0) return;
     setApplied(true);
     const rems = checkedRemovals.map(c => c.name);
-    // Only add as many as fit within the target deck size
-    const maxAdds = Math.max(0, targetDeckSize - currentDeckSize + rems.length);
-    const adds = checkedAdditions.slice(0, maxAdds).map(c => c.name);
+    const adds = checkedAdditions.map(c => c.name);
     setTimeout(() => onApply(rems, adds), 600);
-  }, [totalChanges, checkedRemovals, checkedAdditions, onApply, targetDeckSize, currentDeckSize]);
+  }, [totalChanges, checkedRemovals, checkedAdditions, onApply]);
 
   const priceDelta = useMemo(() => {
     let removedTotal = 0, addedTotal = 0;
@@ -273,14 +271,13 @@ export function OptimizeView({
       const p = resolvePrice(c);
       if (p) { removedTotal += parseFloat(p); hasAnyPrice = true; }
     }
-    const maxAdds = Math.max(0, effectiveAdditions);
-    for (const c of checkedAdditions.slice(0, maxAdds)) {
+    for (const c of checkedAdditions) {
       const p = resolvePrice(c);
       if (p) { addedTotal += parseFloat(p); hasAnyPrice = true; }
     }
     if (!hasAnyPrice) return null;
     return addedTotal - removedTotal;
-  }, [checkedRemovals, checkedAdditions, effectiveAdditions]);
+  }, [checkedRemovals, checkedAdditions]);
 
   const noSwaps = removals.length === 0 && additions.length === 0;
 
@@ -323,10 +320,7 @@ export function OptimizeView({
           <div className="w-px h-4 bg-border/40" />
           <div className="flex items-center gap-1.5">
             <TrendingUp className="w-3.5 h-3.5 text-emerald-400/70" />
-            <span className="text-emerald-400/80 font-medium">
-              +{Math.max(0, effectiveAdditions)}
-              {overBy > 0 && <span className="text-amber-400/80 text-[10px] ml-0.5">/{checkedAdditions.length}</span>}
-            </span>
+            <span className="text-emerald-400/80 font-medium">+{checkedAdditions.length}</span>
             <span className="text-muted-foreground/60">selected</span>
           </div>
           <div className="w-px h-4 bg-border/40" />
@@ -340,7 +334,7 @@ export function OptimizeView({
             <>
               <div className="w-px h-4 bg-border/40" />
               <span className="text-amber-400/80 text-[10px]">
-                {overBy} addition{overBy !== 1 ? 's' : ''} skipped (deck full)
+                deck will be {overBy} over target
               </span>
             </>
           )}
@@ -354,7 +348,7 @@ export function OptimizeView({
               </>
             )}
             {(() => {
-              const resultSize = currentDeckSize - checkedRemovals.length + Math.max(0, effectiveAdditions);
+              const resultSize = currentDeckSize - checkedRemovals.length + checkedAdditions.length;
               const netChange = resultSize - currentDeckSize;
               if (netChange === 0) {
                 return <span className="text-muted-foreground/60 tabular-nums">{resultSize}/{targetDeckSize}</span>;

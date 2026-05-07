@@ -2080,6 +2080,7 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
   const [searchQuery, setSearchQuery] = useState('');
   const [toastMessage, setToastMessage] = useState<{ text: string; onUndo?: () => void } | null>(null);
   const [showSavedToast, setShowSavedToast] = useState(false);
+  const [savedListId, setSavedListId] = useState<string | null>(null);
   const [removedCards, setRemovedCards] = useState<Set<string>>(new Set());
   const tempBannedRef = useRef(customization.tempBannedCards || []);
   tempBannedRef.current = customization.tempBannedCards || [];
@@ -3827,7 +3828,7 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
           if (customization.comboCount === 3) summaryParts.push('Combo-heavy');
           if (customization.scryfallQuery) summaryParts.push(`Query: ${customization.scryfallQuery}`);
 
-          createList(name, cards, '', {
+          const newList = createList(name, cards, '', {
             type: 'deck',
             commanderName: commander?.name,
             partnerCommanderName: generatedDeck?.partnerCommander?.name,
@@ -3835,6 +3836,7 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
             generationSummary: summaryParts.length > 0 ? summaryParts.join(' · ') : undefined,
           });
           trackEvent('list_created', { listName: name, cardCount: cards.length });
+          setSavedListId(newList.id);
           setShowSavedToast(true);
         }}
         defaultListName={commander ? `${commander.name} Deck` : 'My Deck'}
@@ -3859,10 +3861,13 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
           <Check className="w-4 h-4 shrink-0" />
           <span>Deck saved!</span>
           <button
-            onClick={() => { setShowSavedToast(false); navigate('/lists'); }}
+            onClick={() => {
+              setShowSavedToast(false);
+              navigate(savedListId ? `/lists/${savedListId}/deck-view` : '/lists');
+            }}
             className="underline underline-offset-2 hover:text-white/80 transition-colors font-medium"
           >
-            View in My Lists
+            View Deck
           </button>
         </div>,
         document.body
