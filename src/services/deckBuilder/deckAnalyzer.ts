@@ -1039,7 +1039,7 @@ export function computeOptimizeSwaps(
   // Detect mana base issues — excess lands or taplands
   const { currentLands, adjustedSuggestion, taplandCount } = analysis.manaBase;
   const landExcess = currentLands - adjustedSuggestion;
-  const hasExcessLands = landExcess > 2;
+  const hasExcessLands = landExcess > 0;
   const hasTaplandProblem = taplandCount > 0 && (taplandCount / Math.max(currentLands, 1)) > 0.3;
 
   // ── Grade-aware protections ──
