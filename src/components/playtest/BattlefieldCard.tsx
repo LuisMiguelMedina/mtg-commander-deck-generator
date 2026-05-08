@@ -176,32 +176,47 @@ const PositionedCard = React.forwardRef<HTMLDivElement, PositionedProps>(functio
             ))}
           </div>
         )}
-        {/* Loyalty shield (planeswalkers) — bottom-right, larger and prominent */}
+        {/* Loyalty shield (planeswalkers) — bottom-right with MTG-style hex shield */}
         {isPlaneswalker && (
           <div
-            className="absolute bottom-1 right-1 flex items-center gap-0.5 pointer-events-auto"
+            className="absolute bottom-1 right-1 flex items-end gap-1 pointer-events-auto"
             style={{ transform: card.tapped ? 'rotate(-90deg)' : undefined, transformOrigin: 'center' }}
           >
-            <button
-              onClick={(e) => { e.stopPropagation(); onAdjust('loyalty', -1); }}
-              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onAdjust('loyalty', -1); }}
-              className="w-5 h-5 rounded-full bg-black/70 text-white text-xs font-bold flex items-center justify-center hover:bg-red-600/80"
-              title="−1 loyalty"
-            >−</button>
+            {/* Hex loyalty shield with the value */}
             <div
               onClick={(e) => e.stopPropagation()}
               onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onAdjust('loyalty', -1); }}
-              className="min-w-[28px] h-7 px-1.5 rounded-md bg-blue-600 text-white font-bold flex items-center justify-center shadow-md ring-2 ring-blue-300/60 text-sm cursor-default"
+              className="relative w-10 h-11 flex items-center justify-center cursor-default drop-shadow-[0_2px_3px_rgba(0,0,0,0.6)]"
               title={`${loyaltyValue} loyalty (right-click −1)`}
             >
-              {loyaltyValue}
+              <svg viewBox="0 0 32 36" className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet" aria-hidden>
+                <polygon
+                  points="16,1 31,9 31,24 16,35 1,24 1,9"
+                  fill="#0c0c0e"
+                  stroke="rgba(255,255,255,0.7)"
+                  strokeWidth="1.5"
+                />
+              </svg>
+              <span className="relative text-white font-bold text-[15px] leading-none tabular-nums">
+                {loyaltyValue}
+              </span>
             </div>
-            <button
-              onClick={(e) => { e.stopPropagation(); onAdjust('loyalty', 1); }}
-              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onAdjust('loyalty', 1); }}
-              className="w-5 h-5 rounded-full bg-black/70 text-white text-xs font-bold flex items-center justify-center hover:bg-emerald-600/80"
-              title="+1 loyalty"
-            >+</button>
+
+            {/* Stacked +/- spinners */}
+            <div className="flex flex-col gap-0.5">
+              <button
+                onClick={(e) => { e.stopPropagation(); onAdjust('loyalty', 1); }}
+                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onAdjust('loyalty', 1); }}
+                className="w-5 h-5 rounded bg-black/75 hover:bg-emerald-600 text-white text-[11px] font-bold flex items-center justify-center shadow ring-1 ring-white/20"
+                title="+1 loyalty"
+              >+</button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onAdjust('loyalty', -1); }}
+                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onAdjust('loyalty', -1); }}
+                className="w-5 h-5 rounded bg-black/75 hover:bg-red-600 text-white text-[11px] font-bold flex items-center justify-center shadow ring-1 ring-white/20"
+                title="−1 loyalty"
+              >−</button>
+            </div>
           </div>
         )}
       </div>
