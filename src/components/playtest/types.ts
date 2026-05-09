@@ -65,6 +65,8 @@ export interface LogEntry {
   ts: number;
   text: string;
   category: LogCategory;
+  /** Marked true when undo() reverses the action that produced this entry. */
+  undone?: boolean;
 }
 
 export interface Zones {

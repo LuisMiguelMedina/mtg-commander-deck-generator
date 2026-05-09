@@ -125,19 +125,19 @@ export function GameLog() {
         ) : filtered.length === 0 ? (
           <div className="text-muted-foreground italic">No entries match the filters.</div>
         ) : (
-          filtered.map(e => <LogLine key={e.id} text={e.text} category={e.category} />)
+          filtered.map(e => <LogLine key={e.id} text={e.text} category={e.category} undone={e.undone} />)
         )}
       </div>
     </aside>
   );
 }
 
-function LogLine({ text, category }: { text: string; category: LogCategory }) {
+function LogLine({ text, category, undone }: { text: string; category: LogCategory; undone?: boolean }) {
   const cat = LOG_CATEGORIES.find(c => c.key === category);
   return (
-    <div className="text-muted-foreground/90 flex gap-1.5">
+    <div className={`flex gap-1.5 ${undone ? 'text-muted-foreground/40 line-through' : 'text-muted-foreground/90'}`}>
       <span
-        className={`shrink-0 w-1 self-stretch rounded-full ${cat?.chip.split(' ').find(c => c.startsWith('bg-')) ?? 'bg-zinc-500/40'}`}
+        className={`shrink-0 w-1 self-stretch rounded-full ${cat?.chip.split(' ').find(c => c.startsWith('bg-')) ?? 'bg-zinc-500/40'} ${undone ? 'opacity-40' : ''}`}
         aria-hidden
       />
       <span className="flex-1">{text}</span>

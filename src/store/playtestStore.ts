@@ -670,6 +670,18 @@ export const usePlaytestStore = create<Store>((set, get) => ({
   undo: () => set(state => {
     if (state.history.length === 0) return {};
     const prev = state.history[state.history.length - 1];
+    // Walk back through the log and mark the most recent non-undone, non-meta
+    // entry as undone. "Undo" entries themselves are skipped so re-undoing
+    // strikes out a real action each time, not a previous undo line.
+    const log = [...state.log];
+    for (let i = log.length - 1; i >= 0; i--) {
+      const e = log[i];
+      if (e.undone) continue;
+      if (e.text === 'Undo') continue;
+      log[i] = { ...e, undone: true };
+      break;
+    }
+    log.push(makeLogEntry('Undo', 'system'));
     return {
       history: state.history.slice(0, -1),
       zones: prev.zones,
@@ -677,7 +689,7 @@ export const usePlaytestStore = create<Store>((set, get) => ({
       life: prev.life,
       turn: prev.turn,
       phase: prev.phase,
-      log: [...state.log, makeLogEntry('Undo', 'system')],
+      log,
     };
   }),
 

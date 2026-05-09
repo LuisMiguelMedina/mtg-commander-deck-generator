@@ -182,22 +182,42 @@ const PositionedCard = React.forwardRef<HTMLDivElement, PositionedProps>(functio
             className="absolute bottom-1 right-1 flex items-end gap-1 pointer-events-auto"
             style={{ transform: card.tapped ? 'rotate(-90deg)' : undefined, transformOrigin: 'center' }}
           >
-            {/* Hex loyalty shield with the value */}
+            {/* Planeswalker loyalty shield (pentagon with flat top, V point bottom) */}
             <div
               onClick={(e) => e.stopPropagation()}
               onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onAdjust('loyalty', -1); }}
-              className="relative w-10 h-11 flex items-center justify-center cursor-default drop-shadow-[0_2px_3px_rgba(0,0,0,0.6)]"
+              className="relative w-11 h-[52px] flex items-center justify-center cursor-default drop-shadow-[0_2px_4px_rgba(0,0,0,0.65)]"
               title={`${loyaltyValue} loyalty (right-click −1)`}
             >
-              <svg viewBox="0 0 32 36" className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet" aria-hidden>
-                <polygon
-                  points="16,1 31,9 31,24 16,35 1,24 1,9"
-                  fill="#0c0c0e"
-                  stroke="rgba(255,255,255,0.7)"
-                  strokeWidth="1.5"
+              <svg viewBox="0 0 40 48" className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet" aria-hidden>
+                <defs>
+                  <linearGradient id={`loy-bg-${card.instanceId}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#262629" />
+                    <stop offset="55%" stopColor="#0d0d10" />
+                    <stop offset="100%" stopColor="#000" />
+                  </linearGradient>
+                </defs>
+                {/* Outer shield: flat-ish top, gentle shoulders, V point bottom */}
+                <path
+                  d="M 4 4 L 36 4 L 38 14 L 38 28 L 20 46 L 2 28 L 2 14 Z"
+                  fill={`url(#loy-bg-${card.instanceId})`}
+                  stroke="rgba(255,255,255,0.85)"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                />
+                {/* Inner highlight for depth */}
+                <path
+                  d="M 7 7 L 33 7 L 35 14.5 L 35 27 L 20 42 L 5 27 L 5 14.5 Z"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.14)"
+                  strokeWidth="1"
+                  strokeLinejoin="round"
                 />
               </svg>
-              <span className="relative text-white font-bold text-[15px] leading-none tabular-nums">
+              <span
+                className="relative text-white font-bold text-[16px] leading-none tabular-nums -translate-y-[2px]"
+                style={{ textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+              >
                 {loyaltyValue}
               </span>
             </div>
