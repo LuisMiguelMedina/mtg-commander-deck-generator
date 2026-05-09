@@ -182,13 +182,15 @@ const PositionedCard = React.forwardRef<HTMLDivElement, PositionedProps>(functio
             className="absolute bottom-1 right-1 flex items-end gap-1 pointer-events-auto"
             style={{ transform: card.tapped ? 'rotate(-90deg)' : undefined, transformOrigin: 'center' }}
           >
-            {/* Planeswalker loyalty shield — uses the SVG asset under public/icons/ */}
-            <div
-              onClick={(e) => e.stopPropagation()}
+            {/* Planeswalker loyalty shield — uses the SVG asset under public/icons/.
+                Left-click +1, right-click −1, no separate spinner buttons. */}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onAdjust('loyalty', 1); }}
               onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onAdjust('loyalty', -1); }}
-              className="relative cursor-default drop-shadow-[0_2px_3px_rgba(0,0,0,0.7)]"
-              style={{ width: 64, height: 40 }}
-              title={`${loyaltyValue} loyalty (right-click −1)`}
+              className="relative cursor-pointer drop-shadow-[0_2px_4px_rgba(0,0,0,0.75)] hover:brightness-110 active:scale-95 transition"
+              style={{ width: 84, height: 52 }}
+              title={`${loyaltyValue} loyalty · click +1 · right-click −1`}
             >
               <img
                 src={`${import.meta.env.BASE_URL}icons/Loyalty.svg`}
@@ -197,33 +199,16 @@ const PositionedCard = React.forwardRef<HTMLDivElement, PositionedProps>(functio
                 draggable={false}
                 aria-hidden
               />
-              {/* Value sits in the lower black area of the shield */}
               <span
-                className="absolute inset-0 flex items-center justify-center text-white font-bold text-[15px] leading-none tabular-nums"
+                className="absolute inset-0 flex items-center justify-center text-white font-extrabold text-[20px] leading-none tabular-nums"
                 style={{
-                  paddingTop: '24%', // push down past the top notch into the black area
-                  textShadow: '0 1px 2px rgba(0,0,0,0.85)',
+                  paddingTop: '24%', // push past the top notch into the black area
+                  textShadow: '0 1px 2px rgba(0,0,0,0.9)',
                 }}
               >
                 {loyaltyValue}
               </span>
-            </div>
-
-            {/* Stacked +/- spinners */}
-            <div className="flex flex-col gap-0.5">
-              <button
-                onClick={(e) => { e.stopPropagation(); onAdjust('loyalty', 1); }}
-                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onAdjust('loyalty', 1); }}
-                className="w-5 h-5 rounded bg-black/75 hover:bg-emerald-600 text-white text-[11px] font-bold flex items-center justify-center shadow ring-1 ring-white/20"
-                title="+1 loyalty"
-              >+</button>
-              <button
-                onClick={(e) => { e.stopPropagation(); onAdjust('loyalty', -1); }}
-                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onAdjust('loyalty', -1); }}
-                className="w-5 h-5 rounded bg-black/75 hover:bg-red-600 text-white text-[11px] font-bold flex items-center justify-center shadow ring-1 ring-white/20"
-                title="−1 loyalty"
-              >−</button>
-            </div>
+            </button>
           </div>
         )}
       </div>
