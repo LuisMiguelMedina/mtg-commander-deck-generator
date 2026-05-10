@@ -178,7 +178,7 @@ function OptimizeCardRow({
         )}
         {scoreVal != null && (
           <span
-            className="text-[10px] font-medium tabular-nums text-muted-foreground/70 w-9 text-right"
+            className="text-[10px] font-medium tabular-nums text-violet-300/80 w-9 text-right"
             title="Relevancy score"
           >
             {scoreVal}
