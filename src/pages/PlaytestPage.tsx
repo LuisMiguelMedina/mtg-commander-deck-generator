@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { DndContext, DragOverlay, PointerSensor, KeyboardSensor, TouchSensor, useSensor, useSensors, pointerWithin, rectIntersection, type CollisionDetection, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
+import { DndContext, DragOverlay, PointerSensor, KeyboardSensor, TouchSensor, useSensor, useSensors, pointerWithin, rectIntersection, type CollisionDetection, type DragEndEvent, type DragMoveEvent, type DragStartEvent } from '@dnd-kit/core';
 import { useStore } from '@/store';
 import { useUserLists } from '@/hooks/useUserLists';
 import { usePlaytestStore } from '@/store/playtestStore';
@@ -93,6 +93,9 @@ export function PlaytestPage({ kind }: { kind: 'list' | 'generated' }) {
       card = bf?.card;
       faceDown = bf?.faceDown ?? false;
       tapped = bf?.tapped ?? false;
+      // Track active battlefield card for group-drag follow rendering.
+      state.setDragActive(source.instanceId);
+      state.setDragDelta({ x: 0, y: 0 });
     }
     if (card) {
       setActiveCard(card);
@@ -101,7 +104,25 @@ export function PlaytestPage({ kind }: { kind: 'list' | 'generated' }) {
     }
   }
 
+  function onDragMove(event: DragMoveEvent) {
+    const data = event.active.data.current as { source?: MoveSource } | undefined;
+    const source = data?.source;
+    if (!source || source.kind !== 'battlefield') return;
+    const { x, y } = event.delta;
+    usePlaytestStore.getState().setDragDelta({ x, y });
+  }
+
+  function clearDragTracking() {
+    const state = usePlaytestStore.getState();
+    state.setDragActive(null);
+    state.setDragDelta(null);
+  }
+
   function onDragEnd(event: DragEndEvent) {
+    try { onDragEndInner(event); } finally { clearDragTracking(); }
+  }
+
+  function onDragEndInner(event: DragEndEvent) {
     setActiveCard(null);
     setActiveFaceDown(false);
     setActiveTapped(false);
@@ -150,8 +171,17 @@ export function PlaytestPage({ kind }: { kind: 'list' | 'generated' }) {
         const state = usePlaytestStore.getState();
         const target = state.battlefield.find(b => b.instanceId === source.instanceId);
         if (!target) return;
+        const dx = x - target.x;
+        const dy = y - target.y;
+        const groupIds = state.selectedIds.includes(source.instanceId) && state.selectedIds.length > 1
+          ? state.selectedIds.filter(id => id !== source.instanceId)
+          : [];
+        const groupSet = new Set(groupIds);
         const others = state.battlefield.filter(b => b.instanceId !== source.instanceId);
-        const updated = [...others, { ...target, x, y }];
+        const repositioned = others.map(b =>
+          groupSet.has(b.instanceId) ? { ...b, x: b.x + dx, y: b.y + dy } : b
+        );
+        const updated = [...repositioned, { ...target, x, y }];
         usePlaytestStore.setState({
           history: [...state.history, {
             zones: state.zones,
@@ -198,7 +228,7 @@ export function PlaytestPage({ kind }: { kind: 'list' | 'generated' }) {
   if (!ready) return null;
 
   return (
-    <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => { setActiveCard(null); setActiveFaceDown(false); setActiveTapped(false); }}>
+    <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={() => { setActiveCard(null); setActiveFaceDown(false); setActiveTapped(false); clearDragTracking(); }}>
       <div className="h-screen w-screen flex flex-col bg-background overflow-hidden">
         <PlaytestToolbar onExit={() => navigate(-1)} />
         <div className="flex-1 flex min-h-0">

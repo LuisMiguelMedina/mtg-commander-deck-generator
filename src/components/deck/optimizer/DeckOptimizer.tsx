@@ -517,28 +517,22 @@ export function DeckOptimizer({
     handleOptimizeRef.current?.();
   }, [commanderName, analysis, loading]);
 
-  // Re-run analysis when cards change (add/remove). Debounced so rapid
-  // multi-add interactions don't trigger several full analyses in a row.
-  // prevCardKeyRef must only be updated AFTER the timeout fires — if we
-  // update it eagerly, an unrelated re-render before 80ms elapses cancels
-  // the cleanup's clearTimeout but then bails on the cardKey-match check,
-  // and the analysis never runs.
+  // Re-run analysis when cards change (add/remove). Runs synchronously on
+  // each card-key change so the role panel updates instantly. Bulk
+  // operations (cut-all, multi-add) already batch into a single
+  // currentCards update upstream, so no debounce is needed here.
   const hasAnalysis = analysis != null;
   useEffect(() => {
     if (!cachedEdhrecDataRef.current || !hasAnalysis) return;
     const cardKey = currentCards.map(c => c.name).join('\0');
     if (cardKey === prevCardKeyRef.current) return;
-
-    const handle = setTimeout(() => {
-      prevCardKeyRef.current = cardKey;
-      const result = runAnalysisFor({
-        targets: effectiveRoleTargets,
-        pacing: userPacing ?? undefined,
-        landTarget: userLandTarget ?? undefined,
-      });
-      if (result) setAnalysis(result);
-    }, 80);
-    return () => clearTimeout(handle);
+    prevCardKeyRef.current = cardKey;
+    const result = runAnalysisFor({
+      targets: effectiveRoleTargets,
+      pacing: userPacing ?? undefined,
+      landTarget: userLandTarget ?? undefined,
+    });
+    if (result) setAnalysis(result);
   }, [currentCards, effectiveRoleTargets, userPacing, userLandTarget, hasAnalysis, runAnalysisFor]);
 
   // Snapshot the card key whenever a new analysis lands, so we can show a

@@ -22,6 +22,16 @@ export function BattlefieldCard({ card }: { card: BfCard }) {
   const adjustCounter = usePlaytestStore(s => s.adjustCounter);
   const setHovered = usePlaytestStore(s => s.setHovered);
   const battlefield = usePlaytestStore(s => s.battlefield);
+  const selected = usePlaytestStore(s => s.selectedIds.includes(card.instanceId));
+  // Group-drag follow: when a different selected card is being dragged, this card
+  // should visually translate by the same delta until drop.
+  const followDelta = usePlaytestStore(s => {
+    const aid = s.dragActiveId;
+    if (!aid || aid === card.instanceId) return null;
+    if (!s.selectedIds.includes(card.instanceId)) return null;
+    if (!s.selectedIds.includes(aid)) return null;
+    return s.dragDelta;
+  });
   const [menu, setMenu] = useState<CardMenuTarget | null>(null);
 
   const draggable = useDraggable({
@@ -51,8 +61,9 @@ export function BattlefieldCard({ card }: { card: BfCard }) {
         card={card}
         xPx={xPx}
         yPx={yPx}
-        transform={draggable.transform}
+        transform={draggable.transform ?? followDelta}
         isDragging={draggable.isDragging}
+        selected={selected}
         onTap={() => toggleTap(card.instanceId)}
         onAdjust={(t, d) => adjustCounter(card.instanceId, t, d)}
         onHover={(v) => setHovered(v ? card.instanceId : null)}
@@ -72,6 +83,7 @@ interface PositionedProps {
   yPx: number;
   transform: { x: number; y: number } | null;
   isDragging: boolean;
+  selected: boolean;
   attributes: DraggableAttributes;
   listeners: Record<string, unknown> | undefined;
   onTap: () => void;
@@ -81,7 +93,7 @@ interface PositionedProps {
 }
 
 const PositionedCard = React.forwardRef<HTMLDivElement, PositionedProps>(function PositionedCard(props, ref) {
-  const { card, xPx, yPx, transform, isDragging, attributes, listeners, onTap, onAdjust, onHover, onContextMenu } = props;
+  const { card, xPx, yPx, transform, isDragging, selected, attributes, listeners, onTap, onAdjust, onHover, onContextMenu } = props;
   const cardWidth = 100;
   const localRef = useRef<HTMLDivElement | null>(null);
   const setRefs = (node: HTMLDivElement | null) => {
@@ -145,7 +157,7 @@ const PositionedCard = React.forwardRef<HTMLDivElement, PositionedProps>(functio
                   : getCardImageUrl(card.card, 'normal'))
           }
           alt={card.faceDown ? 'Face-down' : card.card.name}
-          className="w-full rounded-[5px] shadow-lg pointer-events-none"
+          className={`w-full rounded-[5px] shadow-lg pointer-events-none ${selected ? 'ring-2 ring-primary ring-offset-1 ring-offset-transparent' : ''}`}
           draggable={false}
         />
         {/* Counter chips, counter-rotated to stay upright when card is tapped */}

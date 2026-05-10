@@ -51,6 +51,7 @@ export function PlaytestCardMenu({ target, onClose }: Props) {
   const unattach = usePlaytestStore(s => s.unattach);
   const battlefield = usePlaytestStore(s => s.battlefield);
   const commanderNames = usePlaytestStore(s => s.source?.commanderNames ?? []);
+  const selectedIds = usePlaytestStore(s => s.selectedIds ?? []);
 
   useEffect(() => {
     if (!target) return;
@@ -99,13 +100,64 @@ export function PlaytestCardMenu({ target, onClose }: Props) {
   const isDFC = onBattlefield && bfCard ? isDoubleFacedCard(bfCard.card) : false;
   const typeLine = getFrontFaceTypeLine(target.card);
 
+  // If the right-clicked card is part of a multi-selection, every action
+  // applies to the whole selection. Right-clicking outside the selection
+  // (or with no selection) just acts on the right-clicked card.
+  const isBulk = onBattlefield && bfCard
+    ? selectedIds.includes(bfCard.instanceId) && selectedIds.length > 1
+    : false;
+  const targetIds = isBulk ? selectedIds : (bfCard ? [bfCard.instanceId] : []);
+  const bulkSuffix = isBulk ? ` (${targetIds.length})` : '';
+
+  // Drive tap/face-down/transform off the right-clicked card's state, then
+  // set every target to that opposite state — so a mixed selection ends up
+  // uniformly tapped/untapped instead of randomly toggled.
+  const applyTap = () => {
+    if (!bfCard) return;
+    const wantTapped = !bfCard.tapped;
+    targetIds.forEach((id) => {
+      const c = battlefield.find((b) => b.instanceId === id);
+      if (c && c.tapped !== wantTapped) toggleTap(id);
+    });
+    onClose();
+  };
+  const applyFaceDown = () => {
+    if (!bfCard) return;
+    const wantFaceDown = !bfCard.faceDown;
+    targetIds.forEach((id) => {
+      const c = battlefield.find((b) => b.instanceId === id);
+      if (c && c.faceDown !== wantFaceDown) toggleFaceDown(id);
+    });
+    onClose();
+  };
+  const applyFlip = () => {
+    if (!bfCard) return;
+    const wantFlipped = !bfCard.flipped;
+    targetIds.forEach((id) => {
+      const c = battlefield.find((b) => b.instanceId === id);
+      if (c && c.flipped !== wantFlipped) toggleFlipped(id);
+    });
+    onClose();
+  };
+  const applyCopy = () => { targetIds.forEach((id) => copyCard(id)); onClose(); };
+  const applyUnattach = () => { targetIds.forEach((id) => unattach(id)); onClose(); };
+  const applyCounter = (type: string) => { targetIds.forEach((id) => adjustCounter(id, type, 1)); onClose(); };
+
   const move = (dest: 'hand' | 'graveyard' | 'exile' | 'command' | 'libtop' | 'libbot') => {
-    const source = onBattlefield && target.instanceId
-      ? { kind: 'battlefield' as const, instanceId: target.instanceId }
-      : { kind: 'zone' as const, zone: 'hand' as const, index: target.handIndex! };
-    if (dest === 'libtop') moveCard({ source, target: { kind: 'library', position: 'top' } });
-    else if (dest === 'libbot') moveCard({ source, target: { kind: 'library', position: 'bottom' } });
-    else moveCard({ source, target: { kind: 'zone', zone: dest } });
+    if (onBattlefield) {
+      // Bulk-aware battlefield → zone moves.
+      targetIds.forEach((id) => {
+        const source = { kind: 'battlefield' as const, instanceId: id };
+        if (dest === 'libtop') moveCard({ source, target: { kind: 'library', position: 'top' } });
+        else if (dest === 'libbot') moveCard({ source, target: { kind: 'library', position: 'bottom' } });
+        else moveCard({ source, target: { kind: 'zone', zone: dest } });
+      });
+    } else {
+      const source = { kind: 'zone' as const, zone: 'hand' as const, index: target.handIndex! };
+      if (dest === 'libtop') moveCard({ source, target: { kind: 'library', position: 'top' } });
+      else if (dest === 'libbot') moveCard({ source, target: { kind: 'library', position: 'bottom' } });
+      else moveCard({ source, target: { kind: 'zone', zone: dest } });
+    }
     onClose();
   };
 
@@ -127,6 +179,11 @@ export function PlaytestCardMenu({ target, onClose }: Props) {
         {typeLine && (
           <div className="text-[10px] text-muted-foreground/80 leading-tight truncate">{typeLine}</div>
         )}
+        {isBulk && (
+          <div className="mt-1 text-[10px] text-primary/90 font-medium">
+            Acting on {targetIds.length} selected
+          </div>
+        )}
       </div>
       <Sep />
 
@@ -135,37 +192,37 @@ export function PlaytestCardMenu({ target, onClose }: Props) {
         <>
           <Item
             icon={<RotateCcw className={`w-3.5 h-3.5 ${bfCard.tapped ? '' : 'rotate-90'}`} />}
-            onClick={() => { toggleTap(bfCard.instanceId); onClose(); }}
+            onClick={applyTap}
             shortcut="T"
           >
-            {bfCard.tapped ? 'Untap' : 'Tap'}
+            {bfCard.tapped ? 'Untap' : 'Tap'}{bulkSuffix}
           </Item>
           {isDFC && (
             <Item
               icon={<Repeat className="w-3.5 h-3.5" />}
-              onClick={() => { toggleFlipped(bfCard.instanceId); onClose(); }}
+              onClick={applyFlip}
             >
-              {bfCard.flipped ? 'Show front face' : 'Transform'}
+              {bfCard.flipped ? 'Show front face' : 'Transform'}{bulkSuffix}
             </Item>
           )}
           <Item
             icon={bfCard.faceDown ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-            onClick={() => { toggleFaceDown(bfCard.instanceId); onClose(); }}
+            onClick={applyFaceDown}
           >
-            {bfCard.faceDown ? 'Flip face up' : 'Flip face down'}
+            {bfCard.faceDown ? 'Flip face up' : 'Flip face down'}{bulkSuffix}
           </Item>
           <Item
             icon={<CopyIcon className="w-3.5 h-3.5" />}
-            onClick={() => { copyCard(bfCard.instanceId); onClose(); }}
+            onClick={applyCopy}
           >
-            Create copy
+            {isBulk ? `Create copies${bulkSuffix}` : 'Create copy'}
           </Item>
           {isAttached && (
             <Item
               icon={<Link2Off className="w-3.5 h-3.5" />}
-              onClick={() => { unattach(bfCard.instanceId); onClose(); }}
+              onClick={applyUnattach}
             >
-              Unattach
+              Unattach{bulkSuffix}
             </Item>
           )}
           <Sep />
@@ -174,14 +231,14 @@ export function PlaytestCardMenu({ target, onClose }: Props) {
 
       {/* Move destinations */}
       {onBattlefield && (
-        <Item icon={<HandIcon className="w-3.5 h-3.5" />} onClick={() => move('hand')}>Move to hand</Item>
+        <Item icon={<HandIcon className="w-3.5 h-3.5" />} onClick={() => move('hand')}>Move to hand{bulkSuffix}</Item>
       )}
-      <Item icon={<ArrowUpToLine className="w-3.5 h-3.5" />}   onClick={() => move('libtop')}>Move to library top</Item>
-      <Item icon={<ArrowDownToLine className="w-3.5 h-3.5" />} onClick={() => move('libbot')}>Move to library bottom</Item>
-      <Item icon={<Trash2 className="w-3.5 h-3.5" />}          onClick={() => move('graveyard')}>Move to graveyard</Item>
-      <Item icon={<Sparkles className="w-3.5 h-3.5" />}        onClick={() => move('exile')}>Move to exile</Item>
+      <Item icon={<ArrowUpToLine className="w-3.5 h-3.5" />}   onClick={() => move('libtop')}>Move to library top{bulkSuffix}</Item>
+      <Item icon={<ArrowDownToLine className="w-3.5 h-3.5" />} onClick={() => move('libbot')}>Move to library bottom{bulkSuffix}</Item>
+      <Item icon={<Trash2 className="w-3.5 h-3.5" />}          onClick={() => move('graveyard')}>Move to graveyard{bulkSuffix}</Item>
+      <Item icon={<Sparkles className="w-3.5 h-3.5" />}        onClick={() => move('exile')}>Move to exile{bulkSuffix}</Item>
       {commanderNames.includes(target.card.name) && (
-        <Item icon={<Crown className="w-3.5 h-3.5" />}         onClick={() => move('command')}>Move to command zone</Item>
+        <Item icon={<Crown className="w-3.5 h-3.5" />}         onClick={() => move('command')}>Move to command zone{bulkSuffix}</Item>
       )}
 
       {/* Counters */}
@@ -192,9 +249,9 @@ export function PlaytestCardMenu({ target, onClose }: Props) {
             <Item
               key={c.key}
               icon={<Plus className="w-3.5 h-3.5" />}
-              onClick={() => { adjustCounter(bfCard.instanceId, c.key, 1); onClose(); }}
+              onClick={() => applyCounter(c.key)}
             >
-              Add {c.label} counter
+              Add {c.label} counter{bulkSuffix}
             </Item>
           ))}
         </>

@@ -104,12 +104,13 @@ export function RoleSummaryStrip({
 }
 
 // ─── Roles Tab: Grouped Card List ────────────────────────────────────
-export function RoleCardGroups({ cards, role, onPreview, onCardAction, menuProps }: {
+export function RoleCardGroups({ cards, role, onPreview, onCardAction, menuProps, addedCards }: {
   cards: AnalyzedCard[];
   role: string;
   onPreview: (name: string) => void;
   onCardAction?: (card: ScryfallCard, action: CardAction) => void;
   menuProps?: CardRowMenuProps;
+  addedCards?: Set<string>;
 }) {
   const knownSubtypes = ROLE_KNOWN_SUBTYPES[role];
   const groupEntries = useMemo(() => {
@@ -138,6 +139,7 @@ export function RoleCardGroups({ cards, role, onPreview, onCardAction, menuProps
             ac={ac}
             onPreview={onPreview}
             showDetails
+            justAdded={addedCards?.has(ac.card.name)}
             onCardAction={onCardAction}
             menuProps={menuProps}
           />
@@ -190,7 +192,7 @@ export function RoleDetailPanel({
         <div className={`${hasSuggestions ? 'md:w-[30%] shrink-0' : 'w-full'}`}>
           <RoleSummary rb={rb} />
           {rb.cards.length > 0 ? (
-            <RoleCardGroups cards={rb.cards} role={rb.role} onPreview={onPreview} onCardAction={onCardAction} menuProps={menuProps} />
+            <RoleCardGroups cards={rb.cards} role={rb.role} onPreview={onPreview} onCardAction={onCardAction} menuProps={menuProps} addedCards={addedCards} />
           ) : (
             <p className="text-xs text-muted-foreground italic px-0.5">No cards filling this role</p>
           )}

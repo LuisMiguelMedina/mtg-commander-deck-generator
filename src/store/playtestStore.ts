@@ -54,6 +54,9 @@ interface PlaytestState {
   combos: DetectedCombo[];
   // Battlefield instanceIds currently selected via marquee (rectangle) selection.
   selectedIds: string[];
+  // Active multi-drag tracking — used so non-active selected cards visually follow.
+  dragActiveId: string | null;
+  dragDelta: { x: number; y: number } | null;
 }
 
 interface PlaytestActions {
@@ -108,6 +111,10 @@ interface PlaytestActions {
 
   setSelectedIds: (ids: string[]) => void;
   clearSelection: () => void;
+
+  setDragActive: (instanceId: string | null) => void;
+  setDragDelta: (delta: { x: number; y: number } | null) => void;
+  applyGroupMove: (activeId: string, dx: number, dy: number) => void;
 }
 
 type Store = PlaytestState & PlaytestActions;
@@ -133,6 +140,8 @@ const initial: PlaytestState = {
   freeCounters: [],
   combos: [],
   selectedIds: [],
+  dragActiveId: null,
+  dragDelta: null,
 };
 
 function snapshotOf(s: PlaytestState): PlaytestSnapshot {
@@ -755,6 +764,21 @@ export const usePlaytestStore = create<Store>((set, get) => ({
 
   setSelectedIds: (ids) => set({ selectedIds: ids }),
   clearSelection: () => set(state => (state.selectedIds.length === 0 ? {} : { selectedIds: [] })),
+
+  setDragActive: (instanceId) => set({ dragActiveId: instanceId }),
+  setDragDelta: (delta) => set({ dragDelta: delta }),
+
+  applyGroupMove: (activeId, dx, dy) => set(state => {
+    if (state.selectedIds.length <= 1) return {};
+    if (!state.selectedIds.includes(activeId)) return {};
+    const moveSet = new Set(state.selectedIds.filter(id => id !== activeId));
+    if (moveSet.size === 0) return {};
+    return {
+      battlefield: state.battlefield.map(b =>
+        moveSet.has(b.instanceId) ? { ...b, x: b.x + dx, y: b.y + dy } : b
+      ),
+    };
+  }),
 }));
 
 // Helper: serializable selector for zone counts (used by Sidebar to avoid re-rendering on every change)

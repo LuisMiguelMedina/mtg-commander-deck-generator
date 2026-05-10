@@ -60,7 +60,7 @@ export function PlaytestActionsBar() {
       <Button variant="outline" size="sm" className={btn} onClick={() => openModal({ kind: 'tokens' })} title="Create token"><Sparkles className={icon} />Tokens</Button>
       <Popover open={counterOpen} onOpenChange={setCounterOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className={btn} title="Add a free-floating counter"><Circle className={icon} />Counter</Button>
+          <Button variant="outline" size="sm" className={btn} title="Add a free-floating counter"><Circle className={icon} />Counters</Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-44 p-2">
           <p className="text-[10px] uppercase opacity-60 px-1 pb-1">Pick a color</p>

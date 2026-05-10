@@ -34,13 +34,14 @@ export function AnimatedCollapse({ open, children }: { open: boolean; children: 
 
 // ─── Shared: Analyzed Card Row (compact, for curve/lands/types) ──────
 function _AnalyzedCardRow({
-  ac, onPreview, warning, showDetails, showProducedMana, onCardAction, menuProps,
+  ac, onPreview, warning, showDetails, showProducedMana, justAdded, onCardAction, menuProps,
 }: {
   ac: AnalyzedCard;
   onPreview: (name: string) => void;
   warning?: string;
   showDetails?: boolean;
   showProducedMana?: boolean;
+  justAdded?: boolean;
   onCardAction?: (card: ScryfallCard, action: CardAction) => void;
   menuProps?: CardRowMenuProps;
 }) {
@@ -66,7 +67,7 @@ function _AnalyzedCardRow({
     <div
       className={`flex items-center gap-2 py-1 px-1.5 rounded-lg cursor-pointer hover:bg-accent/40 transition-colors group ${
         warning ? 'border border-amber-500/20' : 'border border-transparent'
-      }`}
+      } ${justAdded ? 'animate-chip-in bg-emerald-500/5' : ''}`}
       onClick={() => onPreview(ac.card.name)}
       onContextMenu={(e) => {
         if (onCardAction && menuProps) {
