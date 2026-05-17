@@ -338,9 +338,12 @@ export function CutCardItem({
 }) {
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const isBanned = menuProps?.bannedNames.has(ac.card.name);
-  const rawInclusion = ac.inclusion ?? cardInclusionMap?.[ac.card.name] ?? edhrecRankToInclusion(ac.card.edhrec_rank);
+  // Treat a 0 in cardInclusionMap as "not in pool" (older decks stored 0 for
+  // missing entries) so we fall through to the global edhrec_rank estimate.
+  const mapInclusion = cardInclusionMap?.[ac.card.name] || null;
+  const rawInclusion = ac.inclusion ?? mapInclusion ?? edhrecRankToInclusion(ac.card.edhrec_rank);
   const pct = rawInclusion != null ? Math.round(rawInclusion) : null;
-  const isEstimate = ac.inclusion == null && cardInclusionMap?.[ac.card.name] == null && pct != null;
+  const isEstimate = ac.inclusion == null && mapInclusion == null && pct != null;
   const price = getCardPrice(ac.card);
   const imgUrl = ac.card.image_uris?.normal
     || ac.card.card_faces?.[0]?.image_uris?.normal
@@ -489,7 +492,7 @@ function SummarySection({ type, items, onNavigate, onNavigateRole }: {
           onClick={() => handleClick(item.tab)}
           className="flex items-start gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left py-0.5"
         >
-          <span className="mt-0.5 shrink-0" dangerouslySetInnerHTML={{ __html: summaryIconSvg(item.icon) }} />
+          <span className="mt-0 shrink-0" dangerouslySetInnerHTML={{ __html: summaryIconSvg(item.icon) }} />
           <span>
             <span className="font-semibold text-foreground/90">{item.label}</span>
             <span> — {item.text}</span>

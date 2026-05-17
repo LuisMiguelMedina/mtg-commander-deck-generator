@@ -482,8 +482,8 @@ export function ListsPage() {
 
       {/* Toolbar */}
       {lists.length > 0 && (
-        <div className="flex items-center gap-3 mb-6">
-          <div className="relative flex-1 max-w-sm">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-6">
+          <div className="relative flex-1 min-w-[180px] sm:max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               type="text"

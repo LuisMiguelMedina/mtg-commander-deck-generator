@@ -307,13 +307,50 @@
   }
 
   .animate-deal-in {
-    animation: dealIn 380ms cubic-bezier(0.22, 0.9, 0.32, 1);
+    animation: dealIn 380ms cubic-bezier(0.22, 0.9, 0.32, 1) backwards;
   }
 
   @keyframes dealIn {
     0%   { opacity: 0; transform: translateY(110px) rotate(-6deg) scale(0.9); }
     60%  { opacity: 1; }
     100% { opacity: 1; transform: translateY(0) rotate(0) scale(1); }
+  }
+
+  .animate-deal-in-from-top {
+    animation: dealInFromTop 380ms cubic-bezier(0.22, 0.9, 0.32, 1) backwards;
+  }
+
+  @keyframes dealInFromTop {
+    0%   { opacity: 0; transform: translateY(-110px) rotate(6deg) scale(0.9); }
+    60%  { opacity: 1; }
+    100% { opacity: 1; transform: translateY(0) rotate(0) scale(1); }
+  }
+
+  /* Battlefield card flip: brief 3D rotate so a face-down/face-up
+     toggle reads as a physical flip. The image swap happens instantly;
+     this animation just hides the swap at the edge-on midpoint. */
+  .animate-bf-flip {
+    animation: bfFlip 380ms ease-in-out;
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
+  }
+
+  @keyframes bfFlip {
+    0%     { transform: rotateY(0deg); }
+    49.99% { transform: rotateY(90deg); }
+    50%    { transform: rotateY(-90deg); }
+    100%   { transform: rotateY(0deg); }
+  }
+
+  /* Soft fade-up: used when the FIRST card lands in an empty pile.
+     Intentionally gentler than animate-pop-in (no springy overshoot). */
+  .animate-soft-in {
+    animation: softIn 280ms ease-out;
+  }
+
+  @keyframes softIn {
+    from { opacity: 0; transform: scale(0.94); }
+    to   { opacity: 1; transform: scale(1); }
   }
 
   @keyframes jiggle {
@@ -438,7 +475,7 @@
   position: absolute;
   border-radius: 50%;
   filter: blur(200px);
-  opacity: 0.07;
+  opacity: 0.11;
 }
 
 .aurora-bg::before {
@@ -446,7 +483,7 @@
   height: 60vh;
   top: -20%;
   left: -10%;
-  background: radial-gradient(ellipse, hsl(262 80% 55%), hsl(220 70% 50%), transparent 70%);
+  background: radial-gradient(ellipse, hsl(262 85% 58%), hsl(220 75% 52%), transparent 70%);
   animation: aurora 20s ease-in-out infinite;
 }
 
@@ -455,7 +492,7 @@
   height: 50vh;
   bottom: -10%;
   right: -10%;
-  background: radial-gradient(ellipse, hsl(180 60% 40%), hsl(262 60% 45%), transparent 70%);
+  background: radial-gradient(ellipse, hsl(180 70% 45%), hsl(262 70% 50%), transparent 70%);
   animation: aurora 25s ease-in-out infinite reverse;
 }
 
@@ -491,4 +528,16 @@
   .card-preview-content .card-preview-info > div {
     justify-content: flex-start;
   }
+}
+
+/* Playtest loading: three card backs riffle-shuffle */
+.animate-shuffle {
+  animation: shuffleLoop 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes shuffleLoop {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  25%      { transform: translate(-32px, -14px) rotate(-12deg); }
+  50%      { transform: translate(0, 0) rotate(0deg); }
+  75%      { transform: translate(32px, -14px) rotate(12deg); }
 }

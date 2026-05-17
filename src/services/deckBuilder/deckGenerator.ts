@@ -3647,6 +3647,20 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
     if (detectedCombos.length === 0) detectedCombos = undefined;
   }
 
+  // Shared constraint gate for post-assembly injection phases (combo audit + role/CMC fix-ups).
+  // Owned-card exemptions match the rest of the pipeline.
+  function passesUserConstraints(card: ScryfallCard): boolean {
+    if (!fitsColorIdentity(card, colorIdentity)) return false;
+    if (exceedsCmcCap(card, maxCmc)) return false;
+    if (notOnArena(card, arenaOnly)) return false;
+    const rarityExempt = isOwnedRarityExempt(card.name, context.collectionNames, ignoreOwnedRarity);
+    if (!rarityExempt && exceedsMaxRarity(card, maxRarity)) return false;
+    const budgetExempt = isOwnedBudgetExempt(card.name, context.collectionNames, ignoreOwnedBudget);
+    if (!budgetExempt && exceedsMaxPrice(card, maxCardPrice, currency)) return false;
+    if (collectionStrategy === 'full' && notInCollection(card.name, context.collectionNames)) return false;
+    return true;
+  }
+
   // ── Combo Integrity Audit ──
   // After deck assembly: if a combo piece slipped in but its combo is incomplete,
   // either complete the combo (swap in missing pieces) or evict the low-value orphan.
@@ -3704,6 +3718,7 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
     function auditAdd(card: ScryfallCard): boolean {
       if (usedNames.has(card.name)) return false; // guard against duplicates
       if (bannedCards.has(card.name)) return false; // respect banlist
+      if (!passesUserConstraints(card)) return false;
       stampRoleSubtypes(card);
       const role = getCardRole(card.name);
       const typeLine = (card.type_line || '').toLowerCase();
@@ -3735,6 +3750,7 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
         const name = trulyMissing[0];
         if (bannedCards.has(name) || !scryfallCardMap.has(name)) continue;
         if (collectionStrategy === 'full' && notInCollection(name, context.collectionNames)) continue;
+        if (!passesUserConstraints(scryfallCardMap.get(name)!)) continue;
         enablerScore.set(name, (enablerScore.get(name) ?? 0) + 1);
         const ids = enablerCombos.get(name) ?? [];
         ids.push(dc.comboId);
@@ -3794,7 +3810,8 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
         .filter(n => !bannedCards.has(n))
         .filter(n => !(collectionStrategy === 'full' && notInCollection(n, context.collectionNames)))
         .map(n => scryfallCardMap.get(n))
-        .filter((c): c is ScryfallCard => !!c);
+        .filter((c): c is ScryfallCard => !!c)
+        .filter(c => passesUserConstraints(c));
 
       // If all "missing" pieces are actually already in the deck now, mark complete and move on
       if (trulyMissing.length === 0) {
@@ -3836,7 +3853,8 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
           if (!found) continue;
           const replacement = edhrecData.cardlists.allNonLand
             .filter(c => !usedNames.has(c.name) && !bannedCards.has(c.name) && scryfallCardMap.has(c.name)
-              && !(collectionStrategy === 'full' && notInCollection(c.name, context.collectionNames)))
+              && !(collectionStrategy === 'full' && notInCollection(c.name, context.collectionNames))
+              && passesUserConstraints(scryfallCardMap.get(c.name)!))
             .sort((a, b) => b.inclusion - a.inclusion)[0];
           if (!replacement) continue;
           auditRemove(found.card, found.category);
@@ -3938,7 +3956,7 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
     // Helper: find best EDHREC candidate for a role that's already fetched
     function findRoleCandidate(role: RoleKey): ScryfallCard | null {
       const candidates = edhrecData!.cardlists.allNonLand
-        .filter(c => !usedNames.has(c.name) && !bannedCards.has(c.name) && getCardRole(c.name) === role && scryfallCardMap.has(c.name))
+        .filter(c => !usedNames.has(c.name) && !bannedCards.has(c.name) && getCardRole(c.name) === role && scryfallCardMap.has(c.name) && passesUserConstraints(scryfallCardMap.get(c.name)!))
         .sort((a, b) => calculateCardPriority(b) - calculateCardPriority(a));
       return candidates.length > 0 ? scryfallCardMap.get(candidates[0].name)! : null;
     }
@@ -3989,7 +4007,7 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
             const weak = findWeakestCard((card) => (card.cmc ?? 0) === Number(overfullEntry[0]));
             if (weak) {
               const candidates = edhrecData!.cardlists.allNonLand
-                .filter(c => !usedNames.has(c.name) && !bannedCards.has(c.name) && scryfallCardMap.has(c.name) && (scryfallCardMap.get(c.name)!.cmc ?? 0) === targetCmc)
+                .filter(c => !usedNames.has(c.name) && !bannedCards.has(c.name) && scryfallCardMap.has(c.name) && (scryfallCardMap.get(c.name)!.cmc ?? 0) === targetCmc && passesUserConstraints(scryfallCardMap.get(c.name)!))
                 .sort((a, b) => calculateCardPriority(b) - calculateCardPriority(a));
               if (candidates.length > 0) {
                 const replacement = scryfallCardMap.get(candidates[0].name)!;
@@ -4038,9 +4056,13 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
         if (incl === undefined && card.name.includes(' // ')) {
           incl = inclusionIndex.get(card.name.split(' // ')[0]);
         }
-        const val = incl ?? 0;
-        inclMap[card.name] = val;
-        score += val;
+        // Only store cards that actually have a commander-inclusion %.
+        // Storing 0 here would be indistinguishable from "0% played" and
+        // would suppress the global edhrec_rank fallback the cut UI uses.
+        if (incl !== undefined) {
+          inclMap[card.name] = incl;
+          score += incl;
+        }
       }
     }
     // Also index swap candidates so the UI can show their inclusion %

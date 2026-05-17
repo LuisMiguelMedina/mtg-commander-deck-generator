@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { Settings, Sparkles } from 'lucide-react';
+import { Settings, Sparkles, Wand2, ListChecks, Library, BarChart3 } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import patchNotes from '@/data/patchNotes.json';
 import { HomePage } from '@/pages/HomePage';
@@ -182,6 +182,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const isCollectionPage = location.pathname === '/collection' || location.pathname.startsWith('/lists');
+  const isCreatePage = location.pathname === '/' || location.pathname.startsWith('/build/') || location.pathname.startsWith('/build-from-deck/');
 
   const [eaEnabled, setEaEnabled] = useState(() => localStorage.getItem('ea-features-enabled') === 'true');
   const toggleEaFeatures = useCallback(() => {
@@ -247,9 +248,9 @@ function Layout({ children }: { children: React.ReactNode }) {
       {!isCollectionPage && <CommanderBackground commander={commander} deckGenerated={!!generatedDeck} />}
 
       {/* Content wrapper with relative positioning */}
-      <div className="relative z-10 flex flex-col min-h-screen">
+      <div className="relative z-10 flex flex-col min-h-screen pb-16 sm:pb-0">
         {/* Header */}
-        <header className="border-b border-border/50 bg-card/70 backdrop-blur-md sticky top-0 z-40">
+        <header className="border-b border-border/50 bg-card/70 backdrop-blur-md sm:sticky sm:top-0 z-40">
           <div className="container mx-auto px-4 py-4">
             <div className="flex items-center justify-between">
               <button
@@ -258,51 +259,61 @@ function Layout({ children }: { children: React.ReactNode }) {
               >
                 <img
                   src={`${import.meta.env.BASE_URL}logo.png`}
-                  alt="EDH Deck Builder"
+                  alt="ManaFoundry - EDH Deck Builder"
                   className="w-10 h-10 rounded-xl shadow-lg"
                 />
-                <div className="hidden sm:block">
-                  <h1 className="text-xl font-bold">EDH Deck Builder</h1>
-                  <p className="text-xs text-muted-foreground">
+                <div>
+                  <h1 className="text-lg sm:text-xl font-bold">ManaFoundry</h1>
+                  <p className="hidden sm:block text-xs text-muted-foreground">
                     Generate, analyze, and optimize Commander decks instantly
                   </p>
                 </div>
               </button>
               <div className="flex items-center gap-3">
-                {import.meta.env.DEV && (
+                <div className="hidden sm:flex items-center gap-3">
+                  {import.meta.env.DEV && (
+                    <button
+                      onClick={() => navigate('/metrics')}
+                      className="text-xs text-amber-500/80 hover:text-amber-400 transition-colors px-2 py-1 rounded-md hover:bg-accent flex items-center gap-1.5"
+                    >
+                      Metrics
+                    </button>
+                  )}
                   <button
-                    onClick={() => navigate('/metrics')}
-                    className="text-xs text-amber-500/80 hover:text-amber-400 transition-colors px-2 py-1 rounded-md hover:bg-accent flex items-center gap-1.5"
+                    onClick={handleLogoClick}
+                    className={`text-xs transition-colors px-2 py-1 rounded-md flex items-center gap-1.5 ${
+                      isCreatePage ? 'text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                    }`}
                   >
-                    Metrics
+                    Generate
                   </button>
-                )}
-                <button
-                  onClick={() => navigate('/lists')}
-                  className={`text-xs transition-colors px-2 py-1 rounded-md flex items-center gap-1.5 ${
-                    location.pathname.startsWith('/lists') ? 'text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                  }`}
-                >
-                  My Lists
-                  {userListCount > 0 && (
-                    <span className="text-[10px] font-medium bg-primary/20 text-primary px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
-                      {userListCount}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={() => navigate('/collection')}
-                  className={`text-xs transition-colors px-2 py-1 rounded-md flex items-center gap-1.5 ${
-                    location.pathname === '/collection' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                  }`}
-                >
-                  My Collection
-                  {collectionCount > 0 && (
-                    <span className="text-[10px] font-medium bg-primary/20 text-primary px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
-                      {collectionCount.toLocaleString()}
-                    </span>
-                  )}
-                </button>
+                  <button
+                    onClick={() => navigate('/lists')}
+                    className={`text-xs transition-colors px-2 py-1 rounded-md flex items-center gap-1.5 ${
+                      location.pathname.startsWith('/lists') ? 'text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                    }`}
+                  >
+                    My Lists
+                    {userListCount > 0 && (
+                      <span className="text-[10px] font-medium bg-primary/20 text-primary px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
+                        {userListCount}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => navigate('/collection')}
+                    className={`text-xs transition-colors px-2 py-1 rounded-md flex items-center gap-1.5 ${
+                      location.pathname === '/collection' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                    }`}
+                  >
+                    My Collection
+                    {collectionCount > 0 && (
+                      <span className="text-[10px] font-medium bg-primary/20 text-primary px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
+                        {collectionCount.toLocaleString()}
+                      </span>
+                    )}
+                  </button>
+                </div>
                 <Popover>
                   <PopoverTrigger asChild>
                     <button className="text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer">
@@ -310,6 +321,15 @@ function Layout({ children }: { children: React.ReactNode }) {
                     </button>
                   </PopoverTrigger>
                   <PopoverContent side="bottom" align="end" className="w-72 max-h-80 overflow-y-auto p-3 text-xs">
+                    {import.meta.env.DEV && (
+                      <button
+                        onClick={() => navigate('/metrics')}
+                        className="sm:hidden w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent transition-colors mb-1 text-amber-500/90"
+                      >
+                        <BarChart3 className="w-3.5 h-3.5" />
+                        <span className="text-sm">Metrics</span>
+                      </button>
+                    )}
                     <button
                       onClick={toggleEaFeatures}
                       className="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent transition-colors mb-2"
@@ -396,6 +416,62 @@ function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </footer>
       </div>
+
+      {/* Mobile bottom tab bar — portaled to body so it's never trapped in a containing block */}
+      {createPortal(
+      <nav
+        className="sm:hidden fixed bottom-0 inset-x-0 z-50 border-t border-border/50 bg-card/95 backdrop-blur-md"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <div className="flex items-stretch justify-around h-16">
+          <button
+            onClick={() => { handleLogoClick(); window.scrollTo(0, 0); }}
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${
+              isCreatePage ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+            aria-label="Generate"
+          >
+            <Wand2 className={`w-5 h-5 ${isCreatePage ? 'text-primary' : ''}`} />
+            <span className="text-[10px] font-medium">Generate</span>
+          </button>
+          <button
+            onClick={() => { navigate('/lists'); window.scrollTo(0, 0); }}
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors relative ${
+              location.pathname.startsWith('/lists') ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+            aria-label="My Lists"
+          >
+            <div className="relative">
+              <ListChecks className={`w-5 h-5 ${location.pathname.startsWith('/lists') ? 'text-primary' : ''}`} />
+              {userListCount > 0 && (
+                <span className="absolute -top-1.5 -right-2 text-[9px] font-semibold bg-primary/90 text-primary-foreground px-1 py-px rounded-full min-w-[1rem] text-center leading-tight">
+                  {userListCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] font-medium">Lists</span>
+          </button>
+          <button
+            onClick={() => { navigate('/collection'); window.scrollTo(0, 0); }}
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${
+              location.pathname === '/collection' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+            aria-label="My Collection"
+          >
+            <div className="relative">
+              <Library className={`w-5 h-5 ${location.pathname === '/collection' ? 'text-primary' : ''}`} />
+              {collectionCount > 0 && (
+                <span className="absolute -top-1.5 -right-2 text-[9px] font-semibold bg-primary/90 text-primary-foreground px-1 py-px rounded-full min-w-[1rem] text-center leading-tight">
+                  {collectionCount > 999 ? `${Math.floor(collectionCount / 1000)}k` : collectionCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] font-medium">Collection</span>
+          </button>
+        </div>
+      </nav>,
+      document.body
+      )}
     </div>
   );
 }

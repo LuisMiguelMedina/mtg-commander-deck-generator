@@ -5,6 +5,16 @@ import { Trash2 } from 'lucide-react';
 import { usePlaytestStore } from '@/store/playtestStore';
 import { COUNTER_COLORS, type CounterColor, type FreeCounter as FreeCounterType } from '@/components/playtest/types';
 
+// Direct value-set lives here so the shift-click menu can update the count
+// without going through the +/- adjust delta.
+function useFreeCounterSetValue() {
+  return (id: string, value: number) => {
+    usePlaytestStore.setState(state => ({
+      freeCounters: state.freeCounters.map(c => (c.id === id ? { ...c, value: Math.round(value) } : c)),
+    }));
+  };
+}
+
 interface Props {
   counter: FreeCounterType;
 }
@@ -13,6 +23,8 @@ export function FreeCounter({ counter }: Props) {
   const adjustFreeCounter = usePlaytestStore(s => s.adjustFreeCounter);
   const removeFreeCounter = usePlaytestStore(s => s.removeFreeCounter);
   const setFreeCounterColor = usePlaytestStore(s => s.setFreeCounterColor);
+  const setFreeCounterValue = useFreeCounterSetValue();
+  const selected = usePlaytestStore(s => s.selectedCounterIds.includes(counter.id));
 
   const drag = useDraggable({
     id: `freecounter:${counter.id}`,
@@ -56,7 +68,7 @@ export function FreeCounter({ counter }: Props) {
           adjustFreeCounter(counter.id, -1);
         }}
         title={`${counter.value} · click +1, right-click −1, shift-click for options`}
-        className={`absolute select-none touch-none flex items-center justify-center rounded-md font-bold text-sm shadow-lg ring-2 ${colorCfg.chip} ${colorCfg.ring}`}
+        className={`absolute select-none touch-none flex items-center justify-center rounded-md font-bold text-sm shadow-lg ring-2 ${colorCfg.chip} ${colorCfg.ring} ${selected ? 'outline outline-2 outline-offset-2 outline-primary' : ''}`}
         style={{
           left: counter.x,
           top: counter.y,
@@ -75,8 +87,10 @@ export function FreeCounter({ counter }: Props) {
         <CounterContextMenu
           x={menu.x}
           y={menu.y}
+          value={counter.value}
           onClose={() => setMenu(null)}
           onColor={(c) => { setFreeCounterColor(counter.id, c); }}
+          onSetValue={(v) => { setFreeCounterValue(counter.id, v); }}
           onDelete={() => { removeFreeCounter(counter.id); setMenu(null); }}
           activeColor={counter.color}
         />
@@ -86,17 +100,25 @@ export function FreeCounter({ counter }: Props) {
 }
 
 function CounterContextMenu({
-  x, y, onClose, onColor, onDelete, activeColor,
+  x, y, value, onClose, onColor, onSetValue, onDelete, activeColor,
 }: {
   x: number;
   y: number;
+  value: number;
   onClose: () => void;
   onColor: (c: CounterColor) => void;
+  onSetValue: (v: number) => void;
   onDelete: () => void;
   activeColor: CounterColor;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [input, setInput] = useState(String(value));
+  useEffect(() => { setInput(String(value)); }, [value]);
+  const commitSet = () => {
+    const n = parseInt(input, 10);
+    if (!isNaN(n)) onSetValue(n);
+  };
 
   useEffect(() => {
     const close = (e: MouseEvent | KeyboardEvent) => {
@@ -133,6 +155,22 @@ function CounterContextMenu({
         visibility: pos ? 'visible' : 'hidden',
       }}
     >
+      <div className="px-2.5 pb-1 text-[10px] uppercase opacity-60">Value</div>
+      <div className="px-2.5 pb-2 flex items-center gap-1.5">
+        <input
+          type="number"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { commitSet(); onClose(); } }}
+          className="h-6 w-16 px-1.5 text-xs bg-background border border-border rounded outline-none focus:border-primary"
+        />
+        <button
+          onClick={() => { commitSet(); onClose(); }}
+          className="h-6 px-2 text-xs rounded border border-border hover:bg-accent"
+        >
+          Set
+        </button>
+      </div>
       <div className="px-2.5 pb-1.5 text-[10px] uppercase opacity-60">Color</div>
       <div className="px-2 grid grid-cols-6 gap-1">
         {COUNTER_COLORS.map(c => (

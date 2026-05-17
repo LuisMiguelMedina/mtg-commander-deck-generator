@@ -5,7 +5,9 @@ import { resolveCombos } from '@/services/playtest/combos';
 import {
   type BattlefieldCard,
   type CounterColor,
+  type DieSides,
   type FreeCounter,
+  type FreeDie,
   type LogCategory,
   type LogEntry,
   type Modal,
@@ -19,6 +21,7 @@ import {
   PHASES,
 } from '@/components/playtest/types';
 import { fisherYates, isLand as _isLand, makeInstanceId, snapArrival, findArrivalSlot } from '@/components/playtest/utils';
+import { usePlaytestSettings, CARD_SIZES } from '@/store/playtestSettingsStore';
 
 const HISTORY_CAP = 20;
 const STARTING_LIFE = 40;
@@ -44,16 +47,32 @@ interface PlaytestState {
   mulliganCount: number;
   // Increments any time the library is shuffled — UI hooks observe this for animations
   shuffleTick: number;
+  // Increments any time a card is placed on TOP of the library — UI hooks
+  // observe this to play a slide-up animation of the card-back on the pile.
+  libraryTopPushTick: number;
+  // Increments any time a card is added to the graveyard / exile pile —
+  // the sidebar Pile uses this to play an overlay animation of the new card.
+  graveyardPushTick: number;
+  exilePushTick: number;
   // Hand-index range of cards added by the most recent draw() call. The hand
   // component checks this at HandCard mount-time to play the deal-in animation
   // only on freshly drawn cards (not on cards returned from other zones).
   lastDrawRange: { start: number; end: number };
+  // Hand-index range of cards returned to hand from the battlefield by the most
+  // recent moveCard() call. Hand component checks this at mount-time to play
+  // the slide-in-from-top animation only on freshly returned cards.
+  lastReturnRange: { start: number; end: number };
   // Free-floating counter objects on the battlefield (separate from per-card counters).
   freeCounters: FreeCounter[];
+  // Free-floating dice on the battlefield — created from the Create dialog,
+  // can be rolled or manually set.
+  freeDice: FreeDie[];
   // Combos detected in the deck (static — populated at hydrate time).
   combos: DetectedCombo[];
   // Battlefield instanceIds currently selected via marquee (rectangle) selection.
   selectedIds: string[];
+  selectedCounterIds: string[];
+  selectedDieIds: string[];
   // Active multi-drag tracking — used so non-active selected cards visually follow.
   dragActiveId: string | null;
   dragDelta: { x: number; y: number } | null;
@@ -90,8 +109,8 @@ interface PlaytestActions {
   unattach: (instanceId: string) => void;
   spawnToken: (card: ScryfallCard, position?: { x: number; y: number }) => void;
 
-  scryConfirm: (decisions: ('top' | 'bottom')[]) => void;
-  surveilConfirm: (decisions: ('top' | 'graveyard')[]) => void;
+  scryConfirm: (topOrder: number[], bottomOrder: number[]) => void;
+  surveilConfirm: (topOrder: number[], graveyardOrder: number[]) => void;
   millConfirm: (n: number) => void;
   searchLibraryTakeToHand: (cardId: string) => void;
 
@@ -109,7 +128,15 @@ interface PlaytestActions {
   setFreeCounterColor: (id: string, color: CounterColor) => void;
   moveFreeCounter: (id: string, x: number, y: number) => void;
 
+  addFreeDie: (sides: DieSides, position?: { x: number; y: number }, color?: CounterColor) => void;
+  rollFreeDie: (id: string) => void;
+  setFreeDieValue: (id: string, value: number) => void;
+  setFreeDieColor: (id: string, color: CounterColor) => void;
+  removeFreeDie: (id: string) => void;
+  moveFreeDie: (id: string, x: number, y: number) => void;
+
   setSelectedIds: (ids: string[]) => void;
+  setMarqueeSelection: (sel: { cards: string[]; counters: string[]; dice: string[] }) => void;
   clearSelection: () => void;
 
   setDragActive: (instanceId: string | null) => void;
@@ -136,10 +163,17 @@ const initial: PlaytestState = {
   battlefieldRect: { width: 0, height: 0 },
   mulliganCount: 0,
   shuffleTick: 0,
+  libraryTopPushTick: 0,
+  graveyardPushTick: 0,
+  exilePushTick: 0,
   lastDrawRange: { start: -1, end: -1 },
+  lastReturnRange: { start: -1, end: -1 },
   freeCounters: [],
+  freeDice: [],
   combos: [],
   selectedIds: [],
+  selectedCounterIds: [],
+  selectedDieIds: [],
   dragActiveId: null,
   dragDelta: null,
 };
@@ -240,6 +274,7 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     const rest = state.zones.library.slice(7);
     return {
       zones: { ...state.zones, hand: draw, library: rest },
+      lastDrawRange: { start: 0, end: draw.length },
       log: [...state.log, makeLogEntry(`Drew opening hand (${draw.length})`, 'library')],
     };
   }),
@@ -259,6 +294,7 @@ export const usePlaytestStore = create<Store>((set, get) => ({
         library: state.zones.library.slice(drawn.length),
       },
       lastDrawRange: { start: before, end: before + drawn.length },
+      lastReturnRange: { start: -1, end: -1 },
       log: [...state.log, makeLogEntry(drawn.length === 1 ? `Drew ${drawn[0].name}` : `Drew ${drawn.length} cards`, 'library')],
     };
   }),
@@ -395,17 +431,34 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     }
     if (!card) return {};
 
+    // Tokens cease to exist the moment they leave the battlefield (MTG rule
+    // 111.8 / 704.5d). When the source is the battlefield and the card is a
+    // token, drop it on the floor instead of routing it into the target zone.
+    const isToken = sourceLabel === 'battlefield' && card.type_line.toLowerCase().includes('token');
+    if (isToken && target.kind !== 'battlefield') {
+      next.log.push(makeLogEntry(`${card.name} ceased to exist`, 'move'));
+      return {
+        ...next,
+        history,
+        lastDrawRange: { start: -1, end: -1 },
+        lastReturnRange: { start: -1, end: -1 },
+      };
+    }
+
     // 2) insert into target
     let targetLabel = '';
+    let handInsertIndex = -1;
     if (target.kind === 'zone') {
       const arr = next.zones[target.zone];
       if (typeof target.index === 'number') {
         // Explicit position requested (e.g. drop between hand cards)
         const idx = Math.max(0, Math.min(target.index, arr.length));
         arr.splice(idx, 0, card);
+        if (target.zone === 'hand') handInsertIndex = idx;
       } else if (target.zone === 'hand') {
         // Default for hand: append (e.g. draw, return-to-hand without position)
         arr.push(card);
+        handInsertIndex = arr.length - 1;
       } else {
         // Face-up piles (command, graveyard, exile) show the most recently
         // added card on top → insert at the front.
@@ -413,14 +466,24 @@ export const usePlaytestStore = create<Store>((set, get) => ({
       }
       targetLabel = target.zone;
     } else if (target.kind === 'library') {
-      if (target.position === 'top') next.zones.library.unshift(card);
-      else next.zones.library.push(card);
-      targetLabel = `library ${target.position}`;
+      if (target.position === 'top') {
+        next.zones.library.unshift(card);
+        targetLabel = 'library top';
+      } else if (target.position === 'bottom') {
+        next.zones.library.push(card);
+        targetLabel = 'library bottom';
+      } else {
+        // Numeric depth: 0 = top, 1 = 2nd from top, etc. Clamp to valid range.
+        const depth = Math.max(0, Math.min(next.zones.library.length, target.position));
+        next.zones.library.splice(depth, 0, card);
+        targetLabel = `library #${depth + 1} from top`;
+      }
     } else {
       // battlefield drop
       let { x, y } = target;
       if (target.arrived) {
-        const snapped = snapArrival(card, x, y, state.battlefieldRect.height);
+        const { width: cw, height: ch } = CARD_SIZES[usePlaytestSettings.getState().cardSize];
+        const snapped = snapArrival(card, x, y, state.battlefieldRect.height, ch);
         const slot = findArrivalSlot(
           next.battlefield,
           snapped.x,
@@ -428,6 +491,8 @@ export const usePlaytestStore = create<Store>((set, get) => ({
           state.battlefieldRect.width,
           state.battlefieldRect.height,
           _isLand(card),
+          cw,
+          ch,
         );
         x = slot.x;
         y = slot.y;
@@ -462,7 +527,43 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     }
     // Any move invalidates the deal-in window — only freshly drawn cards
     // (set by the draw() action) should ever play that animation.
-    return { ...next, history, lastDrawRange: { start: -1, end: -1 } };
+    // If a card was returned to hand from the battlefield, mark a 1-card return
+    // range so that hand card plays the slide-in-from-top animation at mount.
+    const lastReturnRange =
+      sourceLabel === 'battlefield' && targetLabel === 'hand' && handInsertIndex >= 0
+        ? { start: handInsertIndex, end: handInsertIndex + 1 }
+        : { start: -1, end: -1 };
+    // Dragging from the library into the hand should feel like drawing the
+    // card — mark a 1-card draw range so the new hand card plays the deal-in
+    // animation at mount, same as draw().
+    const lastDrawRange =
+      sourceLabel === 'library' && targetLabel === 'hand' && handInsertIndex >= 0
+        ? { start: handInsertIndex, end: handInsertIndex + 1 }
+        : { start: -1, end: -1 };
+    // Library push happens via two pipelines: explicit { kind: 'library', position: 'top' }
+    // (right-click actions) and the generic zone drop { kind: 'zone', zone: 'library' }
+    // used by drag-onto-pile (which unshifts to the top in the zone branch above).
+    const droppedOnLibraryTop = target.kind === 'library' && (target.position === 'top' || target.position === 0);
+    const libraryTopPushTick = droppedOnLibraryTop
+      ? state.libraryTopPushTick + 1
+      : state.libraryTopPushTick;
+    const graveyardPushTick =
+      target.kind === 'zone' && target.zone === 'graveyard'
+        ? state.graveyardPushTick + 1
+        : state.graveyardPushTick;
+    const exilePushTick =
+      target.kind === 'zone' && target.zone === 'exile'
+        ? state.exilePushTick + 1
+        : state.exilePushTick;
+    return {
+      ...next,
+      history,
+      lastDrawRange,
+      lastReturnRange,
+      libraryTopPushTick,
+      graveyardPushTick,
+      exilePushTick,
+    };
   }),
 
   // ─────────────────────── battlefield card actions ───────────────────────
@@ -592,6 +693,7 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     const history = pushHistory(state.history, snapshotOf(state));
     const cx = position?.x ?? Math.floor(state.battlefieldRect.width / 2 - 50);
     const cy = position?.y ?? Math.floor(state.battlefieldRect.height / 2 - 70);
+    const { width: cw, height: ch } = CARD_SIZES[usePlaytestSettings.getState().cardSize];
     const slot = findArrivalSlot(
       state.battlefield,
       cx,
@@ -599,6 +701,8 @@ export const usePlaytestStore = create<Store>((set, get) => ({
       state.battlefieldRect.width,
       state.battlefieldRect.height,
       false,
+      cw,
+      ch,
     );
     const token: BattlefieldCard = {
       instanceId: makeInstanceId(),
@@ -619,34 +723,28 @@ export const usePlaytestStore = create<Store>((set, get) => ({
 
   // ─────────────────────── scry / mill / surveil / search ───────────────────────
 
-  scryConfirm: (decisions) => set(state => {
+  scryConfirm: (topOrder, bottomOrder) => set(state => {
     const history = pushHistory(state.history, snapshotOf(state));
-    const top = state.zones.library.slice(0, decisions.length);
-    const rest = state.zones.library.slice(decisions.length);
-    const tops: ScryfallCard[] = [];
-    const bottoms: ScryfallCard[] = [];
-    decisions.forEach((d, i) => {
-      if (d === 'top') tops.push(top[i]);
-      else bottoms.push(top[i]);
-    });
+    const total = topOrder.length + bottomOrder.length;
+    const revealed = state.zones.library.slice(0, total);
+    const rest = state.zones.library.slice(total);
+    const tops = topOrder.map(i => revealed[i]).filter(Boolean);
+    const bottoms = bottomOrder.map(i => revealed[i]).filter(Boolean);
     return {
       history,
       zones: { ...state.zones, library: [...tops, ...rest, ...bottoms] },
       modal: null,
-      log: [...state.log, makeLogEntry(`Scry ${decisions.length}: ${tops.length} top, ${bottoms.length} bottom`, 'library')],
+      log: [...state.log, makeLogEntry(`Scry ${total}: ${tops.length} top, ${bottoms.length} bottom`, 'library')],
     };
   }),
 
-  surveilConfirm: (decisions) => set(state => {
+  surveilConfirm: (topOrder, graveyardOrder) => set(state => {
     const history = pushHistory(state.history, snapshotOf(state));
-    const top = state.zones.library.slice(0, decisions.length);
-    const rest = state.zones.library.slice(decisions.length);
-    const keepTop: ScryfallCard[] = [];
-    const toGrave: ScryfallCard[] = [];
-    decisions.forEach((d, i) => {
-      if (d === 'top') keepTop.push(top[i]);
-      else toGrave.push(top[i]);
-    });
+    const total = topOrder.length + graveyardOrder.length;
+    const revealed = state.zones.library.slice(0, total);
+    const rest = state.zones.library.slice(total);
+    const keepTop = topOrder.map(i => revealed[i]).filter(Boolean);
+    const toGrave = graveyardOrder.map(i => revealed[i]).filter(Boolean);
     return {
       history,
       zones: {
@@ -655,7 +753,7 @@ export const usePlaytestStore = create<Store>((set, get) => ({
         graveyard: [...state.zones.graveyard, ...toGrave],
       },
       modal: null,
-      log: [...state.log, makeLogEntry(`Surveil ${decisions.length}: ${keepTop.length} top, ${toGrave.length} graveyard`, 'library')],
+      log: [...state.log, makeLogEntry(`Surveil ${total}: ${keepTop.length} top, ${toGrave.length} graveyard`, 'library')],
     };
   }),
 
@@ -762,8 +860,61 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     freeCounters: state.freeCounters.map(c => (c.id === id ? { ...c, x, y } : c)),
   })),
 
+  addFreeDie: (sides, position, color = 'blue') => set(state => {
+    const cx = position?.x ?? Math.floor(state.battlefieldRect.width / 2 - 22);
+    const cy = position?.y ?? Math.floor(state.battlefieldRect.height / 2 - 22);
+    const initial = 1 + Math.floor(Math.random() * sides);
+    return {
+      freeDice: [
+        ...state.freeDice,
+        { id: makeInstanceId(), x: cx, y: cy, sides, value: initial, color },
+      ],
+      log: [...state.log, makeLogEntry(`Added a d${sides} (rolled ${initial})`, 'counter')],
+    };
+  }),
+
+  rollFreeDie: (id) => set(state => {
+    const die = state.freeDice.find(d => d.id === id);
+    if (!die) return {};
+    const next = 1 + Math.floor(Math.random() * die.sides);
+    return {
+      freeDice: state.freeDice.map(d => (d.id === id ? { ...d, value: next } : d)),
+      log: [...state.log, makeLogEntry(`Rolled d${die.sides} → ${next}`, 'counter')],
+    };
+  }),
+
+  setFreeDieValue: (id, value) => set(state => ({
+    freeDice: state.freeDice.map(d => {
+      if (d.id !== id) return d;
+      const clamped = Math.max(1, Math.min(d.sides, Math.round(value)));
+      return { ...d, value: clamped };
+    }),
+  })),
+
+  setFreeDieColor: (id, color) => set(state => ({
+    freeDice: state.freeDice.map(d => (d.id === id ? { ...d, color } : d)),
+  })),
+
+  removeFreeDie: (id) => set(state => ({
+    freeDice: state.freeDice.filter(d => d.id !== id),
+    log: [...state.log, makeLogEntry('Removed a die', 'counter')],
+  })),
+
+  moveFreeDie: (id, x, y) => set(state => ({
+    freeDice: state.freeDice.map(d => (d.id === id ? { ...d, x, y } : d)),
+  })),
+
   setSelectedIds: (ids) => set({ selectedIds: ids }),
-  clearSelection: () => set(state => (state.selectedIds.length === 0 ? {} : { selectedIds: [] })),
+  setMarqueeSelection: (sel) => set({
+    selectedIds: sel.cards,
+    selectedCounterIds: sel.counters,
+    selectedDieIds: sel.dice,
+  }),
+  clearSelection: () => set(state => (
+    state.selectedIds.length === 0 && state.selectedCounterIds.length === 0 && state.selectedDieIds.length === 0
+      ? {}
+      : { selectedIds: [], selectedCounterIds: [], selectedDieIds: [] }
+  )),
 
   setDragActive: (instanceId) => set({ dragActiveId: instanceId }),
   setDragDelta: (delta) => set({ dragDelta: delta }),

@@ -5,8 +5,8 @@ import { useStore } from '@/store';
 import { searchCards, getCardImageUrl, getCardsByNames } from '@/services/scryfall/client';
 import type { ScryfallCard } from '@/types';
 import { CardTypeIcon } from '@/components/ui/mtg-icons';
-import { Search, Loader2, X, Trash2, Plus, ChevronRight, Ban, ListPlus, Check } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Search, Loader2, X, Trash2, Plus, ChevronRight, Ban, ListPlus, Check, PlusSquare } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { UserListChips } from '@/components/lists/UserListChips';
 import { useUserLists } from '@/hooks/useUserLists';
 
@@ -38,6 +38,7 @@ export function MustIncludeCards() {
 
   const [showListPicker, setShowListPicker] = useState(false);
   const [listPickerSearch, setListPickerSearch] = useState('');
+  const navigate = useNavigate();
 
   const handlePickerToggleUserList = (listId: string) => {
     const existing = appliedIncludeLists.find(r => r.listId === listId);
@@ -247,50 +248,60 @@ export function MustIncludeCards() {
             })}
           </PopoverContent>
         </Popover>
-        {userLists.length > 0 && (
-          <Popover open={showListPicker} onOpenChange={(open: boolean) => { setShowListPicker(open); if (!open) setListPickerSearch(''); }}>
-            <PopoverTrigger asChild>
-              <button
-                className="h-9 w-9 flex items-center justify-center rounded-lg border-2 border-input transition-colors focus:outline-none focus-visible:ring-0 hover:bg-accent text-muted-foreground"
-                title="Apply a list as must-includes"
-              >
-                <ListPlus className="w-4 h-4" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-64 py-1 max-h-72 flex flex-col">
-              {userLists.length >= 5 && (
-                <div className="px-2 pt-1 pb-1">
-                  <input
-                    type="text"
-                    placeholder="Search lists..."
-                    value={listPickerSearch}
-                    onChange={e => setListPickerSearch(e.target.value)}
-                    className="w-full px-2 py-1 text-xs bg-muted/50 border border-border rounded focus:outline-none focus:border-primary"
-                    autoFocus
-                    onClick={e => e.stopPropagation()}
-                  />
-                </div>
-              )}
-              <div className="overflow-y-auto">
-                {(listPickerSearch
-                  ? userLists.filter(l => l.name.toLowerCase().includes(listPickerSearch.toLowerCase()))
-                  : userLists
-                ).map(list => (
-                  <button
-                    key={list.id}
-                    onClick={() => handlePickerToggleUserList(list.id)}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-2"
-                  >
-                    <ListPlus className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                    <span className="truncate flex-1">{list.name}</span>
-                    <span className="text-[10px] text-muted-foreground shrink-0">({list.cards.length})</span>
-                    {(appliedIncludeLists.find(r => r.listId === list.id)?.enabled ?? false) && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
-                  </button>
-                ))}
+        <Popover open={showListPicker} onOpenChange={(open: boolean) => { setShowListPicker(open); if (!open) setListPickerSearch(''); }}>
+          <PopoverTrigger asChild>
+            <button
+              className="h-9 w-9 flex items-center justify-center rounded-lg border-2 border-input transition-colors focus:outline-none focus-visible:ring-0 hover:bg-accent text-muted-foreground"
+              title="Apply or create a list"
+            >
+              <ListPlus className="w-4 h-4" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 py-1 max-h-72 flex flex-col">
+            {userLists.length >= 5 && (
+              <div className="px-2 pt-1 pb-1">
+                <input
+                  type="text"
+                  placeholder="Search lists..."
+                  value={listPickerSearch}
+                  onChange={e => setListPickerSearch(e.target.value)}
+                  className="w-full px-2 py-1 text-xs bg-muted/50 border border-border rounded focus:outline-none focus:border-primary"
+                  autoFocus
+                  onClick={e => e.stopPropagation()}
+                />
               </div>
-            </PopoverContent>
-          </Popover>
-        )}
+            )}
+            <div className="overflow-y-auto">
+              {userLists.length === 0 && (
+                <p className="px-3 py-2 text-xs text-muted-foreground">No lists yet.</p>
+              )}
+              {(listPickerSearch
+                ? userLists.filter(l => l.name.toLowerCase().includes(listPickerSearch.toLowerCase()))
+                : userLists
+              ).map(list => (
+                <button
+                  key={list.id}
+                  onClick={() => handlePickerToggleUserList(list.id)}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-2"
+                >
+                  <ListPlus className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <span className="truncate flex-1">{list.name}</span>
+                  <span className="text-[10px] text-muted-foreground shrink-0">({list.cards.length})</span>
+                  {(appliedIncludeLists.find(r => r.listId === list.id)?.enabled ?? false) && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
+                </button>
+              ))}
+            </div>
+            <div className="border-t border-border/50 mt-1">
+              <button
+                onClick={() => { setShowListPicker(false); navigate('/lists/create?type=list'); }}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-2 text-primary"
+              >
+                <PlusSquare className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate flex-1">Create new list</span>
+              </button>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {/* Must Include Cards List — grouped by type */}
@@ -355,10 +366,7 @@ export function MustIncludeCards() {
 
       {mustIncludeCards.length === 0 && !appliedIncludeLists.some(r => r.enabled) && (
         <p className="text-xs text-muted-foreground">
-          Search cards to include{userLists.length > 0
-            ? ', or import a List'
-            : <>, or <Link to="/lists" className="text-primary hover:text-primary/80 transition-colors">create a list</Link> to import</>
-          }
+          Search cards to include, import a List, or <Link to="/lists/create?type=list" className="text-primary hover:text-primary/80 transition-colors">create one</Link>
         </p>
       )}
 

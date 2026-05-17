@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom';
 import { Settings, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { usePlaytestSettings, BG_STYLES, type BattlefieldBg } from '@/store/playtestSettingsStore';
+import { usePlaytestSettings, BG_STYLES, CARD_SIZES, type BattlefieldBg, type BattlefieldCardSize } from '@/store/playtestSettingsStore';
 
 interface Props {
   open: boolean;
@@ -11,8 +11,12 @@ interface Props {
 export function PlaytestSettingsModal({ open, onClose }: Props) {
   const bg = usePlaytestSettings(s => s.bg);
   const setBg = usePlaytestSettings(s => s.setBg);
+  const cardSize = usePlaytestSettings(s => s.cardSize);
+  const setCardSize = usePlaytestSettings(s => s.setCardSize);
   const animations = usePlaytestSettings(s => s.animations);
   const setAnimations = usePlaytestSettings(s => s.setAnimations);
+  const dotGrid = usePlaytestSettings(s => s.dotGrid);
+  const setDotGrid = usePlaytestSettings(s => s.setDotGrid);
 
   if (!open) return null;
 
@@ -59,6 +63,34 @@ export function PlaytestSettingsModal({ open, onClose }: Props) {
           </div>
 
           <div className="border-t border-border/40 pt-4">
+            <div className="mb-2 font-medium text-foreground/90">Battlefield card size</div>
+            <div className="grid grid-cols-3 gap-2">
+              {(Object.keys(CARD_SIZES) as BattlefieldCardSize[]).map((key) => {
+                const selected = cardSize === key;
+                const { label, width, height } = CARD_SIZES[key];
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setCardSize(key)}
+                    className={`flex flex-col items-center justify-end gap-1.5 h-20 rounded-md border text-xs font-medium transition-all px-2 py-2 ${
+                      selected
+                        ? 'border-primary ring-2 ring-primary'
+                        : 'border-border/60 hover:border-foreground/40'
+                    }`}
+                  >
+                    <span
+                      className="rounded-sm bg-muted-foreground/30 border border-border/60"
+                      style={{ width: width * 0.28, height: height * 0.28 }}
+                      aria-hidden
+                    />
+                    <span className="leading-none">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="border-t border-border/40 pt-4">
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -70,6 +102,23 @@ export function PlaytestSettingsModal({ open, onClose }: Props) {
                 <div className="font-medium text-foreground/90">Card arrival animation</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   Cards grow into the hand and shrink onto the battlefield when they move.
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <div className="border-t border-border/40 pt-4">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={dotGrid}
+                onChange={(e) => setDotGrid(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-border accent-primary cursor-pointer"
+              />
+              <div>
+                <div className="font-medium text-foreground/90">Dot grid background</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  Adds a subtle dot pattern to the battlefield for a sense of scale.
                 </div>
               </div>
             </label>

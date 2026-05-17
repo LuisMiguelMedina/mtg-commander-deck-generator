@@ -60,6 +60,18 @@ export interface FreeCounter {
   color: CounterColor;
 }
 
+export type DieSides = 4 | 6 | 8 | 10 | 12 | 20;
+export const DIE_SIDES: DieSides[] = [4, 6, 8, 10, 12, 20];
+
+export interface FreeDie {
+  id: string;
+  x: number;
+  y: number;
+  sides: DieSides;
+  value: number;
+  color: CounterColor;
+}
+
 export interface LogEntry {
   id: string;
   ts: number;
@@ -97,10 +109,10 @@ export interface SourceMeta {
 
 export type Modal =
   | null
-  | { kind: 'search' }
   | { kind: 'scry' | 'mill' | 'surveil'; n: number }
   | { kind: 'zoneViewer'; zone: Exclude<ZoneKey, 'hand'> }
   | { kind: 'tokens' }
+  | { kind: 'create' }
   | { kind: 'mulligan'; mulliganCount: number };
 
 export type MoveSource =
@@ -109,7 +121,7 @@ export type MoveSource =
 
 export type MoveTarget =
   | { kind: 'zone'; zone: 'graveyard' | 'exile' | 'hand' | 'command'; index?: number }
-  | { kind: 'library'; position: 'top' | 'bottom' }
+  | { kind: 'library'; position: 'top' | 'bottom' | number }
   | { kind: 'battlefield'; x: number; y: number; arrived: boolean }; // arrived=true means apply snap rule
 
 export interface MoveArgs {

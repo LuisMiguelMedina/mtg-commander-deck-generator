@@ -45,7 +45,7 @@ export function GameLog() {
     setLogFilter({ move: v, tap: v, library: v, counter: v, life: v, turn: v, system: v });
 
   return (
-    <aside className="w-56 border-l border-border/50 bg-card/30 flex flex-col">
+    <aside className="w-56 border-l border-border/50 bg-card md:bg-card/30 flex flex-col">
       {/* Tab strip */}
       <div className="flex items-stretch border-b border-border/50 text-[11px]">
         <TabButton active={tab === 'log'} onClick={() => setTab('log')}>
@@ -181,12 +181,28 @@ function CombosPanel({ combos }: { combos: DetectedCombo[] }) {
     return m;
   }, [zones, battlefield]);
 
-  const complete = useMemo(() => combos.filter(c => c.isComplete), [combos]);
+  // "Live" cards = anything currently in hand or on the battlefield — combos
+  // are sorted by how many of their cards are live so the most actionable
+  // combos float to the top.
+  const liveNames = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of zones.hand) s.add(c.name);
+    for (const b of battlefield) s.add(b.card.name);
+    return s;
+  }, [zones.hand, battlefield]);
+
+  const complete = useMemo(() => {
+    const withCount = combos
+      .filter(c => c.isComplete)
+      .map(c => ({ combo: c, presentCount: c.cards.filter(n => liveNames.has(n)).length }));
+    withCount.sort((a, b) => b.presentCount - a.presentCount);
+    return withCount;
+  }, [combos, liveNames]);
 
   const filtered = useMemo(() => {
     const needle = filter.toLowerCase().trim();
     if (!needle) return complete;
-    return complete.filter(c =>
+    return complete.filter(({ combo: c }) =>
       c.cards.some(name => name.toLowerCase().includes(needle)) ||
       (c.results[0]?.toLowerCase().includes(needle) ?? false),
     );
@@ -224,12 +240,14 @@ function CombosPanel({ combos }: { combos: DetectedCombo[] }) {
         {filtered.length === 0 ? (
           <div className="px-1 py-3 text-[10px] text-muted-foreground italic">No matches.</div>
         ) : (
-          filtered.map(c => (
+          filtered.map(({ combo: c, presentCount }) => (
             <ComboRow
               key={c.comboId}
               combo={c}
               cardByName={cardByName}
               hasCommander={c.cards.some(n => commanderNames.includes(n))}
+              dimmed={presentCount === 0}
+              liveNames={liveNames}
             />
           ))
         )}
@@ -239,19 +257,21 @@ function CombosPanel({ combos }: { combos: DetectedCombo[] }) {
 }
 
 function ComboRow({
-  combo, cardByName, hasCommander,
+  combo, cardByName, hasCommander, dimmed, liveNames,
 }: {
   combo: DetectedCombo;
   cardByName: Map<string, ScryfallCard>;
   hasCommander: boolean;
+  dimmed: boolean;
+  liveNames: Set<string>;
 }) {
   const result = combo.results?.[0] ?? '';
   return (
     <div
-      className={`rounded-md overflow-hidden border transition-all ${
+      className={`group rounded-md overflow-hidden border transition-all ${dimmed ? 'opacity-50 hover:opacity-100' : ''} ${
         hasCommander
-          ? 'border-amber-400/40 bg-amber-500/[0.06] hover:bg-amber-500/[0.10] shadow-[0_1px_0_rgba(0,0,0,0.4)]'
-          : 'border-border/60 bg-card/60 hover:bg-card/90 shadow-[0_1px_0_rgba(0,0,0,0.3)]'
+          ? 'border-amber-400/40 bg-amber-500/[0.06] hover:bg-amber-500/20 hover:border-amber-400/70 shadow-[0_1px_0_rgba(0,0,0,0.4)]'
+          : 'border-border/60 bg-card/60 hover:bg-accent hover:border-border shadow-[0_1px_0_rgba(0,0,0,0.3)]'
       }`}
     >
       {/* Full-width art banner — equal sections, one per card */}
@@ -262,10 +282,11 @@ function ComboRow({
             card?.image_uris?.art_crop ??
             card?.card_faces?.[0]?.image_uris?.art_crop ??
             null;
+          const live = liveNames.has(name);
           return (
             <div
               key={`${name}-${i}`}
-              className={`flex-1 min-w-0 relative ${i > 0 ? 'border-l border-black/70' : ''}`}
+              className={`flex-1 min-w-0 relative transition-opacity ${i > 0 ? 'border-l border-black/70' : ''} ${live ? '' : 'opacity-40 saturate-50 group-hover:opacity-100 group-hover:saturate-100'}`}
               title={name}
             >
               {artUrl ? (
@@ -292,12 +313,15 @@ function ComboRow({
           {hasCommander && (
             <Crown className="w-2.5 h-2.5 inline -mt-px mr-1 text-amber-300/90 align-baseline" />
           )}
-          {combo.cards.map((name, i) => (
-            <span key={`name-${i}`}>
-              {i > 0 && <span className="text-muted-foreground/50 mx-0.5">+</span>}
-              <span>{name}</span>
-            </span>
-          ))}
+          {combo.cards.map((name, i) => {
+            const live = liveNames.has(name);
+            return (
+              <span key={`name-${i}`}>
+                {i > 0 && <span className="text-muted-foreground/50 mx-0.5">+</span>}
+                <span className={live ? 'text-foreground font-medium' : 'text-muted-foreground/50 group-hover:text-foreground/90'}>{name}</span>
+              </span>
+            );
+          })}
         </div>
         {result && (
           <div className="text-[10px] italic text-muted-foreground/80 leading-snug">

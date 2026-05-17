@@ -18,7 +18,7 @@ import { getCategoryForCard } from '@/services/deckBuilder/cardSwap';
 import { fetchCommanderData, fetchPartnerCommanderData, formatCommanderNameForUrl } from '@/services/edhrec';
 import { applyCommanderTheme, resetTheme } from '@/lib/commanderTheme';
 import type { BracketLevel, BudgetOption, ThemeResult } from '@/types';
-import { Loader2, Wand2, ArrowLeft, ExternalLink, SlidersHorizontal, Bookmark, Check, Copy, X, Swords } from 'lucide-react';
+import { Loader2, Wand2, ArrowLeft, ExternalLink, SlidersHorizontal, Bookmark, Check, Copy, X, Swords, MoreHorizontal } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { trackEvent } from '@/services/analytics';
 import { CardPreviewModal } from '@/components/ui/CardPreviewModal';
@@ -652,15 +652,39 @@ export function BuilderPage() {
 
   return (
     <main className="flex-1 container mx-auto px-4 py-8">
-      {/* Back Button */}
-      <Button
-        variant="ghost"
-        onClick={handleBack}
-        className="mb-6 -ml-2"
-      >
-        <ArrowLeft className="w-4 h-4 mr-2" />
-        {generatedDeck ? 'Back to Settings' : 'Back to Search'}
-      </Button>
+      {/* Back Button + Overflow Menu Row */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <Button
+          variant="ghost"
+          onClick={handleBack}
+          className="-ml-2"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          {generatedDeck ? 'Back to Settings' : 'Back to Search'}
+        </Button>
+        {generatedDeck && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                title="More actions"
+                className="flex items-center justify-center w-8 h-8 rounded-lg border border-border bg-card/50 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-44 p-1">
+              <button
+                onClick={() => navigate('/playtest/generated')}
+                disabled={!generatedDeck}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-accent rounded-md flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              >
+                <Swords className="w-3.5 h-3.5" />
+                Playtest
+              </button>
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
 
       {/* Commander Card Display - only show during customization */}
       {!generatedDeck && (
@@ -1133,15 +1157,6 @@ export function BuilderPage() {
                     </form>
                   </PopoverContent>
                 </Popover>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate('/playtest/generated')}
-                  disabled={!generatedDeck}
-                >
-                  <Swords className="w-4 h-4 mr-1.5" />
-                  Playtest
-                </Button>
                 <Button onClick={() => exportTriggerRef.current?.()} className="btn-shimmer">
                   <Copy className="w-4 h-4 mr-2" />
                   Export

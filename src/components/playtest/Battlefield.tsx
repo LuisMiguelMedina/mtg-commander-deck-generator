@@ -1,27 +1,36 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { usePlaytestStore } from '@/store/playtestStore';
-import { usePlaytestSettings, BG_STYLES } from '@/store/playtestSettingsStore';
+import { usePlaytestSettings, BG_STYLES, CARD_SIZES } from '@/store/playtestSettingsStore';
 import { BattlefieldCard } from '@/components/playtest/BattlefieldCard';
 import { FreeCounter } from '@/components/playtest/FreeCounter';
+import { FreeDie } from '@/components/playtest/FreeDie';
 import { BattlefieldContextMenu, type BattlefieldMenuTarget } from '@/components/playtest/BattlefieldContextMenu';
-
-const BF_CARD_W = 100;
-const BF_CARD_H = 140;
+import { PlaytestPile, PILES } from '@/components/playtest/PlaytestPile';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 export function Battlefield() {
   const cards = usePlaytestStore(s => s.battlefield);
   const freeCounters = usePlaytestStore(s => s.freeCounters);
+  const freeDice = usePlaytestStore(s => s.freeDice);
   const setRect = usePlaytestStore(s => s.setBattlefieldRect);
   const addFreeCounter = usePlaytestStore(s => s.addFreeCounter);
-  const setSelectedIds = usePlaytestStore(s => s.setSelectedIds);
+  const setMarqueeSelection = usePlaytestStore(s => s.setMarqueeSelection);
   const clearSelection = usePlaytestStore(s => s.clearSelection);
   const bg = usePlaytestSettings(s => s.bg);
+  const dotGrid = usePlaytestSettings(s => s.dotGrid);
+  // Tailwind's md breakpoint is 768px. Keep the floating piles to mobile so
+  // the desktop hand-row piles don't share dnd-kit IDs with floating ones.
+  const isDesktop = useMediaQuery('(min-width: 768px)');
   const containerRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<BattlefieldMenuTarget | null>(null);
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const cardsRef = useRef(cards);
   cardsRef.current = cards;
+  const countersRef = useRef(freeCounters);
+  countersRef.current = freeCounters;
+  const diceRef = useRef(freeDice);
+  diceRef.current = freeDice;
 
   // Track size for arrival snap
   useEffect(() => {
@@ -103,15 +112,25 @@ export function Battlefield() {
       const r = Math.max(startX, cx);
       const t = Math.min(startY, cy);
       const b = Math.max(startY, cy);
-      const hits: string[] = [];
+      const { width: cw, height: ch } = CARD_SIZES[usePlaytestSettings.getState().cardSize];
+      const cardHits: string[] = [];
       for (const c of cardsRef.current) {
         const cl = c.x;
         const ct = c.y;
-        const cr = cl + BF_CARD_W;
-        const cb = ct + BF_CARD_H;
-        if (l < cr && r > cl && t < cb && b > ct) hits.push(c.instanceId);
+        const cr = cl + cw;
+        const cb = ct + ch;
+        if (l < cr && r > cl && t < cb && b > ct) cardHits.push(c.instanceId);
       }
-      setSelectedIds(hits);
+      // Counters are 34×34 squares; dice are 44×44.
+      const counterHits: string[] = [];
+      for (const fc of countersRef.current) {
+        if (l < fc.x + 34 && r > fc.x && t < fc.y + 34 && b > fc.y) counterHits.push(fc.id);
+      }
+      const dieHits: string[] = [];
+      for (const fd of diceRef.current) {
+        if (l < fd.x + 44 && r > fd.x && t < fd.y + 44 && b > fd.y) dieHits.push(fd.id);
+      }
+      setMarqueeSelection({ cards: cardHits, counters: counterHits, dice: dieHits });
       setMarquee(null);
     };
     containerEl.addEventListener('pointermove', onMove);
@@ -127,8 +146,27 @@ export function Battlefield() {
       className={`flex-1 relative border-b border-border/50 overflow-hidden ${isOver ? 'ring-2 ring-primary/40 ring-inset' : ''}`}
       style={{ background: BG_STYLES[bg].background }}
     >
+      {dotGrid && (
+        <div
+          aria-hidden
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.10) 1px, transparent 1.4px)',
+            backgroundSize: '24px 24px',
+            backgroundPosition: '0 0',
+            zIndex: 0,
+          }}
+        />
+      )}
       {sorted.map(b => <BattlefieldCard key={b.instanceId} card={b} />)}
       {freeCounters.map(c => <FreeCounter key={c.id} counter={c} />)}
+      {freeDice.map(d => <FreeDie key={d.id} die={d} />)}
+
+      {/* Mobile-only: zones float at the edges of the battlefield. On desktop
+          they live in the hand row below. We conditionally RENDER (not just
+          hide) so dnd-kit doesn't see duplicate droppable/draggable IDs. */}
+      {!isDesktop && <FloatingPilesCluster />}
+
       {marquee && (
         <div
           className="absolute pointer-events-none border border-primary/80 bg-primary/15"
@@ -146,6 +184,40 @@ export function Battlefield() {
         onClose={() => setMenu(null)}
         onAddCounter={(color, position) => addFreeCounter(color, position)}
       />
+    </div>
+  );
+}
+
+function FloatingPilesCluster() {
+  // PILES[0] = command, PILES[2] = graveyard, PILES[3] = exile
+  return (
+    <>
+      {/* Command zone — anchored to the top-right, where it's been. */}
+      <div className="absolute top-2 right-2 z-20 flex flex-col gap-1.5 items-end">
+        <FloatingPile spec={PILES[0]} />
+      </div>
+      {/* Library + Graveyard + Exile — bottom-aligned to the playtest area
+          so the deck (most-touched pile) is closest to the hand. */}
+      <div className="absolute bottom-2 right-2 z-20 flex flex-col gap-1.5 items-end">
+        <FloatingPile spec={PILES[3]} />
+        <FloatingPile spec={PILES[2]} />
+        <FloatingPile spec={PILES[1]} />
+      </div>
+    </>
+  );
+}
+
+function FloatingPile({ spec }: { spec: typeof PILES[number] }) {
+  const cards = usePlaytestStore(s => s.zones[spec.zone]);
+  const hasCards = cards.length > 0;
+  // Desktop: collapsed 56px, expands to 110px on hover / focus.
+  // Mobile: stays at a fixed compact size with no expand animation
+  //         (the user can tap to play / right-click for the dialog as usual).
+  return (
+    <div
+      className={`w-[56px] md:hover:w-[110px] md:focus-within:w-[110px] md:transition-all md:duration-200 ${!hasCards ? 'opacity-70' : ''}`}
+    >
+      <PlaytestPile spec={spec} />
     </div>
   );
 }

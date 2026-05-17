@@ -67,7 +67,13 @@ export function TokenSpawnModal() {
   );
 
   return (
-    <FloatingDialog title={title} onClose={closeModal}>
+    <FloatingDialog
+      title={title}
+      onClose={closeModal}
+      storageKey="playtest:dialog-pos:token-spawn"
+      sizeStorageKey="playtest:dialog-size:token-spawn"
+      resizable
+    >
       <div className="px-5 py-3 border-b border-border/40">
         <Input
           autoFocus

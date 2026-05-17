@@ -175,23 +175,36 @@ export function DeckOptimizer({
   }, [analysis, addedCards]);
 
 
-  /** Build inclusion map from EDHREC data, handling DFC front-face lookups. */
+  /** Build inclusion map from EDHREC data, handling DFC front-face lookups.
+   *  The EDHREC-derived portion is cached per data reference (it doesn't
+   *  change once fetched) so we don't re-iterate ~3000 entries on every
+   *  card-add re-analysis. */
+  const inclusionMapCacheRef = useRef(new WeakMap<import('@/types').EDHRECCommanderData, Record<string, number>>());
   const buildInclusionMap = useCallback((edhrecData: import('@/types').EDHRECCommanderData): Record<string, number> => {
     if (cardInclusionMap) return cardInclusionMap;
-    const built: Record<string, number> = {};
-    const indexCard = (name: string, inclusion: number) => {
-      built[name] = inclusion;
-      if (name.includes(' // ')) built[name.split(' // ')[0]] = inclusion;
-    };
-    for (const c of edhrecData.cardlists.allNonLand) indexCard(c.name, c.inclusion);
-    for (const c of edhrecData.cardlists.lands) indexCard(c.name, c.inclusion);
+    let base = inclusionMapCacheRef.current.get(edhrecData);
+    if (!base) {
+      base = {};
+      const indexCard = (name: string, inclusion: number) => {
+        base![name] = inclusion;
+        if (name.includes(' // ')) base![name.split(' // ')[0]] = inclusion;
+      };
+      for (const c of edhrecData.cardlists.allNonLand) indexCard(c.name, c.inclusion);
+      for (const c of edhrecData.cardlists.lands) indexCard(c.name, c.inclusion);
+      inclusionMapCacheRef.current.set(edhrecData, base);
+    }
+    // Layer on DFC entries from the current deck — cheap (only DFCs in deck).
+    let withDfc: Record<string, number> | null = null;
     for (const card of currentCards) {
-      if (card.name.includes(' // ') && built[card.name] === undefined) {
+      if (card.name.includes(' // ') && base[card.name] === undefined) {
         const front = card.name.split(' // ')[0];
-        if (built[front] !== undefined) built[card.name] = built[front];
+        if (base[front] !== undefined) {
+          if (!withDfc) withDfc = { ...base };
+          withDfc[card.name] = base[front];
+        }
       }
     }
-    return built;
+    return withDfc ?? base;
   }, [cardInclusionMap, currentCards]);
 
   /** Merge two recommendation pools (e.g. primary + secondary theme).
@@ -255,11 +268,17 @@ export function DeckOptimizer({
   }, []);
 
   /** Run base + (optional) theme analysis and merge results.
-   *  Returns null when no cached EDHREC data is available. */
+   *  Returns null when no cached EDHREC data is available.
+   *
+   *  `baseOnly: true` skips the theme analyzeDeck call, halving the work for
+   *  card-add/remove updates. Role counts, curve, and the cards-filling-this-role
+   *  list all come from baseResult either way; only suggestedReplacements
+   *  loses its theme bias until the next full re-analyze. */
   const runAnalysisFor = useCallback((opts: {
     targets: Record<string, number>;
     pacing?: Pacing;
     landTarget?: number;
+    baseOnly?: boolean;
   }) => {
     const baseData = cachedEdhrecDataRef.current;
     if (!baseData) return null;
@@ -272,7 +291,7 @@ export function DeckOptimizer({
     });
 
     const themeData = themeEnhancedDataRef.current;
-    if (!themeData) return baseResult;
+    if (!themeData || opts.baseOnly) return baseResult;
 
     const themeInclusionMap = buildInclusionMap(themeData);
     const themeResult = analyzeDeck({
@@ -518,9 +537,10 @@ export function DeckOptimizer({
   }, [commanderName, analysis, loading]);
 
   // Re-run analysis when cards change (add/remove). Runs synchronously on
-  // each card-key change so the role panel updates instantly. Bulk
-  // operations (cut-all, multi-add) already batch into a single
-  // currentCards update upstream, so no debounce is needed here.
+  // each card-key change so the role panel updates instantly. Skips theme
+  // re-analysis (baseOnly) to keep this path snappy — the user gets fresh
+  // role counts and rb.cards instantly, and a full theme re-merge happens
+  // on the next explicit Re-analyze.
   const hasAnalysis = analysis != null;
   useEffect(() => {
     if (!cachedEdhrecDataRef.current || !hasAnalysis) return;
@@ -531,6 +551,7 @@ export function DeckOptimizer({
       targets: effectiveRoleTargets,
       pacing: userPacing ?? undefined,
       landTarget: userLandTarget ?? undefined,
+      baseOnly: true,
     });
     if (result) setAnalysis(result);
   }, [currentCards, effectiveRoleTargets, userPacing, userLandTarget, hasAnalysis, runAnalysisFor]);
@@ -845,9 +866,12 @@ export function DeckOptimizer({
       })
       .map(c => {
         // For lands, use the higher of commander-specific inclusion and global edhrec_rank
-        // so format staples (e.g. Urborg) aren't suggested as cuts for new/niche commanders
+        // so format staples (e.g. Urborg) aren't suggested as cuts for new/niche commanders.
+        // Treat 0 in the inclusion map as "not in this commander's pool" rather than
+        // "0% played" so the global edhrec_rank fallback kicks in — older decks were
+        // generated with 0 written for missing entries and would otherwise be pinned to 0%.
         const isLand = isAnyLand(c);
-        const cmdInclusion = inclusionMap[c.name] ?? null;
+        const cmdInclusion = inclusionMap[c.name] || null;
         const globalInclusion = edhrecRankToInclusion(c.edhrec_rank);
         const inclusion = isLand
           ? Math.max(cmdInclusion ?? 0, globalInclusion ?? 0) || null

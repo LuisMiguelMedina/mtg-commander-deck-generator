@@ -5,7 +5,6 @@ import { ArrowLeft, Loader2, List, Pencil, CopyPlus, X, Plus, MoreHorizontal, Ch
 import { useStore } from '@/store';
 import { getCardsByNames, getFrontFaceTypeLine, searchCards, getCardImageUrl, getCardPrice, getCardBackFaceUrl, isDoubleFacedCard } from '@/services/scryfall/client';
 import { ManaCost } from '@/components/ui/mtg-icons';
-import { Button } from '@/components/ui/button';
 import { fetchCommanderCombos } from '@/services/edhrec/client';
 import { applyCommanderTheme, resetTheme } from '@/lib/commanderTheme';
 import { DeckDisplay, CardContextMenu, type CardAction } from '@/components/deck/DeckDisplay';
@@ -461,6 +460,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
 
   // Action toast with undo (for add/remove cards)
   const [actionToast, setActionToast] = useState<{ message: string; onUndo: () => void } | null>(null);
+  const [deckSizeNoticeDismissedAt, setDeckSizeNoticeDismissedAt] = useState<number | null>(null);
   const actionToastTimer = useRef<ReturnType<typeof setTimeout>>();
   const onRemoveCardsRef = useRef(onRemoveCards);
   onRemoveCardsRef.current = onRemoveCards;
@@ -1118,14 +1118,14 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
             {totalDeckPrice !== null && totalDeckPrice > 0 && (
               <span className="text-sm text-muted-foreground">{priceSym}{totalDeckPrice.toFixed(2)}</span>
             )}
-            <Button
-              variant="outline"
-              size="sm"
+            <button
               onClick={() => navigate(`/playtest/list/${list.id}`)}
+              title="Playtest this deck"
+              className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-card/50 hover:bg-accent text-muted-foreground hover:text-foreground text-sm transition-colors"
             >
-              <Swords className="w-4 h-4 mr-1.5" />
-              Playtest
-            </Button>
+              <Swords className="w-4 h-4" />
+              <span className="hidden sm:inline">Playtest</span>
+            </button>
             <div className="relative" ref={overflowRef}>
               <button
                 onClick={() => setShowOverflow(prev => !prev)}
@@ -1168,7 +1168,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
           </div>
         </div>
 
-        {list.deckSize && list.cards.length !== list.deckSize && (
+        {list.deckSize && list.cards.length !== list.deckSize && deckSizeNoticeDismissedAt !== list.cards.length && (
           <div className="flex items-center gap-2 px-3 py-2 mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm flex-wrap">
             <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
@@ -1188,6 +1188,14 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
                 Set expected to {list.cards.length}
               </button>
             )}
+            <button
+              onClick={() => setDeckSizeNoticeDismissedAt(list.cards.length)}
+              className={`${onUpdateDeckSize ? '' : 'ml-auto'} p-1 -mr-1 rounded text-amber-400/70 hover:text-amber-200 hover:bg-amber-500/10 transition-colors`}
+              title="Dismiss"
+              aria-label="Dismiss deck size notice"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
 

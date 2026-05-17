@@ -4,9 +4,11 @@ import { usePlaytestStore } from '@/store/playtestStore';
 import { usePlaytestSettings } from '@/store/playtestSettingsStore';
 import { getCardImageUrl, getFrontFaceTypeLine } from '@/services/scryfall/client';
 import { PlaytestCardMenu, type CardMenuTarget } from '@/components/playtest/PlaytestCardMenu';
-import { PlaytestActionsBar } from '@/components/playtest/PlaytestActionsBar';
+import { PlaytestActionsBar, NextTurnButton } from '@/components/playtest/PlaytestActionsBar';
+import { PlaytestPile, PILES } from '@/components/playtest/PlaytestPile';
 import { MagnifiedPreview } from '@/components/playtest/MagnifiedPreview';
 import { useMagnifyKey } from '@/hooks/useMagnifyKey';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import type { ScryfallCard } from '@/types';
 
 type SortMode = 'none' | 'cmc' | 'type';
@@ -15,10 +17,26 @@ export function Hand() {
   const hand = usePlaytestStore(s => s.zones.hand);
   const moveCard = usePlaytestStore(s => s.moveCard);
   const [sort, setSort] = useState<SortMode>('none');
+  // Conditionally RENDER the hand-row piles (not just CSS-hide) so they
+  // don't share dnd-kit IDs with the mobile floating piles on the battlefield.
+  const isDesktop = useMediaQuery('(min-width: 768px)');
   const [menu, setMenu] = useState<CardMenuTarget | null>(null);
   const [hoveredFanIndex, setHoveredFanIndex] = useState<number | null>(null);
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const [rowWidth, setRowWidth] = useState(0);
+
+  useEffect(() => {
+    if (!rowRef.current) return;
+    const el = rowRef.current;
+    const update = () => setRowWidth(el.clientWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const display = sortedHand(hand, sort);
+  const overlap = computeOverlap(display.length, rowWidth);
 
   const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: 'hand',
@@ -35,44 +53,100 @@ export function Hand() {
   return (
     <div
       ref={setDropRef}
-      className={`border-t border-border/50 bg-card/30 px-4 py-3 flex flex-col transition-shadow ${isOver ? 'ring-2 ring-primary/50 ring-inset' : ''}`}
+      className={`border-t border-border/50 bg-card/30 px-2 sm:px-4 py-2 sm:py-3 flex flex-col transition-shadow ${isOver ? 'ring-2 ring-primary/50 ring-inset' : ''}`}
     >
-      <div className="flex items-center gap-3 mb-2">
-        <span className="text-[10px] uppercase opacity-60 shrink-0">Hand · {hand.length}</span>
-        <PlaytestActionsBar />
-        <select
-          value={sort}
-          onChange={e => setSort(e.target.value as SortMode)}
-          className="ml-auto text-[10px] uppercase opacity-60 bg-transparent border border-border/50 rounded px-1.5 py-0.5"
-        >
-          <option value="none">None</option>
-          <option value="cmc">CMC</option>
-          <option value="type">Type</option>
-        </select>
-      </div>
-      <div className="flex justify-center min-h-[160px]">
-        <div className="flex items-end">
-          {display.map(({ card, originalIndex }, i) => (
-            <HandCard
-              key={`${card.id}-${originalIndex}`}
-              card={card}
-              indexInHand={originalIndex}
-              fanIndex={i}
-              total={display.length}
-              hoveredFanIndex={hoveredFanIndex}
-              onHoverChange={(h) => setHoveredFanIndex(prev => h ? i : (prev === i ? null : prev))}
-              onClickPlay={() => playToBattlefield(originalIndex)}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setMenu({ kind: 'hand', handIndex: originalIndex, card, x: e.clientX, y: e.clientY });
-              }}
-            />
-          ))}
+      {/* Toolbar row mirrors the hand row's three-column layout below so the
+          action buttons center over the hand fan, not over the whole bar. */}
+      <div className="flex items-center gap-2 mb-2">
+        <div className="shrink-0 flex items-center gap-2">
+          <span className="text-[10px] uppercase opacity-60 shrink-0">Hand · {hand.length}</span>
+          <select
+            value={sort}
+            onChange={e => setSort(e.target.value as SortMode)}
+            className="hidden sm:inline-block text-[10px] uppercase opacity-60 bg-transparent border border-border/50 rounded px-1 py-0.5 shrink-0 min-w-0"
+            title="Sort hand"
+          >
+            <option value="none">None</option>
+            <option value="cmc">CMC</option>
+            <option value="type">Type</option>
+          </select>
         </div>
+        <div className="flex-1 flex justify-center min-w-0">
+          <PlaytestActionsBar />
+        </div>
+        {/* Right column: spacers + Next Turn on desktop. Hidden on mobile
+            (Next Turn lives in the top toolbar there). */}
+        <div className="hidden md:flex items-center gap-2 shrink-0">
+          <div className="shrink-0" style={{ width: 'clamp(80px, 11vw, 130px)' }} aria-hidden />
+          <div className="shrink-0" style={{ width: 'clamp(80px, 11vw, 130px)' }} aria-hidden />
+          <div className="shrink-0 flex justify-end" style={{ width: 'clamp(80px, 11vw, 130px)' }}>
+            <NextTurnButton />
+          </div>
+        </div>
+      </div>
+      <div className="flex items-end gap-1 sm:gap-2 min-h-[140px] sm:min-h-[160px]">
+        {/* Desktop: Command pile on the left. Mobile: zones float on the battlefield. */}
+        {isDesktop && (
+          <div className="shrink-0" style={{ width: 'clamp(80px, 11vw, 130px)' }}>
+            <PlaytestPile spec={PILES[0]} />
+          </div>
+        )}
+        <div ref={rowRef} className="flex-1 flex justify-center min-w-0">
+          <div className="flex items-end">
+            {display.map(({ card, originalIndex }, i) => (
+              <HandCard
+                key={`${card.id}-${originalIndex}`}
+                card={card}
+                indexInHand={originalIndex}
+                fanIndex={i}
+                overlap={overlap}
+                hoveredFanIndex={hoveredFanIndex}
+                onHoverChange={(h) => setHoveredFanIndex(prev => h ? i : (prev === i ? null : prev))}
+                onClickPlay={() => playToBattlefield(originalIndex)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setMenu({ kind: 'hand', handIndex: originalIndex, card, x: e.clientX, y: e.clientY });
+                }}
+              />
+            ))}
+          </div>
+        </div>
+        {/* Desktop: Library / Graveyard / Exile on the right. */}
+        {isDesktop && (
+          <div className="flex items-end gap-2 shrink-0">
+            <div style={{ width: 'clamp(80px, 11vw, 130px)' }}>
+              <PlaytestPile spec={PILES[1]} />
+            </div>
+            <div style={{ width: 'clamp(80px, 11vw, 130px)' }}>
+              <PlaytestPile spec={PILES[2]} />
+            </div>
+            <div style={{ width: 'clamp(80px, 11vw, 130px)' }}>
+              <PlaytestPile spec={PILES[3]} />
+            </div>
+          </div>
+        )}
       </div>
       <PlaytestCardMenu target={menu} onClose={() => setMenu(null)} />
     </div>
   );
+}
+
+// Compute card overlap so the hand row always fits within rowWidth. Mirrors the
+// `width: clamp(80px, 11vw, 130px)` rule on HandCard — we estimate cardW the
+// same way so overlap math reflects the rendered size. A negative return value
+// means a gap (no overlap); the row keeps a max 2px gap until cards no longer
+// fit, then overlap kicks in as needed.
+const MIN_GAP_PX = 2;
+function computeOverlap(total: number, rowWidth: number): number {
+  if (total <= 1) return 0;
+  const cardW = Math.max(80, Math.min(130, typeof window !== 'undefined' ? window.innerWidth * 0.11 : 110));
+  if (rowWidth <= 0) return -MIN_GAP_PX;
+  // Minimum overlap to fit all cards in the row: total*cardW - (N-1)*overlap = rowWidth.
+  const required = Math.ceil((total * cardW - rowWidth) / (total - 1));
+  const maxOverlap = Math.max(0, cardW - 12);
+  // Floor at -MIN_GAP_PX so cards stay nearly touching even when there's lots
+  // of room; raise to `required` when they would otherwise spill over.
+  return Math.min(maxOverlap, Math.max(-MIN_GAP_PX, required));
 }
 
 function sortedHand(hand: ScryfallCard[], mode: SortMode) {
@@ -86,14 +160,14 @@ interface HandCardProps {
   card: ScryfallCard;
   indexInHand: number;
   fanIndex: number;
-  total: number;
+  overlap: number;
   hoveredFanIndex: number | null;
   onHoverChange: (hovered: boolean) => void;
   onClickPlay: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }
 
-function HandCard({ card, indexInHand, fanIndex, total, hoveredFanIndex, onHoverChange, onClickPlay, onContextMenu }: HandCardProps) {
+function HandCard({ card, indexInHand, fanIndex, overlap, hoveredFanIndex, onHoverChange, onClickPlay, onContextMenu }: HandCardProps) {
   const dragId = `hand:${indexInHand}:${card.id}`;
   const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
     id: dragId,
@@ -119,18 +193,32 @@ function HandCard({ card, indexInHand, fanIndex, total, hoveredFanIndex, onHover
   // the deal-in keyframe; everything else snaps into place without growing.
   const animations = usePlaytestSettings(s => s.animations);
   const [drawRangeAtMount] = useState(() => usePlaytestStore.getState().lastDrawRange);
+  const [returnRangeAtMount] = useState(() => usePlaytestStore.getState().lastReturnRange);
   const isFreshlyDrawn =
     animations &&
     indexInHand >= drawRangeAtMount.start &&
     indexInHand < drawRangeAtMount.end;
-  const [dealing, setDealing] = useState(isFreshlyDrawn);
+  const isFreshlyReturned =
+    animations &&
+    indexInHand >= returnRangeAtMount.start &&
+    indexInHand < returnRangeAtMount.end;
+  // Stagger: when multiple cards arrive in the same draw/return, offset each
+  // card's animation by its position in the batch so they cascade in.
+  const STAGGER_MS = 70;
+  const staggerIdx = isFreshlyDrawn
+    ? indexInHand - drawRangeAtMount.start
+    : isFreshlyReturned
+      ? indexInHand - returnRangeAtMount.start
+      : 0;
+  const animationDelayMs = staggerIdx * STAGGER_MS;
+  const [dealing, setDealing] = useState(isFreshlyDrawn || isFreshlyReturned);
   useEffect(() => {
-    if (!isFreshlyDrawn) return;
-    const t = setTimeout(() => setDealing(false), 380);
+    if (!dealing) return;
+    const t = setTimeout(() => setDealing(false), 380 + animationDelayMs);
     return () => clearTimeout(t);
-  }, [isFreshlyDrawn]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const overlap = total <= 7 ? 24 : Math.min(24 + (total - 7) * 6, 88);
   const dragTransform = transform ? `translate3d(${transform.x}px, ${transform.y}px, 0) scale(1.05)` : undefined;
 
   // Hover-fan-spread: when a sibling is hovered, push neighbors away to make
@@ -140,7 +228,12 @@ function HandCard({ card, indexInHand, fanIndex, total, hoveredFanIndex, onHover
     if (isDragging || dealing || hoveredFanIndex === null || isHovered) return 0;
     const dist = fanIndex - hoveredFanIndex;
     const direction = dist > 0 ? 1 : -1;
-    const magnitude = Math.max(0, Math.min(overlap, 18 - (Math.abs(dist) - 1) * 6));
+    // Spread scales with overlap so a tightly-squeezed hand pushes neighbors
+    // away more aggressively — exposing the cards adjacent to the hovered one
+    // even when overlap is large. Falls off ~30% per additional neighbor.
+    const baseSpread = Math.max(18, overlap * 0.75);
+    const falloff = baseSpread * 0.32;
+    const magnitude = Math.max(0, Math.min(overlap, baseSpread - (Math.abs(dist) - 1) * falloff));
     return direction * magnitude;
   })();
 
@@ -162,13 +255,14 @@ function HandCard({ card, indexInHand, fanIndex, total, hoveredFanIndex, onHover
       ? undefined
       : restingTransform;
   const style: React.CSSProperties = {
-    marginLeft: fanIndex === 0 ? 0 : `-${overlap}px`,
+    marginLeft: fanIndex === 0 ? 0 : `${-overlap}px`,
     transform: inlineTransform,
     zIndex: isDragging ? 50 : isHovered ? 30 : fanIndex,
     transition: isDragging || dealing ? 'none' : 'transform 160ms ease-out',
     width: 'clamp(80px, 11vw, 130px)',
     cursor: isDragging ? 'grabbing' : 'pointer',
     opacity: isDragging ? 0 : 1,
+    ...(dealing && animationDelayMs > 0 ? { animationDelay: `${animationDelayMs}ms` } : {}),
   };
 
   return (
@@ -178,12 +272,16 @@ function HandCard({ card, indexInHand, fanIndex, total, hoveredFanIndex, onHover
       {...listeners}
       onClick={onClickPlay}
       onContextMenu={onContextMenu}
-      onMouseEnter={() => { setHovered(true); onHoverChange(true); }}
-      onMouseLeave={() => { setHovered(false); onHoverChange(false); }}
+      // Only mouse-type pointers trigger the lift/spread animation — taps on
+      // touch devices synthesize mouseenter, but we don't want a tap to lift
+      // and shift neighbors while the user is just trying to play the card.
+      onPointerEnter={(e) => { if (e.pointerType === 'mouse') { setHovered(true); onHoverChange(true); } }}
+      onPointerLeave={(e) => { if (e.pointerType === 'mouse') { setHovered(false); onHoverChange(false); } }}
       title={`Click to play ${card.name} · right-click for more options`}
+      data-hand-index={indexInHand}
       className={`relative shrink-0 rounded-[5px] select-none touch-none ${
         isOver && !isDragging ? 'ring-2 ring-primary' : ''
-      } ${dealing && !isDragging ? 'animate-deal-in' : ''}`}
+      } ${dealing && !isDragging ? (isFreshlyReturned ? 'animate-deal-in-from-top' : 'animate-deal-in') : ''}`}
       style={style}
     >
       <img

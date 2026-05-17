@@ -5,8 +5,8 @@ import { useStore } from '@/store';
 import { searchCards, getCardImageUrl, getCardsByNames } from '@/services/scryfall/client';
 import type { ScryfallCard } from '@/types';
 import { CardTypeIcon } from '@/components/ui/mtg-icons';
-import { Search, Loader2, X, Trash2, ChevronRight, Ban, ListPlus, Check, Shield, Info, Plus } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Search, Loader2, X, Trash2, ChevronRight, Ban, ListPlus, Check, Shield, Info, Plus, PlusSquare } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { UserListChips, PRESET_BAN_LISTS } from '@/components/lists/UserListChips';
 import { useUserLists } from '@/hooks/useUserLists';
 import { getBanList } from '@/services/scryfall/client';
@@ -16,7 +16,7 @@ const CARD_TYPES = ['Battle', 'Creature', 'Instant', 'Sorcery', 'Artifact', 'Enc
 
 const ALWAYS_ACTIVE_ID = 'rc-banlist';
 
-function BanListPickerContent({ banLists, appliedExcludeLists, userLists, listPickerSearch, setListPickerSearch, onTogglePreset, onToggleBanList, onToggleUserList }: {
+function BanListPickerContent({ banLists, appliedExcludeLists, userLists, listPickerSearch, setListPickerSearch, onTogglePreset, onToggleBanList, onToggleUserList, onCreateList }: {
   banLists: BanList[];
   appliedExcludeLists: { listId: string; enabled: boolean }[];
   userLists: { id: string; name: string; cards: string[] }[];
@@ -25,6 +25,7 @@ function BanListPickerContent({ banLists, appliedExcludeLists, userLists, listPi
   onTogglePreset: (id: string) => void;
   onToggleBanList: (id: string) => void;
   onToggleUserList: (id: string) => void;
+  onCreateList: () => void;
 }) {
   const ALWAYS_ACTIVE = 'rc-banlist';
   const presets = PRESET_BAN_LISTS.filter(p => p.id !== ALWAYS_ACTIVE);
@@ -86,6 +87,15 @@ function BanListPickerContent({ banLists, appliedExcludeLists, userLists, listPi
           <p className="px-3 py-2 text-xs text-muted-foreground">No matching lists</p>
         )}
       </div>
+      <div className="border-t border-border/50 mt-1">
+        <button
+          onClick={onCreateList}
+          className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-2 text-primary"
+        >
+          <PlusSquare className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate flex-1">Create new list</span>
+        </button>
+      </div>
     </>
   );
 }
@@ -115,6 +125,7 @@ export function BannedCards() {
 
   const [showListPicker, setShowListPicker] = useState(false);
   const [listPickerSearch, setListPickerSearch] = useState('');
+  const navigate = useNavigate();
 
   const handlePickerTogglePreset = async (presetId: string) => {
     const preset = PRESET_BAN_LISTS.find(p => p.id === presetId);
@@ -360,6 +371,7 @@ export function BannedCards() {
               onTogglePreset={handlePickerTogglePreset}
               onToggleBanList={(id) => updateCustomization({ banLists: banLists.map(l => l.id === id ? { ...l, enabled: !l.enabled } : l) })}
               onToggleUserList={handlePickerToggleUserList}
+              onCreateList={() => { setShowListPicker(false); navigate('/lists/create?type=list'); }}
             />
           </PopoverContent>
         </Popover>
@@ -427,10 +439,7 @@ export function BannedCards() {
 
       {bannedCards.length === 0 && banLists.filter(l => l.enabled).length === 0 && !appliedExcludeLists.some(r => r.enabled) && (
         <p className="text-xs text-muted-foreground">
-          Search cards to exclude{userLists.length > 0
-            ? ', or import a List'
-            : <>, or <Link to="/lists" className="text-primary hover:text-primary/80 transition-colors">create a list</Link> to import</>
-          }
+          Search cards to exclude, import a List, or <Link to="/lists/create?type=list" className="text-primary hover:text-primary/80 transition-colors">create one</Link>
         </p>
       )}
 

@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import type { DraggableAttributes } from '@dnd-kit/core';
 import { usePlaytestStore } from '@/store/playtestStore';
-import { usePlaytestSettings } from '@/store/playtestSettingsStore';
+import { usePlaytestSettings, CARD_SIZES } from '@/store/playtestSettingsStore';
 import { getCardImageUrl, getCardBackFaceUrl, isDoubleFacedCard } from '@/services/scryfall/client';
 import { PlaytestCardMenu, type CardMenuTarget } from '@/components/playtest/PlaytestCardMenu';
 import { MagnifiedPreview } from '@/components/playtest/MagnifiedPreview';
@@ -94,7 +94,8 @@ interface PositionedProps {
 
 const PositionedCard = React.forwardRef<HTMLDivElement, PositionedProps>(function PositionedCard(props, ref) {
   const { card, xPx, yPx, transform, isDragging, selected, attributes, listeners, onTap, onAdjust, onHover, onContextMenu } = props;
-  const cardWidth = 100;
+  const cardSize = usePlaytestSettings(s => s.cardSize);
+  const cardWidth = CARD_SIZES[cardSize].width;
   const localRef = useRef<HTMLDivElement | null>(null);
   const setRefs = (node: HTMLDivElement | null) => {
     localRef.current = node;
@@ -120,6 +121,26 @@ const PositionedCard = React.forwardRef<HTMLDivElement, PositionedProps>(functio
     const id = requestAnimationFrame(() => setArrived(true));
     return () => cancelAnimationFrame(id);
   }, [animations]);
+
+  // Flip: play a quick rotateY when the faceDown state toggles. The displayed
+  // face lags the store value by ~half the animation so the image swap happens
+  // at the edge-on midpoint (otherwise you'd see the *new* face rotating away
+  // from frame 0). Skip the lag entirely when animations are disabled.
+  const prevFaceDown = React.useRef(card.faceDown);
+  const [flipping, setFlipping] = React.useState(false);
+  const [displayFaceDown, setDisplayFaceDown] = React.useState(card.faceDown);
+  React.useEffect(() => {
+    if (prevFaceDown.current === card.faceDown) return;
+    prevFaceDown.current = card.faceDown;
+    if (!animations) {
+      setDisplayFaceDown(card.faceDown);
+      return;
+    }
+    setFlipping(true);
+    const swap = setTimeout(() => setDisplayFaceDown(card.faceDown), 175);
+    const end  = setTimeout(() => setFlipping(false), 380);
+    return () => { clearTimeout(swap); clearTimeout(end); };
+  }, [card.faceDown, animations]);
 
   const innerTransform = [
     arrived ? 'scale(1)' : 'scale(1.15)',
@@ -150,14 +171,14 @@ const PositionedCard = React.forwardRef<HTMLDivElement, PositionedProps>(functio
       >
         <img
           src={
-            card.faceDown
+            displayFaceDown
               ? `${import.meta.env.BASE_URL}card-back.png`
               : (card.flipped && isDoubleFacedCard(card.card)
                   ? (getCardBackFaceUrl(card.card, 'normal') ?? getCardImageUrl(card.card, 'normal'))
                   : getCardImageUrl(card.card, 'normal'))
           }
-          alt={card.faceDown ? 'Face-down' : card.card.name}
-          className={`w-full rounded-[5px] shadow-lg pointer-events-none ${selected ? 'ring-2 ring-primary ring-offset-1 ring-offset-transparent' : ''}`}
+          alt={displayFaceDown ? 'Face-down' : card.card.name}
+          className={`w-full rounded-[5px] shadow-lg pointer-events-none ${selected ? 'ring-2 ring-primary ring-offset-1 ring-offset-transparent' : ''} ${flipping ? 'animate-bf-flip' : ''}`}
           draggable={false}
         />
         {/* Counter chips, counter-rotated to stay upright when card is tapped */}

@@ -18,12 +18,15 @@ import {
 import { usePlaytestStore } from '@/store/playtestStore';
 import { isDoubleFacedCard, getFrontFaceTypeLine } from '@/services/scryfall/client';
 import type { ScryfallCard } from '@/types';
+import type { ZoneKey } from '@/components/playtest/types';
 
 export interface CardMenuTarget {
-  // Either a battlefield card (instanceId set) or a hand card (handIndex set)
-  kind: 'battlefield' | 'hand';
+  // Battlefield card (instanceId), hand card (handIndex), or non-hand zone card (zone + zoneIndex)
+  kind: 'battlefield' | 'hand' | 'zone';
   instanceId?: string;
   handIndex?: number;
+  zone?: Exclude<ZoneKey, 'hand'>;
+  zoneIndex?: number;
   card: ScryfallCard;
   x: number;
   y: number;
@@ -152,6 +155,11 @@ export function PlaytestCardMenu({ target, onClose }: Props) {
         else if (dest === 'libbot') moveCard({ source, target: { kind: 'library', position: 'bottom' } });
         else moveCard({ source, target: { kind: 'zone', zone: dest } });
       });
+    } else if (target.kind === 'zone' && target.zone && typeof target.zoneIndex === 'number') {
+      const source = { kind: 'zone' as const, zone: target.zone, index: target.zoneIndex };
+      if (dest === 'libtop') moveCard({ source, target: { kind: 'library', position: 'top' } });
+      else if (dest === 'libbot') moveCard({ source, target: { kind: 'library', position: 'bottom' } });
+      else moveCard({ source, target: { kind: 'zone', zone: dest } });
     } else {
       const source = { kind: 'zone' as const, zone: 'hand' as const, index: target.handIndex! };
       if (dest === 'libtop') moveCard({ source, target: { kind: 'library', position: 'top' } });
@@ -230,7 +238,7 @@ export function PlaytestCardMenu({ target, onClose }: Props) {
       )}
 
       {/* Move destinations */}
-      {onBattlefield && (
+      {target.kind !== 'hand' && (
         <Item icon={<HandIcon className="w-3.5 h-3.5" />} onClick={() => move('hand')}>Move to hand{bulkSuffix}</Item>
       )}
       <Item icon={<ArrowUpToLine className="w-3.5 h-3.5" />}   onClick={() => move('libtop')}>Move to library top{bulkSuffix}</Item>

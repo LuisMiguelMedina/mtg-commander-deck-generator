@@ -12,6 +12,14 @@ export const BG_STYLES: Record<BattlefieldBg, { label: string; background: strin
   wood:  { label: 'Warm wood',  background: 'radial-gradient(ellipse at center, rgba(120,80,40,0.20), rgba(60,40,20,0.05) 70%)' },
 };
 
+export type BattlefieldCardSize = 'small' | 'medium' | 'large';
+
+export const CARD_SIZES: Record<BattlefieldCardSize, { label: string; width: number; height: number }> = {
+  small:  { label: 'Small',  width: 100, height: 140 },
+  medium: { label: 'Medium', width: 130, height: 182 },
+  large:  { label: 'Large',  width: 165, height: 231 },
+};
+
 export type LogFilter = Record<LogCategory, boolean>;
 
 const ALL_LOG_CATEGORIES_ON: LogFilter = {
@@ -20,20 +28,26 @@ const ALL_LOG_CATEGORIES_ON: LogFilter = {
 
 interface Settings {
   bg: BattlefieldBg;
+  cardSize: BattlefieldCardSize;
   animations: boolean;
+  dotGrid: boolean;
   logFilter: LogFilter;
 }
 
 interface SettingsActions {
   setBg: (bg: BattlefieldBg) => void;
+  setCardSize: (size: BattlefieldCardSize) => void;
   setAnimations: (v: boolean) => void;
+  setDotGrid: (v: boolean) => void;
   setLogFilter: (filter: LogFilter) => void;
   toggleLogCategory: (category: LogCategory) => void;
 }
 
 const defaults: Settings = {
   bg: 'arena',
+  cardSize: 'medium',
   animations: true,
+  dotGrid: true,
   logFilter: ALL_LOG_CATEGORIES_ON,
 };
 
@@ -60,7 +74,9 @@ function save(s: Settings) {
 export const usePlaytestSettings = create<Settings & SettingsActions>((set, get) => ({
   ...load(),
   setBg: (bg) => { set({ bg }); save({ ...get(), bg }); },
+  setCardSize: (cardSize) => { set({ cardSize }); save({ ...get(), cardSize }); },
   setAnimations: (animations) => { set({ animations }); save({ ...get(), animations }); },
+  setDotGrid: (dotGrid) => { set({ dotGrid }); save({ ...get(), dotGrid }); },
   setLogFilter: (logFilter) => { set({ logFilter }); save({ ...get(), logFilter }); },
   toggleLogCategory: (category) => {
     const next: LogFilter = { ...get().logFilter, [category]: !get().logFilter[category] };
