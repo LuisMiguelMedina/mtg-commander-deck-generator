@@ -9,7 +9,7 @@ import { GenerateLane } from '@/components/analyze/GenerateLane';
 import { CommanderStrip, type AnalyzeSource } from '@/components/analyze/CommanderStrip';
 import { hydrateDeckForAnalysis } from '@/components/analyze/analyzeHydration';
 import { DeckOptimizer } from '@/components/deck/optimizer';
-import { CurvePlayArea } from '@/components/analyze/CurvePlayArea';
+import { DeckBuildingArea } from '@/components/analyze/DeckBuildingArea';
 import { useStore } from '@/store';
 import { useUserLists } from '@/hooks/useUserLists';
 import { applyCommanderTheme, resetTheme } from '@/lib/commanderTheme';
@@ -259,7 +259,7 @@ export function AnalyzePage() {
         {generatedDeck.commander && (
           <>
             {!optimizeViewActive && (
-              <CurvePlayArea
+              <DeckBuildingArea
                 currentCards={Object.values(generatedDeck.categories).flat()}
                 excludeNames={(() => {
                   const s = new Set<string>();

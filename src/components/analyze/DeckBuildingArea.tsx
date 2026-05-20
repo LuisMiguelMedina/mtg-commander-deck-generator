@@ -1,14 +1,14 @@
-// src/components/analyze/CurvePlayArea.tsx
+// src/components/analyze/DeckBuildingArea.tsx
 import { useMemo, useState, useEffect } from 'react';
 import { ChevronDown, ChevronRight, ArrowUpDown, BarChart3 } from 'lucide-react';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import type { ScryfallCard } from '@/types';
-import { buildCurveBuckets } from './CurvePlayArea.buckets';
+import { buildCurveBuckets } from './DeckBuildingArea.buckets';
 import { getCardImageUrl, getCardPrice, isBasicLand, isMdfcLand, isChannelLand } from '@/services/scryfall/client';
 import { isUtilityLand, isTapland, loadTaggerData } from '@/services/tagger/client';
 import { CardPreviewModal } from '@/components/ui/CardPreviewModal';
 
-interface CurvePlayAreaProps {
+interface DeckBuildingAreaProps {
   currentCards: ScryfallCard[];
   excludeNames?: Set<string>;
   onCmcSelect?: (cmc: number) => void;
@@ -119,7 +119,7 @@ const COLLAPSED_KEY = 'analyze-play-area-collapsed';
 const LANDS_KEY = 'analyze-play-area-lands-expanded';
 const SORT_STORAGE_KEY = 'analyze-play-area-sort';
 
-export function CurvePlayArea({ currentCards, excludeNames, onCmcSelect }: CurvePlayAreaProps) {
+export function DeckBuildingArea({ currentCards, excludeNames, onCmcSelect }: DeckBuildingAreaProps) {
   const buckets = useMemo(
     () => buildCurveBuckets(currentCards, { excludeNames }),
     [currentCards, excludeNames],
