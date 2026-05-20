@@ -112,6 +112,19 @@ export function AnalyzePage() {
 
   // Detect bridge-from-Generate: if a deck is already in the store on mount
   // and no listId param and no source set yet, treat as 'generated'.
+  // When the URL goes back to a bare /analyze (e.g. browser back from a
+  // listId or tab URL), clear the local `source` so the hub renders again.
+  // We intentionally do NOT clear the Zustand `generatedDeck` here — the
+  // user may have generated it on /build and we don't want to lose their
+  // work; the bridge effect below will re-attach it if they re-enter the
+  // loaded view via /analyze/<tab>.
+  useEffect(() => {
+    if (!listIdParam && !param1IsTab && source !== null) {
+      setSource(null);
+      hydratedListIdRef.current = null;
+    }
+  }, [listIdParam, param1IsTab, source]);
+
   // Bridge-from-Generate: only hydrate from the Zustand store when the URL
   // signals the analyzer view explicitly (e.g. /analyze/overview). Bare
   // /analyze is always the selection hub, even if a deck happens to be in
@@ -158,13 +171,14 @@ export function AnalyzePage() {
         cardCount: countCards(deck),
         hasCommander: !!deck.commander,
       });
+      navigate('/analyze/overview');
     } catch (e) {
       console.error('[AnalyzePage] paste hydration failed', e);
       setError('Could not analyze this deck. Check the card names and try again.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [navigate]);
 
   const handleListPick = useCallback(async (list: UserCardList) => {
     setLoading(true);
