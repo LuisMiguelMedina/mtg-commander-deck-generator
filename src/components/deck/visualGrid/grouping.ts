@@ -17,7 +17,6 @@ export const GROUP_OPTIONS: { value: GroupKey; label: string }[] = [
   { value: 'colorIdentity', label: 'Color Identity' },
   { value: 'rarity', label: 'Rarity' },
   { value: 'role', label: 'Role' },
-  { value: 'none', label: 'No Grouping' },
 ];
 
 export type CardEntry = { card: ScryfallCard; quantity: number };
