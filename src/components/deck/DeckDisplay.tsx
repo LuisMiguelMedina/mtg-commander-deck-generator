@@ -3237,6 +3237,32 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
                   Exit Modify
                 </button>
               )}
+              {viewMode === 'grid' && (
+                <>
+                  <Select
+                    className="h-8 w-[150px] text-xs"
+                    value={groupBy}
+                    onChange={(e) => setGroupBy(e.target.value as GroupKey)}
+                    options={GROUP_OPTIONS.map(o => ({ value: o.value, label: `Group: ${o.label}` }))}
+                  />
+                  <div className="flex bg-card/50 rounded-lg px-1.5 py-1 border border-border/50 items-center">
+                    <button
+                      onClick={() => setGridLayout('grid')}
+                      className={`px-1.5 py-1 rounded ${gridLayout === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      title="Packed grid layout"
+                    >
+                      <LayoutGrid className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setGridLayout('stacks')}
+                      className={`px-1.5 py-1 rounded ${gridLayout === 'stacks' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      title="Visual stacks layout"
+                    >
+                      <Rows3 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </>
+              )}
               <div className="flex bg-card/50 rounded-lg px-1.5 py-1 border border-border/50 items-center">
                 <button
                   onClick={() => setShowTextEditor(v => !v)}
@@ -3468,6 +3494,32 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
               <button onClick={handleExitEditMode} className="flex items-center bg-card/50 rounded-lg px-2.5 py-1.5 border border-border/50 text-xs text-red-400/70 hover:text-red-400 transition-colors whitespace-nowrap">
                 Exit Modify
               </button>
+            )}
+            {viewMode === 'grid' && (
+              <>
+                <Select
+                  className="h-8 w-[150px] text-xs"
+                  value={groupBy}
+                  onChange={(e) => setGroupBy(e.target.value as GroupKey)}
+                  options={GROUP_OPTIONS.map(o => ({ value: o.value, label: `Group: ${o.label}` }))}
+                />
+                <div className="flex bg-card/50 rounded-lg px-1.5 py-1 border border-border/50 items-center">
+                  <button
+                    onClick={() => setGridLayout('grid')}
+                    className={`px-1.5 py-1 rounded ${gridLayout === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                    title="Packed grid layout"
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setGridLayout('stacks')}
+                    className={`px-1.5 py-1 rounded ${gridLayout === 'stacks' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                    title="Visual stacks layout"
+                  >
+                    <Rows3 className="w-4 h-4" />
+                  </button>
+                </div>
+              </>
             )}
             <div className="flex bg-card/50 rounded-lg px-1.5 py-1 border border-border/50 items-center">
               <button
