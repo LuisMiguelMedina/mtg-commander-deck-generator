@@ -33,7 +33,7 @@ export function DeckOptimizer({
   commanderName,
   partnerCommanderName,
   currentCards,
-  deckSize,
+  deckSize: propDeckSize,
   roleCounts,
   roleTargets,
   cardInclusionMap,
@@ -107,6 +107,10 @@ export function DeckOptimizer({
 
   // User-overridable land target (null = use auto-computed)
   const [userLandTarget, setUserLandTarget] = useState<number | null>(null);
+
+  // User-overridable intended deck size (null = use loaded deck's actual size)
+  const [userDeckSize, setUserDeckSize] = useState<number | null>(null);
+  const deckSize = userDeckSize ?? propDeckSize;
 
   // Store subscriptions used inside the analysis handlers below — declared
   // here so handlers can reference them in their dep arrays.
@@ -326,6 +330,28 @@ export function DeckOptimizer({
     const mergedLandRecs = mergeRecommendations(baseResult.landRecommendations, themeResult.landRecommendations, 15);
     return { ...baseResult, recommendations: mergedRecs, roleBreakdowns: mergedRoleBreakdowns, landRecommendations: mergedLandRecs };
   }, [currentCards, roleCounts, deckSize, buildInclusionMap, mergeRecommendations, colorIdentity]);
+
+  // When user adjusts the intended deck size, re-run analysis. The new
+  // deckSize takes effect on the next render via the `deckSize` derivation
+  // above, but runAnalysisFor closes over the *current* render's deckSize —
+  // so we schedule the re-run after state has flushed.
+  const handleDeckSizeChange = useCallback((newSize: number | null) => {
+    setUserDeckSize(newSize);
+  }, []);
+
+  // Re-run analysis whenever the effective deckSize changes via user override.
+  useEffect(() => {
+    if (!analysis) return;
+    const result = runAnalysisFor({
+      targets: effectiveRoleTargets,
+      pacing: userPacing ?? undefined,
+      landTarget: userLandTarget ?? undefined,
+    });
+    if (result) setAnalysis(result);
+    // We deliberately only react to userDeckSize here — other deps would
+    // double-fire the analysis loop that already exists for them.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userDeckSize]);
 
   // When user changes land target, re-run analysis with the new override
   const handleLandTargetChange = useCallback((newTarget: number | null) => {
@@ -1093,6 +1119,8 @@ export function DeckOptimizer({
                 userLandTarget={userLandTarget}
                 onLandTargetChange={handleLandTargetChange}
                 deckSize={deckSize}
+                userDeckSize={userDeckSize}
+                onDeckSizeChange={handleDeckSizeChange}
                 detectedPacing={detectedPacingRef.current ?? undefined}
                 userPacing={userPacing}
                 onPacingChange={handlePacingChange}
@@ -1161,6 +1189,8 @@ export function DeckOptimizer({
               userLandTarget={userLandTarget}
               onLandTargetChange={handleLandTargetChange}
               deckSize={deckSize}
+              userDeckSize={userDeckSize}
+              onDeckSizeChange={handleDeckSizeChange}
             />
 
             {/* Optimize CTA */}

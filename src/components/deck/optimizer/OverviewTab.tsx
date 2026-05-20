@@ -4,7 +4,7 @@ import {
   Shield, Ban, LayoutDashboard,
   Lightbulb, Tag, ArrowUpDown, Pencil, Gauge,
   RotateCcw, Loader2, Info, Zap, Mountain, BarChart3,
-  AlertTriangle,
+  AlertTriangle, Layers,
 } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import type { ScryfallCard, UserCardList, EDHRECTheme } from '@/types';
@@ -96,7 +96,7 @@ export function SuggestionCardGrid({
           )}
         </div>
       )}
-      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-2">
         {sorted.map((rec, i) => (
           <SuggestionCardItem
             key={rec.name}
@@ -293,7 +293,7 @@ export function CutCardGrid({
   getBadges?: (ac: AnalyzedCard) => { countLabel?: string; warning?: string } | undefined;
 }) {
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-2">
       {cards.map((ac, i) => {
         const badges = getBadges?.(ac);
         return (
@@ -519,6 +519,8 @@ export function AdjustPopoverContent({
   userLandTarget,
   onLandTargetChange,
   deckSize,
+  userDeckSize,
+  onDeckSizeChange,
   detectedPacing,
   userPacing,
   onPacingChange,
@@ -532,6 +534,8 @@ export function AdjustPopoverContent({
   userLandTarget?: number | null;
   onLandTargetChange?: (target: number | null) => void;
   deckSize?: number;
+  userDeckSize?: number | null;
+  onDeckSizeChange?: (size: number | null) => void;
   detectedPacing?: Pacing;
   userPacing?: Pacing | null;
   onPacingChange: (pacing: Pacing | null) => void;
@@ -610,6 +614,54 @@ export function AdjustPopoverContent({
           })}
         </div>
       </div>
+
+      {/* Deck Size override */}
+      {onDeckSizeChange && (
+      <div className="p-3 pt-2 border-t border-border/20">
+        <div className="flex items-center gap-2 mb-2">
+          <Layers className="w-3 h-3 text-muted-foreground" />
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Deck Size</span>
+          {userDeckSize != null && (
+            <button
+              onClick={() => onDeckSizeChange(null)}
+              className="text-[10px] text-muted-foreground/40 hover:text-foreground transition-colors ml-auto"
+              title="Reset to actual deck size"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const current = userDeckSize ?? deckSize ?? 99;
+              if (current > 40) onDeckSizeChange(current - 1);
+            }}
+            className="p-1 rounded border border-border/40 text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-colors"
+          >
+            <Minus className="w-3 h-3" />
+          </button>
+          <div className="flex items-center gap-1.5">
+            <span className={`text-sm font-bold tabular-nums ${userDeckSize != null ? 'text-sky-400' : 'text-foreground'}`}>
+              {userDeckSize ?? deckSize ?? 99}
+            </span>
+            <span className="text-[10px] text-muted-foreground/50">cards</span>
+          </div>
+          <button
+            onClick={() => {
+              const current = userDeckSize ?? deckSize ?? 99;
+              if (current < 250) onDeckSizeChange(current + 1);
+            }}
+            className="p-1 rounded border border-border/40 text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-colors"
+          >
+            <Plus className="w-3 h-3" />
+          </button>
+          {userDeckSize == null && (
+            <span className="text-[10px] text-muted-foreground/40 ml-1">Actual</span>
+          )}
+        </div>
+      </div>
+      )}
 
       {/* Land Target override */}
       {onLandTargetChange && (
@@ -739,6 +791,7 @@ export function DeckHealthStrip({ analysis, onNavigate, onNavigateRole, deckExce
   detection, themeLoading, allThemes, primaryThemeSlug, secondaryThemeSlug, onThemeSelect,
   detectedPacing, userPacing, onPacingChange,
   userLandTarget, onLandTargetChange, deckSize,
+  userDeckSize, onDeckSizeChange,
 }: {
   analysis: DeckAnalysis;
   onNavigate: (tab: TabKey) => void;
@@ -757,6 +810,8 @@ export function DeckHealthStrip({ analysis, onNavigate, onNavigateRole, deckExce
   userLandTarget?: number | null;
   onLandTargetChange?: (target: number | null) => void;
   deckSize?: number;
+  userDeckSize?: number | null;
+  onDeckSizeChange?: (size: number | null) => void;
 }) {
   const grades: { key: TabKey; label: string; icon: typeof Shield; grade: GradeResult }[] = [
     { key: 'roles', label: 'Roles', icon: Shield, grade: analysis.rolesGrade },
@@ -804,6 +859,8 @@ export function DeckHealthStrip({ analysis, onNavigate, onNavigateRole, deckExce
                   userLandTarget={userLandTarget}
                   onLandTargetChange={onLandTargetChange}
                   deckSize={deckSize}
+                  userDeckSize={userDeckSize}
+                  onDeckSizeChange={onDeckSizeChange}
                   detectedPacing={detectedPacing}
                   userPacing={userPacing}
                   onPacingChange={onPacingChange}
