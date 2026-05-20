@@ -58,6 +58,7 @@ import { useUserLists } from '@/hooks/useUserLists';
 import { getCollectionNameSet } from '@/services/collection/db';
 import { Select } from '@/components/ui/select';
 import { GROUP_OPTIONS, groupCardsBy, type GroupKey } from './visualGrid/grouping';
+import { StacksColumn } from './visualGrid/StacksColumn';
 
 // Role badge display properties for each subtype
 function getRoleBadgeProps(card: ScryfallCard): { color: string; bgColor: string; title: string; label: string } | null {
@@ -3825,9 +3826,16 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
                         <span className="text-[10px] text-muted-foreground/60">{visibleCards.length}</span>
                       </button>
                       {!collapsedGridCategories.has(label) && (
-                      <div ref={gridAnimateRef} className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
-                        {visibleCards.map(({ card, quantity }) => renderCardTile(card, quantity, isCommanderGroup))}
-                      </div>
+                        gridLayout === 'stacks' ? (
+                          <StacksColumn
+                            cards={visibleCards}
+                            renderTile={(card, quantity) => renderCardTile(card, quantity, isCommanderGroup)}
+                          />
+                        ) : (
+                          <div ref={gridAnimateRef} className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+                            {visibleCards.map(({ card, quantity }) => renderCardTile(card, quantity, isCommanderGroup))}
+                          </div>
+                        )
                       )}
                     </div>
                   );
