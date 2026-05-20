@@ -3100,6 +3100,183 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
     </>
   );
 
+  const renderCardTile = (card: ScryfallCard, quantity: number, isCommanderType: boolean) => {
+    const canSelect = isEditMode && !readOnly && !isCommanderType;
+    const isSelected = selectedCards.has(card.id);
+    const normalizedName = card.name.includes(' // ') ? card.name.split(' // ')[0] : card.name;
+    const isMLive = mustIncludeNames.has(card.name);
+    const isBLive = bannedNames.has(card.name);
+    return (
+      <button
+        key={card.id}
+        onClick={(e) => {
+          if (canSelect) {
+            handleToggleCardSelection(card, e.shiftKey);
+          } else {
+            setPreviewCard(card);
+          }
+        }}
+        className={`relative group ${canSelect ? 'cursor-pointer' : ''} ${isSelected ? 'ring-2 ring-primary rounded' : ''} ${canSelect && isCommanderType ? 'opacity-60' : ''}`}
+      >
+        <img
+          src={getCardImageUrl(card, 'small')}
+          alt={card.name}
+          className={`w-full rounded transition-transform ${canSelect ? '' : 'group-hover:scale-105'} ${isSelected ? 'brightness-75' : ''}`}
+          loading="lazy"
+        />
+        {canSelect && (
+          <span className={`absolute top-1 left-1 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+            isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-white/70 bg-black/30'
+          }`}>
+            {isSelected && <Check className="w-3 h-3" />}
+          </span>
+        )}
+        {quantity > 1 && (
+          <span className="absolute top-1 right-1 bg-black/80 text-white text-xs px-1.5 rounded">
+            {quantity}x
+          </span>
+        )}
+        {!readOnly && !isCommanderType && (
+          <span className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity z-10" style={quantity > 1 ? { top: '1.75rem' } : undefined}>
+            <CardContextMenu card={card} onAction={handleCardAction} {...cardMenuProps} isMustInclude={mustIncludeNames.has(card.name)} isBanned={bannedNames.has(card.name)} />
+          </span>
+        )}
+        {sortBy === 'cmc' && (
+          <span className="absolute top-1 left-1 bg-black/80 text-white text-[10px] px-1 rounded">
+            {card.cmc}
+          </span>
+        )}
+        {sortBy === 'price' && showPrice && (
+          <span className="absolute top-1 left-1 bg-black/80 text-white text-[10px] px-1 rounded">
+            {formatPrice(getCardPrice(card, customization.currency), sym)}
+          </span>
+        )}
+        {sortBy === 'score' && generatedDeck?.cardInclusionMap && (() => {
+          const incl = generatedDeck.cardInclusionMap![card.name] ?? generatedDeck.cardInclusionMap![normalizedName];
+          if (incl == null) return null;
+          const pct = Math.round(incl);
+          const hue = (pct / 100) * 120;
+          return (
+            <span className="absolute top-1 left-1 bg-black/80 text-[10px] px-1 rounded font-medium" style={{ color: `hsl(${hue}, 70%, 55%)` }}>
+              {pct}%
+            </span>
+          );
+        })()}
+        {sortBy === 'relevancy' && generatedDeck?.cardRelevancyMap && (() => {
+          const rel = generatedDeck.cardRelevancyMap![card.name] ?? generatedDeck.cardRelevancyMap![normalizedName];
+          if (rel == null) return null;
+          return (
+            <span className="absolute top-1 left-1 bg-violet-500/90 text-white text-[10px] px-1 rounded font-medium" title={`Relevancy: ${rel}`}>
+              {rel}
+            </span>
+          );
+        })()}
+        {sortBy === 'edhrank' && card.edhrec_rank != null && (
+          <span className="absolute top-1 left-1 bg-sky-500/90 text-white text-[10px] px-1 rounded font-medium" title={`EDHREC global rank: #${card.edhrec_rank.toLocaleString()}`}>
+            #{card.edhrec_rank.toLocaleString()}
+          </span>
+        )}
+        {sortBy !== 'cmc' && sortBy !== 'price' && sortBy !== 'score' && sortBy !== 'relevancy' && sortBy !== 'edhrank' && !isEditMode && showRelevancy && generatedDeck?.cardRelevancyMap && (() => {
+          const rel = generatedDeck.cardRelevancyMap![card.name] ?? generatedDeck.cardRelevancyMap![normalizedName];
+          if (rel == null) return null;
+          return (
+            <span className="absolute top-1 right-8 bg-violet-500/90 text-white text-[10px] px-1 rounded font-medium" title={`Relevancy: ${rel}`}>
+              {rel}
+            </span>
+          );
+        })()}
+        {sortBy !== 'cmc' && sortBy !== 'price' && sortBy !== 'score' && sortBy !== 'relevancy' && sortBy !== 'edhrank' && !isEditMode && showInclusion && generatedDeck?.cardInclusionMap && (() => {
+          const incl = generatedDeck.cardInclusionMap![card.name] ?? generatedDeck.cardInclusionMap![normalizedName];
+          if (incl == null) return null;
+          const pct = Math.round(incl);
+          const hue = (pct / 100) * 120;
+          return (
+            <span className="absolute top-1 left-1 bg-black/80 text-[10px] px-1 rounded font-medium" style={{ color: `hsl(${hue}, 70%, 55%)` }} title={`${pct}% EDHREC inclusion`}>
+              {pct}%
+            </span>
+          );
+        })()}
+        {(() => {
+          const hasGcOrPin = card.isGameChanger || isMLive || isBLive;
+          const roleBadges: { bgColor: string; title: string; label: string }[] = [];
+          if (card.deckRole && showRoles) {
+            if (card.multiRole) {
+              for (const role of ['ramp', 'removal', 'boardwipe', 'cardDraw'] as RoleKey[]) {
+                if (cardMatchesRole(card.name, role)) {
+                  const badge = getRoleBadgeProps({ ...card, deckRole: role } as ScryfallCard);
+                  if (badge) roleBadges.push(badge);
+                }
+              }
+            } else {
+              const badge = getRoleBadgeProps(card);
+              if (badge) roleBadges.push(badge);
+            }
+          }
+          const hasLandTags = showRoles && card.isUtilityLand;
+          if (!hasGcOrPin && roleBadges.length === 0 && !hasLandTags) return null;
+          return (
+            <span className="absolute bottom-1 flex gap-0.5" style={{ right: isDoubleFacedCard(card) ? 28 : 4 }}>
+              {card.isGameChanger && (
+                <span className="bg-amber-500/80 text-white rounded-full w-5 h-5 flex items-center justify-center" title="Game Changer">
+                  <Star className="w-2.5 h-2.5" />
+                </span>
+              )}
+              {isBLive && (
+                <span className="bg-red-500/80 text-white rounded-full w-5 h-5 flex items-center justify-center animate-pop-in" title="Excluded">
+                  <Ban className="w-2.5 h-2.5" />
+                </span>
+              )}
+              {isMLive && (
+                <span className={`${
+                  card.mustIncludeSource === 'deck' ? 'bg-muted-foreground/60' :
+                  card.mustIncludeSource === 'combo' ? 'bg-violet-500/80' :
+                  'bg-emerald-500/80'
+                } text-white rounded-full w-5 h-5 flex items-center justify-center ${
+                  card.mustIncludeSource === 'deck' || card.mustIncludeSource === 'combo' ? '' : 'animate-pop-in'
+                }`}
+                  title={card.mustIncludeSource === 'deck' ? 'From Original Deck' :
+                         card.mustIncludeSource === 'combo' ? 'Added by User' : 'Must Include'}>
+                  {card.mustIncludeSource === 'deck' ? <Bookmark className="w-2.5 h-2.5" /> :
+                   card.mustIncludeSource === 'combo' ? <Sparkles className="w-2.5 h-2.5" /> :
+                   <Pin className="w-2.5 h-2.5" />}
+                </span>
+              )}
+              {roleBadges.map((badge) => (
+                <span key={badge.label} className={`text-white rounded-full px-1.5 py-0.5 text-[8px] font-bold leading-none flex items-center ${badge.bgColor}`}
+                  title={badge.title}
+                >{badge.label}</span>
+              ))}
+              {showRoles && card.isUtilityLand && (
+                <span className="text-white rounded-full px-1.5 py-0.5 text-[8px] font-bold leading-none flex items-center bg-violet-500/80"
+                  title="Utility Land">UL</span>
+              )}
+            </span>
+          );
+        })()}
+        {isDoubleFacedCard(card) && (
+          <span className="absolute bottom-1 right-1 bg-black/70 text-white rounded-full w-5 h-5 flex items-center justify-center" title="Double-faced card">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+          </span>
+        )}
+        {(() => {
+          const combos = cardComboMap.get(normalizedName);
+          if (!combos || combos.length === 0) return null;
+          return (
+            <span
+              className="absolute bottom-1 left-1 bg-violet-600/80 text-white rounded-full w-5 h-5 flex items-center justify-center text-[9px] font-bold"
+              title={`Part of ${combos.length} combo${combos.length > 1 ? 's' : ''}`}
+            >
+              {combos.length > 1 ? combos.length : <Sparkles className="w-2.5 h-2.5" />}
+            </span>
+          );
+        })()}
+      </button>
+    );
+  };
+
   return (
     <>
       <div className="animate-slide-up">
@@ -3638,191 +3815,7 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
                       </button>
                       {!collapsedGridCategories.has(type) && (
                       <div ref={gridAnimateRef} className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
-                        {visibleCards.map(({ card, quantity }) => {
-                          const isCommanderType = type === 'Commander';
-                          const canSelect = isEditMode && !readOnly && !isCommanderType;
-                          const isSelected = selectedCards.has(card.id);
-                          return (
-                            <button
-                              key={card.id}
-                              onClick={(e) => {
-                                if (canSelect) {
-                                  handleToggleCardSelection(card, e.shiftKey);
-                                } else {
-                                  setPreviewCard(card);
-                                }
-                              }}
-                              className={`relative group ${canSelect ? 'cursor-pointer' : ''} ${isSelected ? 'ring-2 ring-primary rounded' : ''} ${canSelect && isCommanderType ? 'opacity-60' : ''}`}
-                            >
-                              <img
-                                src={getCardImageUrl(card, 'small')}
-                                alt={card.name}
-                                className={`w-full rounded transition-transform ${canSelect ? '' : 'group-hover:scale-105'} ${isSelected ? 'brightness-75' : ''}`}
-                                loading="lazy"
-                              />
-                              {/* Selection checkbox overlay */}
-                              {canSelect && (
-                                <span className={`absolute top-1 left-1 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                                  isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-white/70 bg-black/30'
-                                }`}>
-                                  {isSelected && <Check className="w-3 h-3" />}
-                                </span>
-                              )}
-                              {quantity > 1 && (
-                                <span className="absolute top-1 right-1 bg-black/80 text-white text-xs px-1.5 rounded">
-                                  {quantity}x
-                                </span>
-                              )}
-                              {!readOnly && !isCommanderType && (
-                                <span className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity z-10" style={quantity > 1 ? { top: '1.75rem' } : undefined}>
-                                  <CardContextMenu card={card} onAction={handleCardAction} {...cardMenuProps} isMustInclude={mustIncludeNames.has(card.name)} isBanned={bannedNames.has(card.name)} />
-                                </span>
-                              )}
-                              {sortBy === 'cmc' && (
-                                <span className="absolute top-1 left-1 bg-black/80 text-white text-[10px] px-1 rounded">
-                                  {card.cmc}
-                                </span>
-                              )}
-                              {sortBy === 'price' && showPrice && (
-                                <span className="absolute top-1 left-1 bg-black/80 text-white text-[10px] px-1 rounded">
-                                  {formatPrice(getCardPrice(card, customization.currency), sym)}
-                                </span>
-                              )}
-                              {sortBy === 'score' && generatedDeck?.cardInclusionMap && (() => {
-                                const normalizedName = card.name.includes(' // ') ? card.name.split(' // ')[0] : card.name;
-                                const incl = generatedDeck.cardInclusionMap![card.name] ?? generatedDeck.cardInclusionMap![normalizedName];
-                                if (incl == null) return null;
-                                const pct = Math.round(incl);
-                                const hue = (pct / 100) * 120;
-                                return (
-                                  <span className="absolute top-1 left-1 bg-black/80 text-[10px] px-1 rounded font-medium" style={{ color: `hsl(${hue}, 70%, 55%)` }}>
-                                    {pct}%
-                                  </span>
-                                );
-                              })()}
-                              {sortBy === 'relevancy' && generatedDeck?.cardRelevancyMap && (() => {
-                                const normalizedName = card.name.includes(' // ') ? card.name.split(' // ')[0] : card.name;
-                                const rel = generatedDeck.cardRelevancyMap![card.name] ?? generatedDeck.cardRelevancyMap![normalizedName];
-                                if (rel == null) return null;
-                                return (
-                                  <span className="absolute top-1 left-1 bg-violet-500/90 text-white text-[10px] px-1 rounded font-medium" title={`Relevancy: ${rel}`}>
-                                    {rel}
-                                  </span>
-                                );
-                              })()}
-                              {sortBy === 'edhrank' && card.edhrec_rank != null && (
-                                <span className="absolute top-1 left-1 bg-sky-500/90 text-white text-[10px] px-1 rounded font-medium" title={`EDHREC global rank: #${card.edhrec_rank.toLocaleString()}`}>
-                                  #{card.edhrec_rank.toLocaleString()}
-                                </span>
-                              )}
-                              {sortBy !== 'cmc' && sortBy !== 'price' && sortBy !== 'score' && sortBy !== 'relevancy' && sortBy !== 'edhrank' && !isEditMode && showRelevancy && generatedDeck?.cardRelevancyMap && (() => {
-                                const normalizedName = card.name.includes(' // ') ? card.name.split(' // ')[0] : card.name;
-                                const rel = generatedDeck.cardRelevancyMap![card.name] ?? generatedDeck.cardRelevancyMap![normalizedName];
-                                if (rel == null) return null;
-                                return (
-                                  <span className="absolute top-1 right-8 bg-violet-500/90 text-white text-[10px] px-1 rounded font-medium" title={`Relevancy: ${rel}`}>
-                                    {rel}
-                                  </span>
-                                );
-                              })()}
-                              {sortBy !== 'cmc' && sortBy !== 'price' && sortBy !== 'score' && sortBy !== 'relevancy' && sortBy !== 'edhrank' && !isEditMode && showInclusion && generatedDeck?.cardInclusionMap && (() => {
-                                const normalizedName = card.name.includes(' // ') ? card.name.split(' // ')[0] : card.name;
-                                const incl = generatedDeck.cardInclusionMap![card.name] ?? generatedDeck.cardInclusionMap![normalizedName];
-                                if (incl == null) return null;
-                                const pct = Math.round(incl);
-                                const hue = (pct / 100) * 120;
-                                return (
-                                  <span className="absolute top-1 left-1 bg-black/80 text-[10px] px-1 rounded font-medium" style={{ color: `hsl(${hue}, 70%, 55%)` }} title={`${pct}% EDHREC inclusion`}>
-                                    {pct}%
-                                  </span>
-                                );
-                              })()}
-                              {/* Bottom-right badge stack: GC/pin/ban icons + role badges */}
-                              {(() => {
-                                const isMLive = mustIncludeNames.has(card.name);
-                                const isBLive = bannedNames.has(card.name);
-                                const hasGcOrPin = card.isGameChanger || isMLive || isBLive;
-                                const roleBadges: { bgColor: string; title: string; label: string }[] = [];
-                                if (card.deckRole && showRoles) {
-                                  if (card.multiRole) {
-                                    // Show all matching roles
-                                    for (const role of ['ramp', 'removal', 'boardwipe', 'cardDraw'] as RoleKey[]) {
-                                      if (cardMatchesRole(card.name, role)) {
-                                        // Build a pseudo-card to get badge props for each role
-                                        const badge = getRoleBadgeProps({ ...card, deckRole: role } as ScryfallCard);
-                                        if (badge) roleBadges.push(badge);
-                                      }
-                                    }
-                                  } else {
-                                    const badge = getRoleBadgeProps(card);
-                                    if (badge) roleBadges.push(badge);
-                                  }
-                                }
-                                const hasLandTags = showRoles && card.isUtilityLand;
-                                if (!hasGcOrPin && roleBadges.length === 0 && !hasLandTags) return null;
-                                return (
-                                  <span className="absolute bottom-1 flex gap-0.5" style={{ right: isDoubleFacedCard(card) ? 28 : 4 }}>
-                                    {card.isGameChanger && (
-                                      <span className="bg-amber-500/80 text-white rounded-full w-5 h-5 flex items-center justify-center" title="Game Changer">
-                                        <Star className="w-2.5 h-2.5" />
-                                      </span>
-                                    )}
-                                    {isBLive && (
-                                      <span className="bg-red-500/80 text-white rounded-full w-5 h-5 flex items-center justify-center animate-pop-in" title="Excluded">
-                                        <Ban className="w-2.5 h-2.5" />
-                                      </span>
-                                    )}
-                                    {isMLive && (
-                                      <span className={`${
-                                        card.mustIncludeSource === 'deck' ? 'bg-muted-foreground/60' :
-                                        card.mustIncludeSource === 'combo' ? 'bg-violet-500/80' :
-                                        'bg-emerald-500/80'
-                                      } text-white rounded-full w-5 h-5 flex items-center justify-center ${
-                                        card.mustIncludeSource === 'deck' || card.mustIncludeSource === 'combo' ? '' : 'animate-pop-in'
-                                      }`}
-                                        title={card.mustIncludeSource === 'deck' ? 'From Original Deck' :
-                                               card.mustIncludeSource === 'combo' ? 'Added by User' : 'Must Include'}>
-                                        {card.mustIncludeSource === 'deck' ? <Bookmark className="w-2.5 h-2.5" /> :
-                                         card.mustIncludeSource === 'combo' ? <Sparkles className="w-2.5 h-2.5" /> :
-                                         <Pin className="w-2.5 h-2.5" />}
-                                      </span>
-                                    )}
-                                    {roleBadges.map((badge) => (
-                                      <span key={badge.label} className={`text-white rounded-full px-1.5 py-0.5 text-[8px] font-bold leading-none flex items-center ${badge.bgColor}`}
-                                        title={badge.title}
-                                      >{badge.label}</span>
-                                    ))}
-                                    {showRoles && card.isUtilityLand && (
-                                      <span className="text-white rounded-full px-1.5 py-0.5 text-[8px] font-bold leading-none flex items-center bg-violet-500/80"
-                                        title="Utility Land">UL</span>
-                                    )}
-                                  </span>
-                                );
-                              })()}
-                              {isDoubleFacedCard(card) && (
-                                <span className="absolute bottom-1 right-1 bg-black/70 text-white rounded-full w-5 h-5 flex items-center justify-center" title="Double-faced card">
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
-                                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                                    <path d="M3 3v5h5" />
-                                  </svg>
-                                </span>
-                              )}
-                              {(() => {
-                                const normalizedName = card.name.includes(' // ') ? card.name.split(' // ')[0] : card.name;
-                                const combos = cardComboMap.get(normalizedName);
-                                if (!combos || combos.length === 0) return null;
-                                return (
-                                  <span
-                                    className="absolute bottom-1 left-1 bg-violet-600/80 text-white rounded-full w-5 h-5 flex items-center justify-center text-[9px] font-bold"
-                                    title={`Part of ${combos.length} combo${combos.length > 1 ? 's' : ''}`}
-                                  >
-                                    {combos.length > 1 ? combos.length : <Sparkles className="w-2.5 h-2.5" />}
-                                  </span>
-                                );
-                              })()}
-                            </button>
-                          );
-                        })}
+                        {visibleCards.map(({ card, quantity }) => renderCardTile(card, quantity, type === 'Commander'))}
                       </div>
                       )}
                     </div>
