@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, List, Pencil, CopyPlus, X, Plus, MoreHorizontal, ChevronDown, ChevronRight, ClipboardPaste, Bold, Italic, Heading2, ListOrdered, Minus, Swords } from 'lucide-react';
+import { ArrowLeft, Loader2, List, Pencil, CopyPlus, X, Plus, MoreHorizontal, ChevronDown, ChevronRight, ClipboardPaste, Bold, Italic, Heading2, ListOrdered, Minus, Swords, Microscope } from 'lucide-react';
 import { useStore } from '@/store';
 import { getCardsByNames, getFrontFaceTypeLine, searchCards, getCardImageUrl, getCardPrice, getCardBackFaceUrl, isDoubleFacedCard } from '@/services/scryfall/client';
 import { ManaCost } from '@/components/ui/mtg-icons';
@@ -11,7 +11,7 @@ import { DeckDisplay, CardContextMenu, type CardAction } from '@/components/deck
 import { ComboDisplay } from '@/components/deck/ComboDisplay';
 import { enrichDeckCards } from '@/services/deckBuilder/deckEnricher';
 import { CollectionImporter } from '@/components/collection/CollectionImporter';
-import { DeckOptimizer } from '@/components/deck/optimizer';
+import { trackEvent } from '@/services/analytics';
 import type { UserCardList, ScryfallCard, GeneratedDeck, DeckStats, DetectedCombo } from '@/types';
 import { useUserLists } from '@/hooks/useUserLists';
 
@@ -436,15 +436,6 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
   const overflowRef = useRef<HTMLDivElement>(null);
 
   // EA Features toggle (controlled from the patch notes popover in the header)
-  const [eaEnabled, setEaEnabled] = useState(() => localStorage.getItem('ea-features-enabled') === 'true');
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ enabled: boolean }>).detail;
-      setEaEnabled(!!detail?.enabled);
-    };
-    window.addEventListener('ea-features-changed', handler);
-    return () => window.removeEventListener('ea-features-changed', handler);
-  }, []);
 
   // Total deck price
   const totalDeckPrice = useMemo(() => {
@@ -1119,6 +1110,17 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
               <span className="text-sm text-muted-foreground">{priceSym}{totalDeckPrice.toFixed(2)}</span>
             )}
             <button
+              onClick={() => {
+                trackEvent('analyze_cta_clicked', { from: 'list-deck' });
+                navigate(`/analyze?listId=${list.id}`);
+              }}
+              title="Analyze this deck"
+              className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-card/50 hover:bg-accent text-muted-foreground hover:text-foreground text-sm transition-colors"
+            >
+              <Microscope className="w-4 h-4" />
+              <span className="hidden sm:inline">Analyze</span>
+            </button>
+            <button
               onClick={() => navigate(`/playtest/list/${list.id}`)}
               title="Playtest this deck"
               className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-card/50 hover:bg-accent text-muted-foreground hover:text-foreground text-sm transition-colors"
@@ -1426,31 +1428,6 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
           )}
         </DeckDisplay>
 
-        {eaEnabled && list.commanderName && generatedDeck && (
-          <DeckOptimizer
-            commanderName={list.commanderName}
-            partnerCommanderName={list.partnerCommanderName}
-            currentCards={Object.values(generatedDeck.categories).flat()}
-            deckSize={(list.deckSize || 100) - 1 - (list.partnerCommanderName ? 1 : 0)}
-            roleCounts={generatedDeck.roleCounts || {}}
-            roleTargets={generatedDeck.roleTargets || {}}
-            categories={generatedDeck.categories}
-            cardInclusionMap={generatedDeck.cardInclusionMap}
-            onAddCards={onAddCards}
-            onRemoveCards={handleRemoveCardsWithToast}
-            onRemoveFromBoard={onRemoveFromBoard}
-            onAddBasicLand={onChangeQuantity ? (name) => {
-              const count = list.cards.filter(c => c === name).length;
-              onChangeQuantity(name, count + 1);
-            } : undefined}
-            onRemoveBasicLand={onChangeQuantity ? (name) => {
-              const count = list.cards.filter(c => c === name).length;
-              if (count > 0) onChangeQuantity(name, count - 1);
-            } : undefined}
-            sideboardNames={list.sideboard}
-            maybeboardNames={list.maybeboard}
-          />
-        )}
       </div>
 
       {/* Action toast with undo */}
