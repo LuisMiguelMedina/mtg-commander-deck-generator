@@ -3814,7 +3814,7 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
                 ))}
               </div>
             ) : (
-              <div className={`p-4 ${gridLayout === 'stacks' ? 'grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-4 items-start' : 'space-y-1'}`}>
+              <div className={`p-4 ${gridLayout === 'stacks' ? 'flex flex-wrap gap-4 items-start' : 'space-y-1'}`}>
                 {groupedForDisplay.map(({ label, cards }) => {
                   const visibleCards = combinedMatchingIds
                     ? cards.filter(({ card }) => combinedMatchingIds.has(card.id))
@@ -3823,7 +3823,7 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
                   const isCommanderGroup = label === 'Commander';
                   const isTypeGroup = groupBy === 'type';
                   return (
-                    <div key={label}>
+                    <div key={label} className={gridLayout === 'stacks' ? 'w-[170px] shrink-0' : ''}>
                       <button
                         onClick={() => setCollapsedGridCategories(prev => {
                           const next = new Set(prev);
