@@ -44,6 +44,8 @@ export function DeckOptimizer({
   onRemoveBasicLand: onRemoveBasicLandProp,
   sideboardNames,
   maybeboardNames,
+  activeTab: controlledActiveTab,
+  onTabChange,
 }: DeckOptimizerProps) {
   const [analysis, setAnalysis] = useState<DeckAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
@@ -52,7 +54,12 @@ export function DeckOptimizer({
   const [previewCard, setPreviewCard] = useState<ScryfallCard | null>(null);
   const cachedEdhrecDataRef = useRef<import('@/types').EDHRECCommanderData | null>(null);
   const prevCardKeyRef = useRef(currentCards.map(c => c.name).join('\0'));
-  const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const [internalActiveTab, setInternalActiveTab] = useState<TabKey>('overview');
+  const activeTab = controlledActiveTab ?? internalActiveTab;
+  const setActiveTab = useCallback((tab: TabKey) => {
+    if (onTabChange) onTabChange(tab);
+    if (controlledActiveTab === undefined) setInternalActiveTab(tab);
+  }, [onTabChange, controlledActiveTab]);
   const [activeRole, setActiveRole] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<LandSection | null>(null);
   const [activeCurvePhases, setActiveCurvePhases] = useState<Set<CurvePhase>>(new Set());

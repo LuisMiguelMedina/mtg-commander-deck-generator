@@ -29,6 +29,10 @@ export interface DeckOptimizerProps {
   onRemoveBasicLand?: (name: string) => void;
   sideboardNames?: string[];
   maybeboardNames?: string[];
+  /** Controlled active tab (e.g. URL-driven). If omitted, uses internal state. */
+  activeTab?: TabKey;
+  /** Fired when the user clicks a tab. Required if `activeTab` is provided. */
+  onTabChange?: (tab: TabKey) => void;
 }
 
 export type TabKey = 'overview' | 'roles' | 'lands' | 'curve' | 'bracket';
@@ -40,6 +44,24 @@ export const TABS: { key: TabKey; label: string; icon: typeof LayoutDashboard }[
   { key: 'curve',    label: 'Tempo',    icon: BarChart3 as typeof LayoutDashboard },
   { key: 'bracket',  label: 'Bracket',  icon: Gauge as typeof LayoutDashboard },
 ];
+
+// URL slug <-> TabKey mapping. Slugs follow the user-facing labels
+// (Mana / Tempo) rather than the internal keys (lands / curve).
+export const TAB_SLUG_BY_KEY: Record<TabKey, string> = {
+  overview: 'overview',
+  roles:    'roles',
+  lands:    'mana',
+  curve:    'tempo',
+  bracket:  'bracket',
+};
+
+export const TAB_KEY_BY_SLUG: Record<string, TabKey> = {
+  overview: 'overview',
+  roles:    'roles',
+  mana:     'lands',
+  tempo:    'curve',
+  bracket:  'bracket',
+};
 
 // ─── Utility Functions ───────────────────────────────────────────────
 

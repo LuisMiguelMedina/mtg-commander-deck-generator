@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
+import { TAB_SLUG_BY_KEY, TAB_KEY_BY_SLUG, type TabKey } from '@/components/deck/optimizer/constants';
 import { LaneTabs, type LaneKey } from '@/components/analyze/LaneTabs';
 import { WhatYoullSeeStrip } from '@/components/analyze/WhatYoullSeeStrip';
 import { PasteLane, type PasteLaneResult } from '@/components/analyze/PasteLane';
@@ -39,6 +40,14 @@ export function AnalyzePage() {
   const { lists } = useUserLists();
   const [searchParams] = useSearchParams();
   const listIdParam = searchParams.get('listId');
+  const { tab: tabSlug } = useParams<{ tab?: string }>();
+  const navigate = useNavigate();
+  const activeAnalyzerTab: TabKey = (tabSlug && TAB_KEY_BY_SLUG[tabSlug]) || 'overview';
+  const handleAnalyzerTabChange = useCallback((next: TabKey) => {
+    const slug = TAB_SLUG_BY_KEY[next];
+    const qs = listIdParam ? `?listId=${listIdParam}` : '';
+    navigate(`/analyze/${slug}${qs}`);
+  }, [navigate, listIdParam]);
 
   const prevLaneRef = useRef<LaneKey>(activeLane);
   useEffect(() => {
@@ -217,6 +226,8 @@ export function AnalyzePage() {
             roleTargets={generatedDeck.roleTargets || {}}
             categories={generatedDeck.categories}
             cardInclusionMap={generatedDeck.cardInclusionMap}
+            activeTab={activeAnalyzerTab}
+            onTabChange={handleAnalyzerTabChange}
           />
         )}
       </main>

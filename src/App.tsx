@@ -504,6 +504,7 @@ function App() {
         <Route path="/build/:commanderName/:partnerName?" element={<Layout><BuilderPage /></Layout>} />
         <Route path="/build-from-deck/:listId" element={<Layout><OptimizePage /></Layout>} />
         <Route path="/analyze" element={<Layout><AnalyzePage /></Layout>} />
+        <Route path="/analyze/:tab" element={<Layout><AnalyzePage /></Layout>} />
         <Route path="/collection" element={<Layout><CollectionPage /></Layout>} />
         <Route path="/lists/*" element={<Layout><ListsPage /></Layout>} />
         <Route path="/playtest/list/:listId" element={<PlaytestPage kind="list" />} />
