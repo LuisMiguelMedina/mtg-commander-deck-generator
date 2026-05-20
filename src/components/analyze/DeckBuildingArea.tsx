@@ -472,6 +472,12 @@ function CurveCell({ cards, cmcIndex, onHover, onSelect, onEmptyClick }: CurveCe
   // margin-top equal to 126% of the column width — leaving a ~10% top
   // sliver visible (half the previous 20%). Hovered cards do NOT lift in
   // the stack (the floating preview to the right is the hover signal).
+  // Stable per-instance keys: counting occurrences of each name in this
+  // cell. Because sortBy is a stable sort, two cards with the same name
+  // keep their relative order across re-sorts, so the Nth occurrence of
+  // "Forest" is always the same card instance — letting auto-animate
+  // recognize reorders as reorders (not unmount + mount).
+  const nameCounts = new Map<string, number>();
   return (
     <div ref={fanRef} className="relative flex flex-col w-full">
       {cards.map((card, idx) => {
@@ -479,9 +485,12 @@ function CurveCell({ cards, cmcIndex, onHover, onSelect, onEmptyClick }: CurveCe
         const badgeClass = role ? (ROLE_BADGE[role] ?? '') : '';
         const badgeLabel = role ? (ROLE_LABEL[role] ?? '') : '';
         const imgUrl = getCardImageUrl(card, 'small') ?? '';
+        const occurrence = nameCounts.get(card.name) ?? 0;
+        nameCounts.set(card.name, occurrence + 1);
+        const stableKey = `${card.name}#${occurrence}`;
         return (
           <button
-            key={card.name + idx}
+            key={stableKey}
             type="button"
             className={`relative w-full aspect-[5/7] text-left p-0 bg-transparent border-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded ${idx > 0 ? '-mt-[126%]' : ''}`}
             style={{ zIndex: idx }}
