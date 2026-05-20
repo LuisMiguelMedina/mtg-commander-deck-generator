@@ -1112,7 +1112,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
             <button
               onClick={() => {
                 trackEvent('analyze_cta_clicked', { from: 'list-deck' });
-                navigate(`/analyze?listId=${list.id}`);
+                navigate(`/analyze/${list.id}`);
               }}
               title="Analyze this deck"
               className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-card/50 hover:bg-accent text-muted-foreground hover:text-foreground text-sm transition-colors"

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { TAB_SLUG_BY_KEY, TAB_KEY_BY_SLUG, type TabKey } from '@/components/deck/optimizer/constants';
 import { LaneTabs, type LaneKey } from '@/components/analyze/LaneTabs';
 import { WhatYoullSeeStrip } from '@/components/analyze/WhatYoullSeeStrip';
@@ -38,15 +38,23 @@ export function AnalyzePage() {
   const generatedDeck = useStore(s => s.generatedDeck);
   const colorIdentityStore = useStore(s => s.colorIdentity);
   const { lists } = useUserLists();
-  const [searchParams] = useSearchParams();
-  const listIdParam = searchParams.get('listId');
-  const { tab: tabSlug } = useParams<{ tab?: string }>();
+  const { param1, param2 } = useParams<{ param1?: string; param2?: string }>();
   const navigate = useNavigate();
+
+  // URL shape variants under /analyze:
+  //   /analyze                       → hub
+  //   /analyze/<tab>                 → tab (paste / generated deck)
+  //   /analyze/<listId>              → list-loaded, default tab
+  //   /analyze/<listId>/<tab>        → list + tab
+  // Disambiguation: a TAB_KEY_BY_SLUG entry is a tab; anything else is a listId.
+  const param1IsTab = !!(param1 && param1 in TAB_KEY_BY_SLUG);
+  const listIdParam: string | null = !param1 ? null : (param1IsTab ? null : param1);
+  const tabSlug: string | undefined = param1IsTab ? param1 : param2;
+
   const activeAnalyzerTab: TabKey = (tabSlug && TAB_KEY_BY_SLUG[tabSlug]) || 'overview';
   const handleAnalyzerTabChange = useCallback((next: TabKey) => {
     const slug = TAB_SLUG_BY_KEY[next];
-    const qs = listIdParam ? `?listId=${listIdParam}` : '';
-    navigate(`/analyze/${slug}${qs}`);
+    navigate(listIdParam ? `/analyze/${listIdParam}/${slug}` : `/analyze/${slug}`);
   }, [navigate, listIdParam]);
 
   const prevLaneRef = useRef<LaneKey>(activeLane);
@@ -176,6 +184,7 @@ export function AnalyzePage() {
         cardCount: countCards(deck),
         hasCommander: !!deck.commander,
       });
+      navigate(`/analyze/${list.id}`);
     } catch (e) {
       console.error('[AnalyzePage] list hydration failed', e);
       setError('Could not analyze this list. Please try again.');
@@ -183,7 +192,7 @@ export function AnalyzePage() {
       setLoading(false);
       setLoadingListId(null);
     }
-  }, []);
+  }, [navigate]);
 
   const handleChangeDeck = useCallback(() => {
     if (source?.kind === 'paste') {
@@ -194,7 +203,8 @@ export function AnalyzePage() {
     setSource(null);
     setError(null);
     hydratedListIdRef.current = null;
-  }, [source]);
+    navigate('/analyze');
+  }, [source, navigate]);
 
   const deckLoaded = generatedDeck && source;
 
