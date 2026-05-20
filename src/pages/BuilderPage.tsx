@@ -1038,14 +1038,13 @@ export function BuilderPage() {
               return (
                 <div className="flex items-center gap-2 xl:hidden">
                   <Button
-                    variant="outline"
-                    size="sm"
                     onClick={() => {
                       trackEvent('analyze_cta_clicked', { from: 'builder' });
                       navigate('/analyze');
                     }}
+                    className="btn-shimmer"
                   >
-                    <Microscope className="w-4 h-4 mr-1.5" />
+                    <Microscope className="w-4 h-4 mr-2" />
                     Analyze
                   </Button>
                   <Button onClick={onExport} className="btn-shimmer">
@@ -1159,15 +1158,14 @@ export function BuilderPage() {
                   </PopoverContent>
                 </Popover>
                 <Button
-                  variant="outline"
-                  size="sm"
                   onClick={() => {
                     trackEvent('analyze_cta_clicked', { from: 'builder' });
                     navigate('/analyze');
                   }}
+                  className="btn-shimmer"
                   title="Open in the Analyze page"
                 >
-                  <Microscope className="w-4 h-4 mr-1.5" />
+                  <Microscope className="w-4 h-4 mr-2" />
                   Analyze
                 </Button>
                 <Button onClick={() => exportTriggerRef.current?.()} className="btn-shimmer">
