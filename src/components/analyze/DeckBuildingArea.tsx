@@ -1,6 +1,6 @@
 // src/components/analyze/DeckBuildingArea.tsx
 import { useMemo, useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, ArrowUpDown, BarChart3 } from 'lucide-react';
+import { ChevronDown, ChevronRight, ArrowUpDown, BarChart3, Sprout, Swords, Flame, BookOpen } from 'lucide-react';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import type { ScryfallCard } from '@/types';
 import { buildCurveBuckets } from './DeckBuildingArea.buckets';
@@ -462,7 +462,7 @@ function CurveCell({ cards, cmcIndex, onHover, onSelect, onEmptyClick }: CurveCe
       <button
         type="button"
         onClick={onEmptyClick}
-        className="w-full aspect-[5/7] min-h-[120px] rounded hover:bg-primary/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="w-full aspect-[5/7] min-h-[120px] p-0 border-0 bg-transparent cursor-pointer rounded-[8px] hover:bg-primary/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         aria-label={`Filter analyzer to CMC ${cmcIndex === 7 ? '7+' : cmcIndex} (empty column)`}
       />
     );
