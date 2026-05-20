@@ -14,12 +14,20 @@ interface CurvePlayAreaProps {
 
 const COLUMN_LABELS = ['0', '1', '2', '3', '4', '5', '6', '7+'];
 
-// Vertical 3px left-edge ribbon, not a top stripe — top stripes "scar" the fan.
-const ROLE_RIBBON: Record<string, string> = {
+// Role swatch color — used in the header legend.
+const ROLE_SWATCH: Record<string, string> = {
   ramp:      'bg-emerald-500',
   removal:   'bg-rose-500',
   boardwipe: 'bg-orange-500',
   cardDraw:  'bg-sky-500',
+};
+
+// Per-card corner badge (text on a translucent backdrop).
+const ROLE_BADGE: Record<string, string> = {
+  ramp:      'bg-emerald-500/90 text-emerald-50',
+  removal:   'bg-rose-500/90 text-rose-50',
+  boardwipe: 'bg-orange-500/90 text-orange-50',
+  cardDraw:  'bg-sky-500/90 text-sky-50',
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -147,7 +155,7 @@ export function CurvePlayArea({ currentCards, excludeNames, onCmcSelect }: Curve
       <div className="flex items-center justify-between gap-3 px-2 sm:px-4 py-2 border-b border-border/30">
         <div className="flex items-center gap-2 min-w-0">
           <BarChart3 className="w-4 h-4 text-primary/70 shrink-0" />
-          <span className="text-sm font-bold uppercase tracking-wider">Curve</span>
+          <span className="text-sm font-bold uppercase tracking-wider">Deck</span>
           <span className="text-[11px] text-muted-foreground/70 tabular-nums shrink-0">
             <span className="text-foreground/80 font-semibold">{totalNonLand}</span> non-land
             {' · '}
@@ -157,7 +165,7 @@ export function CurvePlayArea({ currentCards, excludeNames, onCmcSelect }: Curve
           <div className="hidden md:flex items-center gap-2 ml-3 text-[10px] text-muted-foreground/70">
             {Object.entries(ROLE_LABEL).map(([key, label]) => (
               <span key={key} className="inline-flex items-center gap-1">
-                <span className={`inline-block w-2 h-2 rounded-sm ${ROLE_RIBBON[key]}`} />
+                <span className={`inline-block w-2 h-2 rounded-sm ${ROLE_SWATCH[key]}`} />
                 {label}
               </span>
             ))}
@@ -224,11 +232,11 @@ export function CurvePlayArea({ currentCards, excludeNames, onCmcSelect }: Curve
           })}
         </div>
       ) : (
-        // Outer wrapper caps the grid width and centers it. On ultrawide
-        // screens this prevents columns from ballooning to 250px+ each.
-        <div className="max-w-[1280px] mx-auto px-2 sm:px-4">
+        // Full viewport width — cards fill their column instead of floating
+        // small inside it. Column max keeps things sane on ultrawide.
+        <div className="px-2 sm:px-4">
           {/* CMC column headers */}
-          <div className="grid grid-cols-[72px_repeat(8,minmax(0,1fr))] gap-1 pt-2 text-[10px] text-muted-foreground/70">
+          <div className="grid grid-cols-[64px_repeat(8,minmax(0,200px))] justify-center gap-2 pt-2 text-[10px] text-muted-foreground/70">
             <div></div>
             {COLUMN_LABELS.map((label, i) => (
               <button
@@ -250,7 +258,7 @@ export function CurvePlayArea({ currentCards, excludeNames, onCmcSelect }: Curve
             <button
               type="button"
               onClick={toggleLands}
-              className="w-full grid grid-cols-[72px_repeat(8,minmax(0,1fr))] gap-1 py-2 items-center hover:bg-accent/20 transition-colors text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="w-full grid grid-cols-[64px_repeat(8,minmax(0,200px))] justify-center gap-2 py-2 items-center hover:bg-accent/20 transition-colors text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               aria-expanded={landsExpanded}
             >
               <div className="text-[10px] uppercase tracking-wider text-foreground/70 font-semibold flex items-center gap-1">
@@ -303,7 +311,7 @@ interface CurveRowProps {
 
 function CurveRow({ label, rowCards, onHover, onSelect, onCmcSelect }: CurveRowProps) {
   return (
-    <div className="grid grid-cols-[72px_repeat(8,minmax(0,1fr))] gap-1 py-1.5 items-end min-h-[180px]">
+    <div className="grid grid-cols-[64px_repeat(8,minmax(0,200px))] justify-center gap-2 py-2 items-end">
       {/* Row label as a chunky tag — readable, not a faint afterthought */}
       {label
         ? (
@@ -334,35 +342,37 @@ function CurveCell({ cards, cmcIndex, onHover, onSelect, onEmptyClick }: CurveCe
 
   if (cards.length === 0) {
     if (!onEmptyClick) {
-      return <div className="min-h-[140px]" />;
+      return <div className="w-full aspect-[5/7] min-h-[120px]" />;
     }
     return (
       <button
         type="button"
         onClick={onEmptyClick}
-        className="min-h-[140px] w-full rounded hover:bg-primary/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="w-full aspect-[5/7] min-h-[120px] rounded hover:bg-primary/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         aria-label={`Filter analyzer to CMC ${cmcIndex === 7 ? '7+' : cmcIndex} (empty column)`}
       />
     );
   }
-  // Bigger, tighter Arena-style fan: 112px wide cards, 26px overlap so only
-  // the top sliver of each upper card shows.
-  const CARD_W = 112;
-  const CARD_H = Math.round(CARD_W * 1.4);
-  const OVERLAP = 26;
-  const stackHeight = (cards.length - 1) * OVERLAP + CARD_H;
+  // Arena-style fan, fully responsive. Cards fill the column width via
+  // `w-full aspect-[5/7]`, and each non-first card sits via a negative
+  // margin-top equal to 119% of the column width — which is ~85% of the
+  // card's height (since card height = column-width × 7/5). The result:
+  // each upper card peeks ~22% of its height, and the layout scales
+  // smoothly from narrow mobile columns to wide desktop columns.
   return (
-    <div className="relative mx-auto" style={{ width: `${CARD_W}px`, height: `${stackHeight}px` }}>
+    <div className="relative flex flex-col w-full">
       {cards.map((card, idx) => {
-        const ribbonClass = card.deckRole ? (ROLE_RIBBON[card.deckRole] ?? '') : '';
+        const role = card.deckRole;
+        const badgeClass = role ? (ROLE_BADGE[role] ?? '') : '';
+        const badgeLabel = role ? (ROLE_LABEL[role] ?? '') : '';
         const imgUrl = getCardImageUrl(card, 'small') ?? '';
         const isHovered = hoveredIdx === idx;
         return (
           <button
             key={card.name + idx}
             type="button"
-            className="absolute left-0 right-0 transition-transform duration-150 hover:scale-[1.2] text-left w-full p-0 bg-transparent border-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded"
-            style={{ top: `${idx * OVERLAP}px`, zIndex: isHovered ? 50 : idx }}
+            className={`relative w-full aspect-[5/7] transition-transform duration-150 hover:scale-[1.15] text-left p-0 bg-transparent border-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded ${idx > 0 ? '-mt-[112%]' : ''}`}
+            style={{ zIndex: isHovered ? 50 : idx }}
             onClick={() => onSelect(card)}
             onMouseEnter={(e) => { setHoveredIdx(idx); onHover(card, e); }}
             onMouseLeave={() => { setHoveredIdx(null); onHover(null); }}
@@ -370,15 +380,19 @@ function CurveCell({ cards, cmcIndex, onHover, onSelect, onEmptyClick }: CurveCe
             <img
               src={imgUrl}
               alt={card.name}
-              className="w-full rounded shadow-md border border-border/40"
+              className="absolute inset-0 w-full h-full rounded shadow-md border border-border/40 object-cover"
               loading="lazy"
               draggable={false}
-              title={`${card.name}${card.deckRole ? ` · ${card.deckRole}` : ''}`}
+              title={`${card.name}${badgeLabel ? ` · ${badgeLabel}` : ''}`}
             />
-            {/* Role ribbon: vertical 3px stripe on the left edge.
-                Much less intrusive than a top stripe in a fanned stack. */}
-            {ribbonClass && (
-              <div className={`absolute left-0 top-0 bottom-0 w-[3px] z-10 ${ribbonClass} rounded-l`} />
+            {/* Role pip in the top-right corner — small text badge instead
+                of an edge ribbon. Only renders if a role is stamped. */}
+            {badgeLabel && (
+              <span
+                className={`absolute top-1 right-1 z-10 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wider rounded shadow-sm ${badgeClass}`}
+              >
+                {badgeLabel}
+              </span>
             )}
           </button>
         );
