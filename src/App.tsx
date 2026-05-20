@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { Settings, Sparkles, Wand2, ListChecks, Library, BarChart3 } from 'lucide-react';
+import { Settings, Sparkles, Wand2, ListChecks, Library, BarChart3, Microscope } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import patchNotes from '@/data/patchNotes.json';
 import { HomePage } from '@/pages/HomePage';
 import { BuilderPage } from '@/pages/BuilderPage';
 import { OptimizePage } from '@/pages/OptimizePage';
+import { AnalyzePage } from '@/pages/AnalyzePage';
 import { CollectionPage } from '@/pages/CollectionPage';
 import { ListsPage } from '@/pages/ListsPage';
 import { PlaytestPage } from '@/pages/PlaytestPage';
@@ -182,6 +183,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const isCollectionPage = location.pathname === '/collection' || location.pathname.startsWith('/lists');
+  const isAnalyzePage = location.pathname.startsWith('/analyze');
   const isCreatePage = location.pathname === '/' || location.pathname.startsWith('/build/') || location.pathname.startsWith('/build-from-deck/');
 
   const [eaEnabled, setEaEnabled] = useState(() => localStorage.getItem('ea-features-enabled') === 'true');
@@ -245,7 +247,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background flex flex-col relative">
       {/* Commander Art Background (hidden on collection page) */}
-      {!isCollectionPage && <CommanderBackground commander={commander} deckGenerated={!!generatedDeck} />}
+      {!isCollectionPage && (!isAnalyzePage || !!generatedDeck) && <CommanderBackground commander={commander} deckGenerated={!!generatedDeck} />}
 
       {/* Content wrapper with relative positioning */}
       <div className="relative z-10 flex flex-col min-h-screen pb-16 sm:pb-0">
@@ -286,6 +288,14 @@ function Layout({ children }: { children: React.ReactNode }) {
                     }`}
                   >
                     Generate
+                  </button>
+                  <button
+                    onClick={() => navigate('/analyze')}
+                    className={`text-xs transition-colors px-2 py-1 rounded-md flex items-center gap-1.5 ${
+                      isAnalyzePage ? 'text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                    }`}
+                  >
+                    Analyze
                   </button>
                   <button
                     onClick={() => navigate('/lists')}
@@ -435,6 +445,16 @@ function Layout({ children }: { children: React.ReactNode }) {
             <span className="text-[10px] font-medium">Generate</span>
           </button>
           <button
+            onClick={() => { navigate('/analyze'); window.scrollTo(0, 0); }}
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${
+              isAnalyzePage ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+            aria-label="Analyze"
+          >
+            <Microscope className={`w-5 h-5 ${isAnalyzePage ? 'text-primary' : ''}`} />
+            <span className="text-[10px] font-medium">Analyze</span>
+          </button>
+          <button
             onClick={() => { navigate('/lists'); window.scrollTo(0, 0); }}
             className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors relative ${
               location.pathname.startsWith('/lists') ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
@@ -483,6 +503,7 @@ function App() {
         <Route path="/" element={<Layout><HomePage /></Layout>} />
         <Route path="/build/:commanderName/:partnerName?" element={<Layout><BuilderPage /></Layout>} />
         <Route path="/build-from-deck/:listId" element={<Layout><OptimizePage /></Layout>} />
+        <Route path="/analyze" element={<Layout><AnalyzePage /></Layout>} />
         <Route path="/collection" element={<Layout><CollectionPage /></Layout>} />
         <Route path="/lists/*" element={<Layout><ListsPage /></Layout>} />
         <Route path="/playtest/list/:listId" element={<PlaytestPage kind="list" />} />
