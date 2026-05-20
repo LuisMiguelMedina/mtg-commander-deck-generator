@@ -1,11 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { LaneTabs, type LaneKey } from '@/components/analyze/LaneTabs';
 import { WhatYoullSeeStrip } from '@/components/analyze/WhatYoullSeeStrip';
 import { PasteLane, type PasteLaneResult } from '@/components/analyze/PasteLane';
 import { ListsLane } from '@/components/analyze/ListsLane';
 import { GenerateLane } from '@/components/analyze/GenerateLane';
+import { CommanderStrip, type AnalyzeSource } from '@/components/analyze/CommanderStrip';
 import { hydrateDeckForAnalysis } from '@/components/analyze/analyzeHydration';
+import { DeckOptimizer } from '@/components/deck/optimizer';
 import { useStore } from '@/store';
+import { useUserLists } from '@/hooks/useUserLists';
+import { applyCommanderTheme, resetTheme } from '@/lib/commanderTheme';
 import type { UserCardList } from '@/types';
 
 const LANE_STORAGE_KEY = 'analyze-active-lane';
@@ -19,10 +24,65 @@ export function AnalyzePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingListId, setLoadingListId] = useState<string | null>(null);
+  const [source, setSource] = useState<AnalyzeSource | null>(null);
+
+  const generatedDeck = useStore(s => s.generatedDeck);
+  const colorIdentityStore = useStore(s => s.colorIdentity);
+  const { lists } = useUserLists();
+  const [searchParams] = useSearchParams();
+  const listIdParam = searchParams.get('listId');
 
   useEffect(() => {
     localStorage.setItem(LANE_STORAGE_KEY, activeLane);
   }, [activeLane]);
+
+  // Hydrate from ?listId= (bridge from ListDeckView) on mount.
+  const hydratedListIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!listIdParam || hydratedListIdRef.current === listIdParam) return;
+    const list = lists.find(l => l.id === listIdParam);
+    if (!list || !list.commanderName) return;
+    hydratedListIdRef.current = listIdParam;
+    setLoading(true);
+    setError(null);
+    hydrateDeckForAnalysis({
+      cardNames: list.cards,
+      commanderName: list.commanderName,
+      partnerCommanderName: list.partnerCommanderName,
+      deckSize: list.deckSize ?? list.cards.length,
+    })
+      .then(({ deck, colorIdentity }) => {
+        useStore.setState({
+          commander: deck.commander,
+          partnerCommander: deck.partnerCommander,
+          colorIdentity,
+          generatedDeck: deck,
+        });
+        setSource({ kind: 'list', listId: list.id, listName: list.name });
+      })
+      .catch(e => {
+        console.error('[AnalyzePage] listId hydration failed', e);
+        setError('Could not load this list. Please try again.');
+      })
+      .finally(() => setLoading(false));
+  }, [listIdParam, lists]);
+
+  // Detect bridge-from-Generate: if a deck is already in the store on mount
+  // and no listId param and no source set yet, treat as 'generated'.
+  useEffect(() => {
+    if (source !== null) return;
+    if (generatedDeck && !listIdParam) {
+      setSource({ kind: 'generated' });
+    }
+  }, [generatedDeck, listIdParam, source]);
+
+  // Apply commander theme when a deck is loaded.
+  useEffect(() => {
+    if (colorIdentityStore.length > 0) {
+      applyCommanderTheme(colorIdentityStore);
+    }
+    return () => resetTheme();
+  }, [colorIdentityStore]);
 
   const handlePasteAnalyze = useCallback(async (result: PasteLaneResult) => {
     setLoading(true);
@@ -39,6 +99,7 @@ export function AnalyzePage() {
         colorIdentity,
         generatedDeck: deck,
       });
+      setSource({ kind: 'paste' });
     } catch (e) {
       console.error('[AnalyzePage] paste hydration failed', e);
       setError('Could not analyze this deck. Check the card names and try again.');
@@ -64,6 +125,7 @@ export function AnalyzePage() {
         colorIdentity,
         generatedDeck: deck,
       });
+      setSource({ kind: 'list', listId: list.id, listName: list.name });
     } catch (e) {
       console.error('[AnalyzePage] list hydration failed', e);
       setError('Could not analyze this list. Please try again.');
@@ -72,6 +134,53 @@ export function AnalyzePage() {
       setLoadingListId(null);
     }
   }, []);
+
+  const handleChangeDeck = useCallback(() => {
+    if (source?.kind === 'paste') {
+      const ok = window.confirm("Discard this analysis? You haven't saved it.");
+      if (!ok) return;
+    }
+    useStore.setState({ generatedDeck: null, commander: null, partnerCommander: null, colorIdentity: [] });
+    setSource(null);
+    setError(null);
+    hydratedListIdRef.current = null;
+  }, [source]);
+
+  const deckLoaded = generatedDeck && source;
+
+  if (deckLoaded) {
+    const partnerOffset = generatedDeck.partnerCommander ? 1 : 0;
+    const totalCards =
+      (generatedDeck.commander ? 1 : 0)
+      + partnerOffset
+      + Object.values(generatedDeck.categories).reduce((n, arr) => n + arr.length, 0);
+    const analyzerDeckSize = Math.max(totalCards - 1 - partnerOffset, 0);
+
+    return (
+      <main className="flex-1 py-6">
+        <CommanderStrip
+          deck={generatedDeck}
+          colorIdentity={colorIdentityStore}
+          source={source}
+          onChangeDeck={handleChangeDeck}
+        />
+        <div className="px-4 sm:px-8 lg:px-12">
+          {generatedDeck.commander && (
+            <DeckOptimizer
+              commanderName={generatedDeck.commander.name}
+              partnerCommanderName={generatedDeck.partnerCommander?.name}
+              currentCards={Object.values(generatedDeck.categories).flat()}
+              deckSize={analyzerDeckSize}
+              roleCounts={generatedDeck.roleCounts || {}}
+              roleTargets={generatedDeck.roleTargets || {}}
+              categories={generatedDeck.categories}
+              cardInclusionMap={generatedDeck.cardInclusionMap}
+            />
+          )}
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="flex-1 px-4 sm:px-8 lg:px-12 py-8">

@@ -18,7 +18,12 @@ export type AnalyticsEventType =
   | 'build_mode_toggled'
   | 'deck_optimized'
   | 'deck_imported'
-  | 'playtest_started';
+  | 'playtest_started'
+  | 'analyze_page_viewed'
+  | 'analyze_deck_loaded'
+  | 'analyze_deck_saved'
+  | 'analyze_lane_switched'
+  | 'analyze_cta_clicked';
 
 export interface AnalyticsEventMetadata {
   commander_searched: { query: string; resultCount: number };
@@ -69,6 +74,11 @@ export interface AnalyticsEventMetadata {
   build_mode_toggled: { commanderName: string; mode: 'balanced' | 'classic' };
   deck_optimized: { commanderName: string; partnerName?: string; listName: string; originalCardCount: number; deckFormat: number; themes: string[]; totalCards: number; isRegeneration: boolean };
   deck_imported: { source: string; cardCount: number; deckName: string };
+  analyze_page_viewed: { source: 'direct' | 'from_generate' | 'from_list' };
+  analyze_deck_loaded: { source: 'paste' | 'list' | 'generated'; cardCount: number; hasCommander: boolean };
+  analyze_deck_saved: { listName: string; cardCount: number; source: 'paste' | 'list' | 'generated' };
+  analyze_lane_switched: { from: string; to: string };
+  analyze_cta_clicked: { from: 'builder' | 'list-deck' };
   playtest_started: {
     /** Where the playtest was launched from. */
     source: 'list' | 'generated';
