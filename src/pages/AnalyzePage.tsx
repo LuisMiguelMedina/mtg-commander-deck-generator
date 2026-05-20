@@ -198,13 +198,15 @@ export function AnalyzePage() {
     const analyzerDeckSize = Math.max(totalCards - 1 - partnerOffset, 0);
 
     return (
-      <main className="flex-1 py-4 px-2 sm:px-3 lg:px-4">
+      <main className="flex-1 py-3">
+        <div className="px-2 sm:px-3 lg:px-4">
         <CommanderStrip
           deck={generatedDeck}
           colorIdentity={colorIdentityStore}
           source={source}
           onChangeDeck={handleChangeDeck}
         />
+        </div>
         {generatedDeck.commander && (
           <DeckOptimizer
             commanderName={generatedDeck.commander.name}

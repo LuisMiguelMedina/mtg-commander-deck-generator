@@ -1016,10 +1016,10 @@ export function DeckOptimizer({
   // Dashboard Render
   // ═════════════════════════════════════════════════════════════════════
   return (
-    <div id="deck-optimizer" className="mt-2 rounded-xl border border-border/40 bg-card/40 backdrop-blur-sm overflow-hidden">
+    <div id="deck-optimizer" className="mt-2">
       {/* Tab Bar — hidden in optimize view */}
       {!optimizeView && (
-      <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-border/20 bg-card/30 overflow-x-auto">
+      <div className="flex items-center gap-1 px-2 sm:px-4 border-y border-border/40 overflow-x-auto">
         {TABS.map(tab => {
           const isActive = activeTab === tab.key;
           const tabGrade = tabGrades[tab.key];
@@ -1029,23 +1029,26 @@ export function DeckOptimizer({
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 whitespace-nowrap ${
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200 whitespace-nowrap relative ${
                 isActive
-                  ? 'bg-primary/15 text-primary'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/40'
+                  ? 'text-primary'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              <tab.icon className={`w-3.5 h-3.5 transition-transform duration-200 ${isActive ? 'scale-110' : ''}`} />
+              <tab.icon className={`w-4 h-4 transition-transform duration-200 ${isActive ? 'scale-110' : ''}`} />
               {tab.label}
               {gradeStyle && (
-                <span className={`ml-0.5 text-[10px] font-bold leading-none px-1 py-0.5 rounded tabular-nums ${gradeStyle.color} ${gradeStyle.badgeBg}`}>
+                <span className={`ml-0.5 text-[11px] font-bold leading-none px-1.5 py-0.5 rounded tabular-nums ${gradeStyle.color} ${gradeStyle.badgeBg}`}>
                   {tabGrade}
                 </span>
               )}
               {bracketBadge && (
-                <span className={`ml-0.5 text-[10px] font-bold leading-none px-1 py-0.5 rounded tabular-nums ${bracketBadge.text} ${bracketBadge.bg}`}>
+                <span className={`ml-0.5 text-[11px] font-bold leading-none px-1.5 py-0.5 rounded tabular-nums ${bracketBadge.text} ${bracketBadge.bg}`}>
                   {bracketLevel}
                 </span>
+              )}
+              {isActive && (
+                <span className="absolute left-2 right-2 bottom-0 h-0.5 rounded-t-sm bg-primary" />
               )}
             </button>
           );
