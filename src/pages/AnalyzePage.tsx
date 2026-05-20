@@ -36,6 +36,15 @@ export function AnalyzePage() {
   const [loadingListId, setLoadingListId] = useState<string | null>(null);
   const [source, setSource] = useState<AnalyzeSource | null>(null);
   const [analyzerInitialCmc, setAnalyzerInitialCmc] = useState<number | null>(null);
+  const [optimizeViewActive, setOptimizeViewActive] = useState(false);
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ optimizeView?: boolean }>).detail;
+      if (detail) setOptimizeViewActive(!!detail.optimizeView);
+    };
+    document.addEventListener('deck-optimizer-state', handler);
+    return () => document.removeEventListener('deck-optimizer-state', handler);
+  }, []);
 
   const generatedDeck = useStore(s => s.generatedDeck);
   const colorIdentityStore = useStore(s => s.colorIdentity);
@@ -249,23 +258,25 @@ export function AnalyzePage() {
         </div>
         {generatedDeck.commander && (
           <>
-            <CurvePlayArea
-              currentCards={Object.values(generatedDeck.categories).flat()}
-              excludeNames={(() => {
-                const s = new Set<string>();
-                if (generatedDeck.commander) s.add(generatedDeck.commander.name);
-                if (generatedDeck.partnerCommander) s.add(generatedDeck.partnerCommander.name);
-                return s;
-              })()}
-              onCmcSelect={(cmc) => {
-                // Reset to null first, then set the target CMC on the next frame.
-                // This guarantees the prop reference changes even when the user clicks
-                // the same CMC twice (the analyzer toggles selectedCmc off internally).
-                setAnalyzerInitialCmc(null);
-                requestAnimationFrame(() => setAnalyzerInitialCmc(cmc));
-                handleAnalyzerTabChange('curve');
-              }}
-            />
+            {!optimizeViewActive && (
+              <CurvePlayArea
+                currentCards={Object.values(generatedDeck.categories).flat()}
+                excludeNames={(() => {
+                  const s = new Set<string>();
+                  if (generatedDeck.commander) s.add(generatedDeck.commander.name);
+                  if (generatedDeck.partnerCommander) s.add(generatedDeck.partnerCommander.name);
+                  return s;
+                })()}
+                onCmcSelect={(cmc) => {
+                  // Reset to null first, then set the target CMC on the next frame.
+                  // This guarantees the prop reference changes even when the user clicks
+                  // the same CMC twice (the analyzer toggles selectedCmc off internally).
+                  setAnalyzerInitialCmc(null);
+                  requestAnimationFrame(() => setAnalyzerInitialCmc(cmc));
+                  handleAnalyzerTabChange('curve');
+                }}
+              />
+            )}
             <DeckOptimizer
               commanderName={generatedDeck.commander.name}
               partnerCommanderName={generatedDeck.partnerCommander?.name}
