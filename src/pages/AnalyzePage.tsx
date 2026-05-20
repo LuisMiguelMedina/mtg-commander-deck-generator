@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { LaneTabs, type LaneKey } from '@/components/analyze/LaneTabs';
 import { WhatYoullSeeStrip } from '@/components/analyze/WhatYoullSeeStrip';
 import { PasteLane, type PasteLaneResult } from '@/components/analyze/PasteLane';
+import { ListsLane } from '@/components/analyze/ListsLane';
 import { hydrateDeckForAnalysis } from '@/components/analyze/analyzeHydration';
 import { useStore } from '@/store';
+import type { UserCardList } from '@/types';
 
 const LANE_STORAGE_KEY = 'analyze-active-lane';
 
@@ -15,6 +17,7 @@ export function AnalyzePage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingListId, setLoadingListId] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem(LANE_STORAGE_KEY, activeLane);
@@ -40,6 +43,32 @@ export function AnalyzePage() {
       setError('Could not analyze this deck. Check the card names and try again.');
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const handleListPick = useCallback(async (list: UserCardList) => {
+    setLoading(true);
+    setLoadingListId(list.id);
+    setError(null);
+    try {
+      const { deck, colorIdentity } = await hydrateDeckForAnalysis({
+        cardNames: list.cards,
+        commanderName: list.commanderName,
+        partnerCommanderName: list.partnerCommanderName,
+        deckSize: list.deckSize ?? list.cards.length,
+      });
+      useStore.setState({
+        commander: deck.commander,
+        partnerCommander: deck.partnerCommander,
+        colorIdentity,
+        generatedDeck: deck,
+      });
+    } catch (e) {
+      console.error('[AnalyzePage] list hydration failed', e);
+      setError('Could not analyze this list. Please try again.');
+    } finally {
+      setLoading(false);
+      setLoadingListId(null);
     }
   }, []);
 
@@ -73,9 +102,7 @@ export function AnalyzePage() {
           <PasteLane onAnalyze={handlePasteAnalyze} loading={loading} />
         )}
         {activeLane === 'lists' && (
-          <p className="text-sm text-muted-foreground text-center py-10">
-            My Lists lane (coming in Task 5)
-          </p>
+          <ListsLane onPick={handleListPick} loading={loading} loadingListId={loadingListId} />
         )}
         {activeLane === 'generate' && (
           <p className="text-sm text-muted-foreground text-center py-10">
