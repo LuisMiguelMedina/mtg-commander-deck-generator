@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.3.3",
+    "notes": [
+      "Analyze page: cards now show small numbered chips for each of your selected themes — hover to see the theme name.",
+      "New Theme sort option in the deck stacks — groups cards by theme membership so the synergy picks rise to the top."
+    ]
+  },
+  {
     "version": "1.3.2",
     "notes": [
       "Deck grid view: new Stacks layout option — cards overlap in vertical columns, Moxfield-style.",
