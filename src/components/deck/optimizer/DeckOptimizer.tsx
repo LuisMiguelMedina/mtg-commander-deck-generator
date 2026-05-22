@@ -1,21 +1,23 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   Loader2, Sparkles, ShoppingCart, RefreshCw,
-  Scissors, RotateCcw, Zap, Wand2,
+  Scissors, RotateCcw, Zap, Wand2, ArrowLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+import { ColorIdentity } from '@/components/ui/mtg-icons';
 import type { ScryfallCard } from '@/types';
 import { fetchCommanderData, fetchPartnerCommanderData, fetchCommanderThemeData, fetchPartnerThemeData } from '@/services/edhrec/client';
 import { detectThemes, generateStrategyLabel, buildDetectionMessage, PACING_PHRASE, type DetectedThemeResult, type Pacing } from '@/services/deckBuilder/themeDetector';
 import { loadTaggerData, getCardRole } from '@/services/tagger/client';
 import { analyzeDeck, getDeckSummaryData, type DeckAnalysis, type RecommendedCard, type AnalyzedCard, type CurvePhase } from '@/services/deckBuilder/deckAnalyzer';
 import { recomputeRoleTargetsForPacing } from '@/services/deckBuilder/roleTargets';
-import { getCardByName, getCardsByNames, getCardPrice, isAnyLand, WUBRG } from '@/services/scryfall/client';
+import { getCardByName, getCardsByNames, getCardPrice, getCardImageUrl, isAnyLand, WUBRG } from '@/services/scryfall/client';
 import { CardPreviewModal } from '@/components/ui/CardPreviewModal';
 import { type CardAction } from '@/components/deck/DeckDisplay';
 import { useStore } from '@/store';
 import { useUserLists } from '@/hooks/useUserLists';
+import { buildThemeMembership } from '@/components/analyze/themeMembership';
 
 import { type DeckOptimizerProps, type TabKey, type LandSection, TABS, PACING_LABELS, ROLE_LABELS, HEALTH_GRADE_STYLES, BRACKET_COLORS, edhrecRankToInclusion } from './constants';
 import { CutRow, RecommendationRow } from './shared';
@@ -49,6 +51,12 @@ export function DeckOptimizer({
   activeTab: controlledActiveTab,
   onTabChange,
   initialSelectedCmc,
+  commander,
+  partnerCommander,
+  colorIdentity: commanderColorIdentity,
+  sourceLabel,
+  onChangeDeck,
+  onThemeMembershipChange,
 }: DeckOptimizerProps) {
   const [analysis, setAnalysis] = useState<DeckAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
@@ -110,6 +118,25 @@ export function DeckOptimizer({
   const [secondaryThemeSlug, setSecondaryThemeSlug] = useState<string | null>(null);
   const themeDataCacheRef = useRef<Map<string, import('@/types').EDHRECCommanderData>>(new Map());
   const themeEnhancedDataRef = useRef<import('@/types').EDHRECCommanderData | null>(null);
+
+  // Notify parent (AnalyzePage) when the user's selected themes change so it can
+  // tag cards with the matching theme chips in the visual stacks.
+  useEffect(() => {
+    if (!onThemeMembershipChange) return;
+    const findTheme = (slug: string | null) => {
+      if (!slug) return null;
+      const match = themeDetection?.evaluatedThemes.find(t => t.theme.slug === slug);
+      return match ? { slug, name: match.theme.name } : null;
+    };
+    const primary = findTheme(primaryThemeSlug);
+    const secondary = findTheme(secondaryThemeSlug);
+    if (!primary && !secondary) {
+      onThemeMembershipChange(null);
+      return;
+    }
+    const membership = buildThemeMembership(primary, secondary, themeDataCacheRef.current);
+    onThemeMembershipChange(membership);
+  }, [primaryThemeSlug, secondaryThemeSlug, themeDetection, onThemeMembershipChange]);
 
   // User-overridable tempo (null = use auto-detected)
   const [userPacing, setUserPacing] = useState<Pacing | null>(null);
@@ -1157,6 +1184,20 @@ export function DeckOptimizer({
       {!optimizeView && (
         <aside className="w-12 shrink-0 flex flex-col items-stretch border-r border-border/40">
           <TooltipProvider delayDuration={200}>
+          {onChangeDeck && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={onChangeDeck}
+                  aria-label="Check a different deck"
+                  className="flex items-center justify-center py-3 text-muted-foreground hover:text-foreground hover:bg-accent/20 border-b border-border/40 transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Check a different deck</TooltipContent>
+            </Tooltip>
+          )}
           {TABS.map(tab => {
             const isActive = activeTab === tab.key;
             const tabGrade = tabGrades[tab.key];
@@ -1268,6 +1309,38 @@ export function DeckOptimizer({
         {/* ── OVERVIEW TAB ── */}
         {activeTab === 'overview' && (
           <div className="space-y-3">
+            {commander && (
+              <div className="rounded-xl border border-border/40 bg-card/40 backdrop-blur-sm flex items-center gap-3 p-2.5">
+                <div className="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-muted/30">
+                  {(() => {
+                    const art = commander.image_uris?.art_crop
+                      ?? commander.card_faces?.[0]?.image_uris?.art_crop
+                      ?? getCardImageUrl(commander, 'normal');
+                    return art ? <img src={art} alt={commander.name} className="w-full h-full object-cover" /> : null;
+                  })()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-semibold truncate">
+                      {commander.name}
+                      {partnerCommander && (
+                        <span className="text-muted-foreground"> & {partnerCommander.name}</span>
+                      )}
+                    </p>
+                    {sourceLabel && (
+                      <span className="text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/15 text-primary">
+                        {sourceLabel}
+                      </span>
+                    )}
+                  </div>
+                  {commanderColorIdentity && commanderColorIdentity.length > 0 && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <ColorIdentity colors={commanderColorIdentity} size="sm" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             <DeckHealthStrip
               analysis={analysis}
               onNavigate={setActiveTab}

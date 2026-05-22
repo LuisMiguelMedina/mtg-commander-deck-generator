@@ -6,6 +6,7 @@ import {
 import type { Pacing } from '@/services/deckBuilder/themeDetector';
 import type { CurvePhase } from '@/services/deckBuilder/deckAnalyzer';
 import type { ScryfallCard, DeckCategory } from '@/types';
+import type { ThemeMembership } from '@/components/analyze/themeMembership';
 import { getCachedCard, getCardImageUrl } from '@/services/scryfall/client';
 export type { UserCardList } from '@/types';
 import type { ReactNode } from 'react';
@@ -35,6 +36,18 @@ export interface DeckOptimizerProps {
   onTabChange?: (tab: TabKey) => void;
   /** Optional initial value for the Curve tab's CMC focus. */
   initialSelectedCmc?: number | null;
+  /** Commander card (for Overview header on /analyze). */
+  commander?: ScryfallCard;
+  /** Partner commander card (for Overview header on /analyze). */
+  partnerCommander?: ScryfallCard;
+  /** Color identity letters for the Overview header. */
+  colorIdentity?: string[];
+  /** Source label shown next to the commander name (e.g. From "My List"). */
+  sourceLabel?: string;
+  /** Click handler for the sidebar "back" button. When provided, renders the back button. */
+  onChangeDeck?: () => void;
+  /** Fired when theme membership for the currently selected themes is (re)computed. */
+  onThemeMembershipChange?: (membership: ThemeMembership | null) => void;
 }
 
 export type TabKey = 'overview' | 'roles' | 'lands' | 'curve' | 'bracket' | 'cost';
