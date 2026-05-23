@@ -72,13 +72,12 @@ const ROLE_PRIORITY: Record<string, number> = {
 
 const COLOR_PRIORITY: Record<string, number> = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 
-type SortKey = 'name' | 'color' | 'role' | 'theme' | 'price';
+type SortKey = 'name' | 'color' | 'role' | 'price';
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'name',  label: 'Name'  },
   { key: 'color', label: 'Color' },
   { key: 'role',  label: 'Role'  },
-  { key: 'theme', label: 'Theme' },
   { key: 'price', label: 'Price' },
 ];
 
@@ -115,7 +114,6 @@ function sortBy(
   cards: ScryfallCard[],
   key: SortKey,
   dir: SortDir = 'asc',
-  themeMembership: ThemeMembership | null = null,
 ): ScryfallCard[] {
   const out = [...cards];
   const sign = dir === 'asc' ? 1 : -1;
@@ -132,21 +130,6 @@ function sortBy(
       const br = b.deckRole ? (ROLE_PRIORITY[b.deckRole] ?? 99) : 99;
       return ar !== br ? sign * (ar - br) : a.name.localeCompare(b.name);
     });
-  } else if (key === 'theme') {
-    const rank = (c: ScryfallCard): number => {
-      const idxs = themeMembership?.byCard.get(c.name.toLowerCase());
-      if (!idxs || idxs.length === 0) return 3;
-      const hasPrimary = idxs.includes(0);
-      const hasSecondary = idxs.includes(1);
-      if (hasPrimary && hasSecondary) return 0;
-      if (hasPrimary) return 1;
-      if (hasSecondary) return 2;
-      return 3;
-    };
-    out.sort((a, b) => {
-      const d = sign * (rank(a) - rank(b));
-      return d !== 0 ? d : a.name.localeCompare(b.name);
-    });
   } else if (key === 'price') {
     out.sort((a, b) => {
       const ap = parseFloat(getCardPrice(a) ?? '0');
@@ -160,7 +143,7 @@ function sortBy(
 // Per-sort default direction. Names/colors/roles read left-to-right ascending;
 // price feels more useful starting from the expensive end.
 const DEFAULT_DIR: Record<SortKey, SortDir> = {
-  name: 'asc', color: 'asc', role: 'asc', theme: 'asc', price: 'desc',
+  name: 'asc', color: 'asc', role: 'asc', price: 'desc',
 };
 
 interface HoverState {
@@ -203,7 +186,7 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
 
   const [sortKey, setSortKey] = useState<SortKey>(() => {
     const stored = localStorage.getItem(SORT_STORAGE_KEY);
-    return (stored === 'name' || stored === 'color' || stored === 'role' || stored === 'theme' || stored === 'price') ? stored : 'name';
+    return (stored === 'name' || stored === 'color' || stored === 'role' || stored === 'price') ? stored : 'name';
   });
   const [sortDir, setSortDir] = useState<SortDir>(() => {
     const stored = localStorage.getItem(SORT_DIR_STORAGE_KEY);
@@ -214,13 +197,6 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
 
   useEffect(() => { localStorage.setItem(SORT_STORAGE_KEY, sortKey); }, [sortKey]);
   useEffect(() => { localStorage.setItem(SORT_DIR_STORAGE_KEY, sortDir); }, [sortDir]);
-  // Fall back to name sort if the Theme option vanishes (no themes selected).
-  useEffect(() => {
-    if (sortKey === 'theme' && (!themeMembership || themeMembership.themes.length === 0)) {
-      setSortKey('name');
-      setSortDir(DEFAULT_DIR.name);
-    }
-  }, [sortKey, themeMembership]);
   // When the user picks a different sort, fall back to that sort's natural
   // default direction (price wants desc; name wants asc).
   const handleSortKeyChange = useCallback((next: SortKey) => {
@@ -283,10 +259,10 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
       : col;
     return columns.map(col => ({
       column: col,
-      creatures: sortBy(applyFilter(flatCreatures.filter(col.matches)), sortKey, sortDir, themeMembership),
-      noncreatures: sortBy(applyFilter(flatNoncreatures.filter(col.matches)), sortKey, sortDir, themeMembership),
+      creatures: sortBy(applyFilter(flatCreatures.filter(col.matches)), sortKey, sortDir),
+      noncreatures: sortBy(applyFilter(flatNoncreatures.filter(col.matches)), sortKey, sortDir),
     }));
-  }, [columns, flatCreatures, flatNoncreatures, sortKey, sortDir, hideEnabled, highlightRoles, matchesActiveFilter, themeMembership]);
+  }, [columns, flatCreatures, flatNoncreatures, sortKey, sortDir, hideEnabled, highlightRoles, matchesActiveFilter]);
 
   const activeColumns = useMemo(
     () => sortedColumns.filter(c => c.creatures.length > 0 || c.noncreatures.length > 0),
@@ -315,9 +291,9 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
     };
     for (const card of flat) groups[categorizeLand(card)].push(card);
     return LAND_CATEGORIES
-      .map(({ key, label }) => ({ key, label, cards: sortBy(groups[key], sortKey, sortDir, themeMembership) }))
+      .map(({ key, label }) => ({ key, label, cards: sortBy(groups[key], sortKey, sortDir) }))
       .filter(g => g.cards.length > 0);
-  }, [buckets, sortKey, sortDir, taggerReady, themeMembership]);
+  }, [buckets, sortKey, sortDir, taggerReady]);
   const landsGridTemplate = `repeat(${Math.max(landCategoryGroups.length, 1)}, minmax(0, 130px))`;
 
   const [hover, setHover] = useState<HoverState | null>(null);
@@ -525,9 +501,7 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
           <div className="flex items-center gap-1">
             <ArrowUpDown className="w-3 h-3 text-muted-foreground/50" />
             <div className="flex items-center border border-border/50 rounded-md overflow-hidden">
-              {SORT_OPTIONS
-                .filter(o => o.key !== 'theme' || (themeMembership && themeMembership.themes.length > 0))
-                .map((opt, i) => {
+              {SORT_OPTIONS.map((opt, i) => {
                 const active = sortKey === opt.key;
                 const ArrowIcon = sortDir === 'asc' ? ArrowUp : ArrowDown;
                 return (
