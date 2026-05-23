@@ -10,7 +10,7 @@ import { CardPreviewModal } from '@/components/ui/CardPreviewModal';
 import { CardContextMenu, type CardAction } from '@/components/deck/DeckDisplay';
 import type { CardRowMenuProps } from '@/components/deck/optimizer/shared';
 import type { ThemeMembership } from './themeMembership';
-import { getColumns, type Column, type GroupKey, GROUP_OPTIONS } from './groupColumns';
+import { getColumns, type Column, type GroupKey, GROUP_OPTIONS, shouldCollapseRows } from './groupColumns';
 
 interface DeckBuildingAreaProps {
   currentCards: ScryfallCard[];
@@ -589,8 +589,25 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
                 ))}
               </div>
 
-              <CurveRow rowCards={activeColumns.map(c => c.creatures)} columnKeys={activeColumns.map(c => c.column.key)} gridTemplate={gridTemplate} onHover={handleHover} onSelect={setPreviewCard} dimNonRoles={highlightRoles && dimEnabled} activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup} removalNames={removalNames} showPrice={sortKey === 'price'} onCardAction={onCardAction} menuProps={menuProps} marginTopPercent={marginTopPercent} themeMembership={sortKey === 'theme' ? themeMembership : null} />
-              <CurveRow rowCards={activeColumns.map(c => c.noncreatures)} columnKeys={activeColumns.map(c => c.column.key)} gridTemplate={gridTemplate} onHover={handleHover} onSelect={setPreviewCard} dimNonRoles={highlightRoles && dimEnabled} activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup} removalNames={removalNames} showPrice={sortKey === 'price'} onCardAction={onCardAction} menuProps={menuProps} marginTopPercent={marginTopPercent} themeMembership={sortKey === 'theme' ? themeMembership : null} />
+              {shouldCollapseRows(groupKey) ? (
+                <CurveRow
+                  rowCards={activeColumns.map(c => [...c.creatures, ...c.noncreatures])}
+                  columnKeys={activeColumns.map(c => c.column.key)}
+                  gridTemplate={gridTemplate}
+                  onHover={handleHover} onSelect={setPreviewCard}
+                  dimNonRoles={highlightRoles && dimEnabled}
+                  activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup}
+                  removalNames={removalNames} showPrice={sortKey === 'price'}
+                  onCardAction={onCardAction} menuProps={menuProps}
+                  marginTopPercent={marginTopPercent}
+                  themeMembership={groupKey === 'theme' ? themeMembership : null}
+                />
+              ) : (
+                <>
+                  <CurveRow rowCards={activeColumns.map(c => c.creatures)} columnKeys={activeColumns.map(c => c.column.key)} gridTemplate={gridTemplate} onHover={handleHover} onSelect={setPreviewCard} dimNonRoles={highlightRoles && dimEnabled} activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup} removalNames={removalNames} showPrice={sortKey === 'price'} onCardAction={onCardAction} menuProps={menuProps} marginTopPercent={marginTopPercent} themeMembership={groupKey === 'theme' ? themeMembership : null} />
+                  <CurveRow rowCards={activeColumns.map(c => c.noncreatures)} columnKeys={activeColumns.map(c => c.column.key)} gridTemplate={gridTemplate} onHover={handleHover} onSelect={setPreviewCard} dimNonRoles={highlightRoles && dimEnabled} activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup} removalNames={removalNames} showPrice={sortKey === 'price'} onCardAction={onCardAction} menuProps={menuProps} marginTopPercent={marginTopPercent} themeMembership={groupKey === 'theme' ? themeMembership : null} />
+                </>
+              )}
             </div>
           ) : (
             <div className="w-full min-w-0 pr-2 sm:pr-4">
@@ -618,7 +635,7 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
                     showPrice={sortKey === 'price'}
                     onCardAction={onCardAction}
                     menuProps={menuProps}
-                    themeMembership={sortKey === 'theme' ? themeMembership : null}
+                    themeMembership={groupKey === 'theme' ? themeMembership : null}
                   />
                 ))}
               </div>
