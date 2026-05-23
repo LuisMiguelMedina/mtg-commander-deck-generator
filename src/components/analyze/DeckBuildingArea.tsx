@@ -1,6 +1,6 @@
 // src/components/analyze/DeckBuildingArea.tsx
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowUpDown, BarChart3, Sprout, Swords, Flame, BookOpen, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUpDown, Sprout, Swords, Flame, BookOpen, ArrowUp, ArrowDown } from 'lucide-react';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import type { ScryfallCard } from '@/types';
 import { buildCurveBuckets } from './DeckBuildingArea.buckets';
@@ -10,6 +10,7 @@ import { CardPreviewModal } from '@/components/ui/CardPreviewModal';
 import { CardContextMenu, type CardAction } from '@/components/deck/DeckDisplay';
 import type { CardRowMenuProps } from '@/components/deck/optimizer/shared';
 import type { ThemeMembership } from './themeMembership';
+import { getColumns, type Column } from './groupColumns';
 
 interface DeckBuildingAreaProps {
   currentCards: ScryfallCard[];
@@ -24,8 +25,6 @@ interface DeckBuildingAreaProps {
   menuProps?: CardRowMenuProps;
   themeMembership?: ThemeMembership | null;
 }
-
-const COLUMN_LABELS = ['0', '1', '2', '3', '4', '5', '6', '7+'];
 
 // Role swatch color — used in the header legend.
 const ROLE_SWATCH: Record<string, string> = {
@@ -250,32 +249,34 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
     return activeRole ? role === activeRole : !!role;
   }, [activeRole, activeCmcRange, activeRoleGroup]);
 
-  // Apply the user's sort within each cell. Buckets keep their CMC × type
-  // organization; we just re-order the cards inside. In `hide` mode we also
-  // drop cards that don't match the active filter so the play area collapses
-  // to just the matching ones.
-  const sortedBuckets = useMemo(() => {
+  // Flat creature / noncreature lists derived from the bucket result —
+  // we re-group these per the active groupKey instead of relying on the
+  // pre-baked CMC arrays.
+  const flatCreatures = useMemo(() => buckets.creatures.flat(), [buckets]);
+  const flatNoncreatures = useMemo(() => buckets.noncreatures.flat(), [buckets]);
+
+  const columns: Column[] = useMemo(
+    () => getColumns('cmc', { themeMembership }),
+    [themeMembership],
+  );
+
+  const sortedColumns = useMemo(() => {
     const applyFilter = (col: ScryfallCard[]) => hideEnabled && highlightRoles
       ? col.filter(matchesActiveFilter)
       : col;
-    return {
-      creatures: buckets.creatures.map(col => sortBy(applyFilter(col), sortKey, sortDir, themeMembership)),
-      noncreatures: buckets.noncreatures.map(col => sortBy(applyFilter(col), sortKey, sortDir, themeMembership)),
-      lands: buckets.lands.map(col => sortBy(col, sortKey, sortDir, themeMembership)),
-    };
-  }, [buckets, sortKey, sortDir, hideEnabled, highlightRoles, matchesActiveFilter, themeMembership]);
+    return columns.map(col => ({
+      column: col,
+      creatures: sortBy(applyFilter(flatCreatures.filter(col.matches)), sortKey, sortDir, themeMembership),
+      noncreatures: sortBy(applyFilter(flatNoncreatures.filter(col.matches)), sortKey, sortDir, themeMembership),
+    }));
+  }, [columns, flatCreatures, flatNoncreatures, sortKey, sortDir, hideEnabled, highlightRoles, matchesActiveFilter, themeMembership]);
 
-  // Only render CMC columns that actually have non-land cards. Lands have
-  // their own category-based drawer beside the curve, so counting them here
-  // would falsely keep CMC 0 alive whenever you have any basics.
-  const activeCmcs = useMemo(
-    () => COLUMN_LABELS
-      .map((_, i) => i)
-      .filter(i => sortedBuckets.creatures[i].length > 0
-                || sortedBuckets.noncreatures[i].length > 0),
-    [sortedBuckets],
+  const activeColumns = useMemo(
+    () => sortedColumns.filter(c => c.creatures.length > 0 || c.noncreatures.length > 0),
+    [sortedColumns],
   );
-  const gridTemplate = `repeat(${activeCmcs.length}, minmax(0, 130px))`;
+
+  const gridTemplate = `repeat(${activeColumns.length}, minmax(0, 130px))`;
 
   // Ensure tagger data is loaded so utility/tapland categorization works.
   // Cheap no-op if it's already cached.
@@ -360,10 +361,10 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
     if (!playmatHeight || !isFinite(containerWidth)) return DEFAULT;
 
     if (view === 'spells') {
-      const n = activeCmcs.length;
+      const n = activeColumns.length;
       if (n === 0) return DEFAULT;
-      const maxCreatures = Math.max(0, ...activeCmcs.map(i => sortedBuckets.creatures[i].length));
-      const maxNoncreatures = Math.max(0, ...activeCmcs.map(i => sortedBuckets.noncreatures[i].length));
+      const maxCreatures = Math.max(0, ...activeColumns.map(c => c.creatures.length));
+      const maxNoncreatures = Math.max(0, ...activeColumns.map(c => c.noncreatures.length));
       const totalStackCards = maxCreatures + maxNoncreatures;
       if (totalStackCards <= 2) return DEFAULT;
       const availableWidth = containerWidth - (n - 1) * COL_GAP_PX - 32;
@@ -387,15 +388,14 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
       const sliverPct = Math.max(MIN_SLIVER_PCT, Math.min(MAX_SLIVER_PCT, sliverFraction * 100));
       return -(140 - sliverPct);
     }
-  }, [view, activeCmcs, sortedBuckets, landCategoryGroups, playmatHeight, containerWidth]);
+  }, [view, activeColumns, landCategoryGroups, playmatHeight, containerWidth]);
 
   return (
     <div ref={rootRef} className="flex-1 min-h-0 flex flex-col overflow-hidden">
       {/* Header — bigger, with sort selector */}
       <div className="flex items-center justify-between gap-3 px-2 sm:px-4 py-2 min-h-[52px] border-b border-border/30 bg-background/40">
         <div className="flex items-center gap-2 min-w-0">
-          <BarChart3 className="w-4 h-4 text-primary/70 shrink-0" />
-          <span className="text-sm font-bold uppercase tracking-wider">Deck</span>
+          <span className="text-sm font-bold uppercase tracking-wider">Deck ({totalNonLand + buckets.landCount})</span>
           {/* View toggle — Non-lands / Lands. Replaces the side drawer. */}
           <div className="flex items-center border border-border/50 rounded-md overflow-hidden">
             <button
@@ -529,18 +529,21 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
                 className="grid justify-start gap-2 pt-2 text-xs text-foreground/85"
                 style={{ gridTemplateColumns: gridTemplate }}
               >
-                {activeCmcs.map(i => (
+                {activeColumns.map(({ column, creatures, noncreatures }) => (
                   <div
-                    key={i}
+                    key={column.key}
                     className="text-center font-semibold tabular-nums py-1"
                   >
-                    {COLUMN_LABELS[i]} <span className="text-muted-foreground/80 font-normal">({buckets.countsByCmc[i]})</span>
+                    {column.label}{' '}
+                    <span className="text-muted-foreground/80 font-normal">
+                      ({creatures.length + noncreatures.length})
+                    </span>
                   </div>
                 ))}
               </div>
 
-              <CurveRow rowCards={sortedBuckets.creatures} activeCmcs={activeCmcs} gridTemplate={gridTemplate} onHover={handleHover} onSelect={setPreviewCard} dimNonRoles={highlightRoles && dimEnabled} activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup} removalNames={removalNames} showPrice={sortKey === 'price'} onCardAction={onCardAction} menuProps={menuProps} marginTopPercent={marginTopPercent} themeMembership={sortKey === 'theme' ? themeMembership : null} />
-              <CurveRow rowCards={sortedBuckets.noncreatures} activeCmcs={activeCmcs} gridTemplate={gridTemplate} onHover={handleHover} onSelect={setPreviewCard} dimNonRoles={highlightRoles && dimEnabled} activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup} removalNames={removalNames} showPrice={sortKey === 'price'} onCardAction={onCardAction} menuProps={menuProps} marginTopPercent={marginTopPercent} themeMembership={sortKey === 'theme' ? themeMembership : null} />
+              <CurveRow rowCards={activeColumns.map(c => c.creatures)} columnKeys={activeColumns.map(c => c.column.key)} gridTemplate={gridTemplate} onHover={handleHover} onSelect={setPreviewCard} dimNonRoles={highlightRoles && dimEnabled} activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup} removalNames={removalNames} showPrice={sortKey === 'price'} onCardAction={onCardAction} menuProps={menuProps} marginTopPercent={marginTopPercent} themeMembership={sortKey === 'theme' ? themeMembership : null} />
+              <CurveRow rowCards={activeColumns.map(c => c.noncreatures)} columnKeys={activeColumns.map(c => c.column.key)} gridTemplate={gridTemplate} onHover={handleHover} onSelect={setPreviewCard} dimNonRoles={highlightRoles && dimEnabled} activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup} removalNames={removalNames} showPrice={sortKey === 'price'} onCardAction={onCardAction} menuProps={menuProps} marginTopPercent={marginTopPercent} themeMembership={sortKey === 'theme' ? themeMembership : null} />
             </div>
           ) : (
             <div className="w-full min-w-0 pr-2 sm:pr-4">
@@ -613,7 +616,7 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
 
 interface CurveRowProps {
   rowCards: ScryfallCard[][];
-  activeCmcs: number[];
+  columnKeys: string[];
   gridTemplate: string;
   onHover: (card: ScryfallCard | null, e?: React.MouseEvent) => void;
   onSelect: (card: ScryfallCard) => void;
@@ -629,14 +632,14 @@ interface CurveRowProps {
   themeMembership?: ThemeMembership | null;
 }
 
-function CurveRow({ rowCards, activeCmcs, gridTemplate, onHover, onSelect, dimNonRoles, activeRole, activeCmcRange, activeRoleGroup, removalNames, showPrice, onCardAction, menuProps, marginTopPercent, themeMembership }: CurveRowProps) {
+function CurveRow({ rowCards, columnKeys, gridTemplate, onHover, onSelect, dimNonRoles, activeRole, activeCmcRange, activeRoleGroup, removalNames, showPrice, onCardAction, menuProps, marginTopPercent, themeMembership }: CurveRowProps) {
   return (
     <div
       className="grid justify-start gap-2 py-2 items-end"
       style={{ gridTemplateColumns: gridTemplate }}
     >
-      {activeCmcs.map((i, col) => (
-        <CurveCell key={i} cards={rowCards[i]} cascadeIndex={col} onHover={onHover} onSelect={onSelect} dimNonRoles={dimNonRoles} activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup} removalNames={removalNames} showPrice={showPrice} onCardAction={onCardAction} menuProps={menuProps} marginTopPercent={marginTopPercent} themeMembership={themeMembership} />
+      {columnKeys.map((key, col) => (
+        <CurveCell key={key} cards={rowCards[col]} cascadeIndex={col} onHover={onHover} onSelect={onSelect} dimNonRoles={dimNonRoles} activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup} removalNames={removalNames} showPrice={showPrice} onCardAction={onCardAction} menuProps={menuProps} marginTopPercent={marginTopPercent} themeMembership={themeMembership} />
       ))}
     </div>
   );
@@ -802,9 +805,14 @@ function CurveCard({
           const raw = getCardPrice(card);
           const n = raw != null ? Number(raw) : NaN;
           if (!Number.isFinite(n)) return null;
-          const label = n >= 100 ? `$${n.toFixed(0)}` : `$${n.toFixed(n < 10 ? 2 : 1)}`;
+          const label = `$${n.toFixed(2)}`;
+          const tone = n < 1 ? 'text-emerald-200 border-emerald-500/40'
+            : n < 5 ? 'text-lime-200 border-lime-500/40'
+            : n < 15 ? 'text-amber-200 border-amber-500/40'
+            : n < 30 ? 'text-orange-200 border-orange-500/40'
+            : 'text-rose-200 border-rose-500/50';
           return (
-            <span className="absolute top-1 left-1 z-10 inline-flex items-center px-1 py-0.5 text-[8px] font-bold rounded shadow-sm bg-black/75 text-emerald-200 border border-emerald-500/40 tabular-nums">
+            <span className={`absolute top-1 left-1 z-10 inline-flex items-center px-1 py-0.5 text-[8px] font-bold rounded shadow-sm bg-black/75 border tabular-nums ${tone}`}>
               {label}
             </span>
           );
