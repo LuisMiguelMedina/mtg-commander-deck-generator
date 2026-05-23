@@ -1,6 +1,6 @@
 // src/components/analyze/DeckBuildingArea.tsx
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowUpDown, Sprout, Swords, Flame, BookOpen, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUpDown, Sprout, Swords, Flame, BookOpen, ArrowUp, ArrowDown, LayoutGrid } from 'lucide-react';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import type { ScryfallCard } from '@/types';
 import { buildCurveBuckets } from './DeckBuildingArea.buckets';
@@ -10,7 +10,7 @@ import { CardPreviewModal } from '@/components/ui/CardPreviewModal';
 import { CardContextMenu, type CardAction } from '@/components/deck/DeckDisplay';
 import type { CardRowMenuProps } from '@/components/deck/optimizer/shared';
 import type { ThemeMembership } from './themeMembership';
-import { getColumns, type Column } from './groupColumns';
+import { getColumns, type Column, type GroupKey, GROUP_OPTIONS } from './groupColumns';
 
 interface DeckBuildingAreaProps {
   currentCards: ScryfallCard[];
@@ -171,6 +171,7 @@ interface HoverState {
 type RightView = 'spells' | 'lands';
 const VIEW_KEY = 'analyze-play-area-view';
 const SORT_STORAGE_KEY = 'analyze-play-area-sort';
+const GROUP_STORAGE_KEY = 'analyze-play-area-group';
 const SORT_DIR_STORAGE_KEY = 'analyze-play-area-sort-dir';
 const DIM_ROLES_KEY = 'analyze-play-area-dim-roles';
 
@@ -190,6 +191,15 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
   useEffect(() => {
     setView(focusLands ? 'lands' : 'spells');
   }, [focusLands]);
+
+  const [groupKey, setGroupKey] = useState<GroupKey>(() => {
+    const stored = localStorage.getItem(GROUP_STORAGE_KEY);
+    if (stored === 'cmc' || stored === 'theme' || stored === 'role' || stored === 'type' || stored === 'none') {
+      return stored;
+    }
+    return 'cmc';
+  });
+  useEffect(() => { localStorage.setItem(GROUP_STORAGE_KEY, groupKey); }, [groupKey]);
 
   const [sortKey, setSortKey] = useState<SortKey>(() => {
     const stored = localStorage.getItem(SORT_STORAGE_KEY);
@@ -256,9 +266,16 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
   const flatNoncreatures = useMemo(() => buckets.noncreatures.flat(), [buckets]);
 
   const columns: Column[] = useMemo(
-    () => getColumns('cmc', { themeMembership }),
-    [themeMembership],
+    () => getColumns(groupKey, { themeMembership }),
+    [groupKey, themeMembership],
   );
+
+  // If Theme grouping loses its themes (e.g. user clears themes), fall back to CMC.
+  useEffect(() => {
+    if (groupKey === 'theme' && (!themeMembership || themeMembership.themes.length === 0)) {
+      setGroupKey('cmc');
+    }
+  }, [groupKey, themeMembership]);
 
   const sortedColumns = useMemo(() => {
     const applyFilter = (col: ScryfallCard[]) => hideEnabled && highlightRoles
@@ -474,6 +491,36 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {/* Group-by chip strip. Disables Theme when no themes are selected. */}
+          <div className="flex items-center gap-1">
+            <LayoutGrid className="w-3 h-3 text-muted-foreground/50" />
+            <div className="flex items-center border border-border/50 rounded-md overflow-hidden">
+              {GROUP_OPTIONS.map((opt, i) => {
+                const themeDisabled = opt.key === 'theme'
+                  && (!themeMembership || themeMembership.themes.length === 0);
+                const active = groupKey === opt.key;
+                return (
+                  <div key={opt.key} className="contents">
+                    {i > 0 && <div className="w-px h-3 bg-border/50" />}
+                    <button
+                      type="button"
+                      disabled={themeDisabled}
+                      onClick={() => setGroupKey(opt.key)}
+                      className={`text-[10px] px-2 py-0.5 inline-flex items-center gap-1 transition-colors ${
+                        active
+                          ? 'bg-accent text-foreground font-medium'
+                          : 'text-muted-foreground/60 hover:text-foreground hover:bg-accent/50'
+                      } ${themeDisabled ? 'opacity-40 pointer-events-none' : ''}`}
+                      aria-pressed={active}
+                      title={themeDisabled ? 'Select themes first' : `Group by ${opt.label.toLowerCase()}`}
+                    >
+                      {opt.label}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
           {/* Sort button group. Click the active sort to flip direction. */}
           <div className="flex items-center gap-1">
             <ArrowUpDown className="w-3 h-3 text-muted-foreground/50" />
