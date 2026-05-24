@@ -252,7 +252,7 @@ function Layout({ children }: { children: React.ReactNode }) {
       {/* Content wrapper with relative positioning */}
       <div className="relative z-10 flex flex-col min-h-screen pb-16 sm:pb-0">
         {/* Header */}
-        <header className="border-b border-border/50 bg-card/70 backdrop-blur-md sm:sticky sm:top-0 z-40">
+        <header className="border-b border-border/50 bg-card/80 backdrop-blur-md sm:sticky sm:top-0 z-40">
           <div className="container mx-auto px-4 py-4">
             <div className="flex items-center justify-between">
               <button
@@ -370,8 +370,8 @@ function Layout({ children }: { children: React.ReactNode }) {
 
         {children}
 
-        {/* Footer — hidden on /analyze to give the optimizer more vertical room */}
-        {!isAnalyzePage && (
+        {/* Footer — hidden on /analyze once a deck is loaded to give the optimizer more vertical room */}
+        {(!isAnalyzePage || !generatedDeck) && (
         <footer className="border-t border-border/50 bg-card/50 backdrop-blur-sm">
           <div className="container mx-auto px-4 py-6 text-center text-sm text-muted-foreground">
             <p>

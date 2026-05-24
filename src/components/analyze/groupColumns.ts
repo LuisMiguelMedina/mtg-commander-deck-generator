@@ -26,7 +26,7 @@ export interface ColumnContext {
   themeMembership: ThemeMembership | null;
 }
 
-const CMC_LABELS = ['0', '1', '2', '3', '4', '5', '6', '7+'];
+const CMC_LABELS = ['CMC 0', 'CMC 1', 'CMC 2', 'CMC 3', 'CMC 4', 'CMC 5', 'CMC 6', 'CMC 7+'];
 
 function cmcColumns(): Column[] {
   return CMC_LABELS.map((label, i) => ({

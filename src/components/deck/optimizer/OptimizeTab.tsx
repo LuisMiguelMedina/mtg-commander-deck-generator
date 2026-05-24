@@ -519,7 +519,7 @@ export function OptimizeView({
 
       {/* Apply CTA */}
       {!noSwaps && (
-        <div className="flex flex-col items-center gap-2 pt-2 pb-1">
+        <div className="sticky bottom-0 -mx-3 sm:-mx-4 px-3 sm:px-4 pt-3 pb-2 border-t border-border/40 bg-gradient-to-t from-background via-background/95 to-background/70 backdrop-blur-sm flex flex-col items-center gap-2 z-10">
           <Button
             onClick={handleApply}
             className={`btn-shimmer px-8 py-3 text-sm font-semibold gap-2.5 transition-all duration-300 ${

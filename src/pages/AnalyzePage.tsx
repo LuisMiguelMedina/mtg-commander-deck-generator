@@ -95,7 +95,10 @@ export function AnalyzePage() {
   const [themeMembership, setThemeMembership] = useState<ThemeMembership | null>(null);
   const handleAnalyzerTabChange = useCallback((next: TabKey) => {
     const slug = TAB_SLUG_BY_KEY[next];
-    navigate(listIdParam ? `/analyze/${listIdParam}/${slug}` : `/analyze/${slug}`);
+    // Replace so tab switches don't accumulate in history — keeps the browser
+    // back button (and our "change deck" back button) tied to the user's
+    // real prior page rather than walking through tab changes.
+    navigate(listIdParam ? `/analyze/${listIdParam}/${slug}` : `/analyze/${slug}`, { replace: true });
   }, [navigate, listIdParam]);
 
   const prevLaneRef = useRef<LaneKey>(activeLane);
@@ -271,7 +274,12 @@ export function AnalyzePage() {
     setSource(null);
     setError(null);
     hydratedListIdRef.current = null;
-    navigate('/analyze');
+    // Prefer browser history (returns to wherever the user came from — list page, /analyze landing, etc.)
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/analyze');
+    }
   }, [source, navigate]);
 
   const handleAddCardsToAnalyzerDeck = useCallback(async (names: string[], destination: 'deck' | 'sideboard' | 'maybeboard') => {
@@ -516,7 +524,10 @@ export function AnalyzePage() {
       (generatedDeck.commander ? 1 : 0)
       + partnerOffset
       + Object.values(generatedDeck.categories).reduce((n, arr) => n + arr.length, 0);
-    const analyzerDeckSize = Math.max(totalCards - 1 - partnerOffset, 0);
+    const sourceList = source.kind === 'list' ? lists.find(l => l.id === source.listId) : undefined;
+    const analyzerDeckSize = sourceList?.deckSize != null
+      ? Math.max(sourceList.deckSize - 1 - partnerOffset, 0)
+      : Math.max(totalCards - 1 - partnerOffset, 0);
 
     const sourceLabel = source.kind === 'paste'
       ? 'Pasted'

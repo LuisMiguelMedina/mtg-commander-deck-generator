@@ -398,7 +398,7 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
         {!isEditing && (
           <p className="text-sm text-muted-foreground mt-2">
             {isDeck
-              ? 'Build a full Commander deck with combo detection, mana curve stats, test hands, and optimization suggestions.'
+              ? 'Save a full Commander deck to check its health, balance roles, spot combos, draw test hands, and get optimization suggestions.'
               : 'Create a reusable card list for exclusions, must-includes, favorites, or tracking cards you own.'}
           </p>
         )}
@@ -439,7 +439,7 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
           {isDeck && <div className="space-y-3">
             <label className="text-sm font-medium flex items-center gap-1.5">
               <CommanderIcon size={14} className="text-muted-foreground" />
-              Commander <span className="text-muted-foreground font-normal">(optional)</span>
+              Commander <span className="text-muted-foreground font-normal">(optional, will populate after importing)</span>
             </label>
 
             {/* Commander selection — dropdown from imported legendaries, or search fallback */}

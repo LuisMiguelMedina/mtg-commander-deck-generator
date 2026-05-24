@@ -3911,7 +3911,7 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
                               >
                                 <ChevronDown className={`w-3 h-3 text-muted-foreground/60 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
                                 {(isTypeGroup || isCommanderGroup) && <CardTypeIcon type={label as CardType} size="sm" className="opacity-60" />}
-                                <span className="text-xs font-medium text-muted-foreground">{label}</span>
+                                <span className="text-xs font-medium text-muted-foreground">{groupBy === 'cmc' && label !== 'Lands' ? `CMC ${label}` : label}</span>
                                 <span className="text-[10px] text-muted-foreground/60">{visibleCards.length}</span>
                               </button>
                               {!collapsed && (

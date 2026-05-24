@@ -8,10 +8,11 @@ import {
 } from 'recharts';
 import { ChevronDown, ChevronRight, X, Target, Crown, BookOpen, Sprout, Lightbulb, AlertTriangle, Swords, Mountain, Layers, ArrowUpDown, Scissors, Sparkles } from 'lucide-react';
 import type { ScryfallCard } from '@/types';
-import type { CurvePhaseAnalysis, CurvePhase, CurveSlot, CurveBreakdown, ManaTrajectoryPoint, AnalyzedCard, RecommendedCard, ManaSourcesAnalysis, RoleBreakdown } from '@/services/deckBuilder/deckAnalyzer';
+import type { CurvePhaseAnalysis, CurvePhase, CurveSlot, CurveBreakdown, ManaTrajectoryPoint, AnalyzedCard, RecommendedCard, ManaSourcesAnalysis, RoleBreakdown, GradeResult } from '@/services/deckBuilder/deckAnalyzer';
 import { PACING_MULTIPLIERS } from '@/services/deckBuilder/deckAnalyzer';
 import type { Pacing } from '@/services/deckBuilder/themeDetector';
 import { getCachedCard } from '@/services/scryfall/client';
+import { getCardRole } from '@/services/tagger/client';
 import { PACING_LABELS, PHASE_META, tileGradeStyles, type CollapsibleGroup } from './constants';
 import { AnalyzedCardRow, CollapsibleCardGroups, type CardAction, type CardRowMenuProps } from './shared';
 import { SuggestionCardGrid, CutCardGrid } from './OverviewTab';
@@ -71,7 +72,7 @@ export function CurveSummaryStrip({
   const activePhase = phases.find(p => activePhases.has(p.phase));
 
   return (
-    <div className="-mx-3 sm:-mx-4 border-t border-b border-border/30">
+    <div className="-mx-3 sm:-mx-4 border-t border-b border-border/30 bg-background/80 backdrop-blur-sm">
       {/* Phase tiles row */}
       <div className="grid grid-cols-3">
         {phases.map((phase, i) => {
@@ -110,8 +111,10 @@ export function CurveSummaryStrip({
         })}
       </div>
 
-      {/* Role filter row — 4 buttons, grades + counts from the active phase */}
-      <div className="grid grid-cols-4 border-t border-border/30">
+      {/* Role filter row — collapses to height 0 when no phase is selected, slides in from top when one is. */}
+      <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${activePhase ? 'grid-rows-[1fr] border-t border-border/30' : 'grid-rows-[0fr]'}`}>
+        <div className="overflow-hidden">
+      <div className="grid grid-cols-4">
         {ROLE_GROUP_ORDER.map((roleKey, ri) => {
           const prb = activePhase?.phaseRoleBreakdowns.find(r => r.roleGroup === roleKey);
           const grade = prb ? getRoleGroupGrade(prb.current, prb.target) : '-';
@@ -135,7 +138,7 @@ export function CurveSummaryStrip({
                   {grade}
                 </span>
               </div>
-              <div className="flex items-baseline justify-between gap-1 mb-1">
+              <div className="flex items-baseline justify-between gap-1">
                 <span className={`text-base font-bold tabular-nums leading-none ${gradeGs.color}`}>
                   {prb?.current ?? 0}
                 </span>
@@ -143,14 +146,11 @@ export function CurveSummaryStrip({
                   {prb?.target ?? 0} suggested
                 </span>
               </div>
-              {activePhase && (
-                <p className="text-[9px] text-muted-foreground/70 leading-snug">
-                  {PHASE_ROLE_CONTEXT[activePhase.phase][roleKey]}
-                </p>
-              )}
             </button>
           );
         })}
+      </div>
+        </div>
       </div>
     </div>
   );
@@ -1034,7 +1034,7 @@ function PhaseRoleCardList({
       for (const ac of phase.cards) {
         if (seen.has(ac.card.name)) continue;
         seen.add(ac.card.name);
-        const role = ac.card.deckRole;
+        const role = ac.card.deckRole || getCardRole(ac.card.name);
         const key: RoleGroupKey =
           role === 'ramp' ? 'ramp' :
           (role === 'removal' || role === 'boardwipe') ? 'interaction' :
@@ -1459,7 +1459,7 @@ function CurveSuggestionPanel({
   const phaseLabel = phases.length === 1 ? `${phases[0].label} ` : '';
 
   const suggestionsTitle = <>{phaseLabel}{sugPrefix}Suggestions ({suggestions.length})</>;
-  const cutsTitle = <>{phaseLabel}{cutsPrefix}Cuts ({cuts.length})</>;
+  const cutsTitle = <>Recommended {phaseLabel}{cutsPrefix}Cuts ({cuts.length})</>;
 
   const handleCutAll = useCallback(() => {
     for (const ac of cuts) {
@@ -1564,6 +1564,102 @@ function CurveSuggestionPanel({
   );
 }
 
+/** Small helper card shown above the deck list — explains the active phase/role context. */
+function CurvePhaseHelperCard({
+  phases, activeRoleGroups,
+}: {
+  phases: CurvePhaseAnalysis[];
+  activeRoleGroups: Set<RoleGroupKey>;
+}) {
+  if (phases.length === 0) return null;
+  const phase = phases[0];
+  const phaseLabel = phase.label.split(' ')[0];
+
+  // If exactly one role group is selected, show that role's context. Otherwise
+  // show every role's context for the active phase as a compact list.
+  const singleRole = activeRoleGroups.size === 1 ? Array.from(activeRoleGroups)[0] : null;
+
+  // Resolve grade: per-role when a single role is active, otherwise the phase's overall grade.
+  let grade: string;
+  if (singleRole) {
+    const prb = phase.phaseRoleBreakdowns.find(r => r.roleGroup === singleRole);
+    grade = prb ? getRoleGroupGrade(prb.current, prb.target) : phase.grade.letter;
+  } else {
+    grade = phase.grade.letter;
+  }
+  const gs = tileGradeStyles(grade);
+
+  return (
+    <div className="mb-3 -mx-3 sm:-mx-4 -mt-3 px-3 sm:px-4 pt-3 pb-3 border-b border-border/30">
+      <div className={`border rounded-lg p-2.5 ${gs.border} ${gs.bg}`}>
+        <div className="flex items-center gap-3">
+          <div className={`flex items-center justify-center w-12 h-12 rounded-lg ${gs.bgColor} shrink-0`}>
+            <span className={`text-2xl font-black leading-none ${gs.color}`}>{grade}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            {singleRole ? (() => {
+              const meta = ROLE_GROUP_META[singleRole];
+              return (
+                <p className="text-xs text-foreground/85 leading-snug">
+                  <span className="font-semibold">{phaseLabel} {meta.label}</span>
+                  <span className="text-muted-foreground/70"> — {PHASE_ROLE_CONTEXT[phase.phase][singleRole]}</span>
+                </p>
+              );
+            })() : (
+              <ul className="space-y-1">
+                {ROLE_GROUP_ORDER.map(rk => {
+                  const meta = ROLE_GROUP_META[rk];
+                  return (
+                    <li key={rk} className="text-[11px] leading-snug">
+                      <span className={`font-semibold ${meta.color}`}>{meta.label}:</span>
+                      <span className="text-muted-foreground/70"> {PHASE_ROLE_CONTEXT[phase.phase][rk]}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Tip card shown when no phase is selected — surfaces the overall tempo grade. */
+export function CurveOverallGradeTip({
+  grade, phases,
+}: {
+  grade: GradeResult;
+  phases: CurvePhaseAnalysis[];
+}) {
+  const gs = tileGradeStyles(grade.letter);
+  return (
+    <div className={`border rounded-lg p-4 ${gs.border} ${gs.bg}`}>
+      <div className="flex items-center gap-4">
+        <div className={`flex items-center justify-center w-16 h-16 rounded-lg ${gs.bgColor} shrink-0`}>
+          <span className={`text-3xl font-black leading-none ${gs.color}`}>{grade.letter}</span>
+        </div>
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Overall Tempo</p>
+          <p className="text-sm text-foreground/85 leading-snug">{grade.message}</p>
+          <div className="flex items-center gap-3 text-[10px] text-muted-foreground/70 pt-0.5">
+            {phases.map(p => {
+              const pgs = tileGradeStyles(p.grade.letter);
+              return (
+                <span key={p.phase} className="flex items-center gap-1">
+                  <span className="text-muted-foreground/60">{p.label.split(' ')[0]}</span>
+                  <span className={`font-bold ${pgs.color}`}>{p.grade.letter}</span>
+                </span>
+              );
+            })}
+            <span className="ml-auto italic text-muted-foreground/50">Select a phase to drill in</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Two-column panel: left = grouped deck card list, right = suggestions grid. */
 export function CurveDetailPanel({
   phases, roleBreakdowns, activeRoleGroups,
@@ -1580,45 +1676,79 @@ export function CurveDetailPanel({
   allRecommendations?: RecommendedCard[];
 }) {
   const showSuggestions = true;
+  const aurora = auroraForCurveContext(phases, activeRoleGroups);
   return (
-    <div className={`${showSuggestions ? 'flex flex-col md:flex-row md:items-stretch gap-4' : ''}`}>
-      {/* Left column: grouped card list */}
-      <div
-        className={`${showSuggestions ? 'md:w-[30%] shrink-0' : 'w-full'} -my-3 sm:-my-4 ${showSuggestions ? '-ml-3 sm:-ml-4' : '-mx-3 sm:-mx-4'} bg-black/15 px-3 sm:px-4 py-3 transition-[background-image] duration-500`}
-        style={{ backgroundImage: 'radial-gradient(ellipse 80% 60% at 15% 0%, rgba(16,185,129,0.05), transparent 60%), radial-gradient(ellipse 70% 55% at 90% 100%, rgba(16,185,129,0.035), transparent 60%)' }}
-      >
-        <PhaseRoleCardList
-          phases={phases}
-          activeRoleGroups={activeRoleGroups}
-          onPreview={onPreview}
-          onCardAction={onCardAction}
-          menuProps={menuProps}
-        />
-      </div>
-
-      {/* Vertical divider */}
-      {showSuggestions && (
-        <div className="hidden md:block w-px bg-border/30 shrink-0 -my-3" />
-      )}
-
-      {/* Right column: suggestions grid */}
-      {showSuggestions && (
-        <div className="flex-1 min-w-0">
-          <CurveSuggestionPanel
+    <div
+      className="-mx-3 sm:-mx-4 -mb-3 sm:-mb-4 bg-black/15 px-3 sm:px-4 py-3 transition-[background-image] duration-500"
+      style={{ marginTop: 0, ...(aurora ? { backgroundImage: aurora } : {}) }}
+    >
+      <div className={`${showSuggestions ? 'flex flex-col md:flex-row md:items-stretch gap-4' : ''}`}>
+        {/* Left column: grouped card list */}
+        <div className={showSuggestions ? 'md:w-[30%] shrink-0' : 'w-full'}>
+          <CurvePhaseHelperCard phases={phases} activeRoleGroups={activeRoleGroups} />
+          <PhaseRoleCardList
             phases={phases}
-            roleBreakdowns={roleBreakdowns}
             activeRoleGroups={activeRoleGroups}
-            addedCards={addedCards}
-            onAdd={onAdd}
             onPreview={onPreview}
             onCardAction={onCardAction}
             menuProps={menuProps}
-            allRecommendations={allRecommendations}
           />
         </div>
-      )}
+
+        {/* Vertical divider */}
+        {showSuggestions && (
+          <div className="hidden md:block w-px bg-border/30 shrink-0 -my-3" />
+        )}
+
+        {/* Right column: suggestions grid */}
+        {showSuggestions && (
+          <div className="flex-1 min-w-0">
+            <CurveSuggestionPanel
+              phases={phases}
+              roleBreakdowns={roleBreakdowns}
+              activeRoleGroups={activeRoleGroups}
+              addedCards={addedCards}
+              onAdd={onAdd}
+              onPreview={onPreview}
+              onCardAction={onCardAction}
+              menuProps={menuProps}
+              allRecommendations={allRecommendations}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
+}
+
+// Aurora gradient tinted by active role group (if one is selected) or by phase identity.
+function auroraForCurveContext(
+  phases: CurvePhaseAnalysis[],
+  activeRoleGroups: Set<RoleGroupKey>,
+): string | undefined {
+  if (phases.length === 0) return undefined;
+
+  const roleRgb: Record<RoleGroupKey, string> = {
+    ramp:        '16,185,129',  // emerald
+    interaction: '244,63,94',   // rose
+    cardDraw:    '14,165,233',  // sky
+    other:       '148,163,184', // slate
+  };
+  const phaseRgb: Record<CurvePhase, string> = {
+    early: '14,165,233',   // sky
+    mid:   '245,158,11',   // amber
+    late:  '168,85,247',   // violet
+  };
+
+  let rgb: string | undefined;
+  if (activeRoleGroups.size === 1) {
+    const role = Array.from(activeRoleGroups)[0];
+    rgb = roleRgb[role];
+  } else {
+    rgb = phaseRgb[phases[0].phase];
+  }
+  if (!rgb) return undefined;
+  return `radial-gradient(ellipse 80% 60% at 15% 0%, rgba(${rgb},0.05), transparent 60%), radial-gradient(ellipse 70% 55% at 90% 100%, rgba(${rgb},0.035), transparent 60%)`;
 }
 
 /** Extrapolate mana beyond the trajectory's last turn. After T7, roughly +1 land/turn, ramp tapers. */

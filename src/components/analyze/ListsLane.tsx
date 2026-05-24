@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useUserLists } from '@/hooks/useUserLists';
 import { ColorIdentity } from '@/components/ui/mtg-icons';
 import type { UserCardList } from '@/types';
@@ -20,7 +21,11 @@ export function ListsLane({ onPick, loading, loadingListId }: ListsLaneProps) {
   if (eligible.length === 0) {
     return (
       <div className="text-center py-12 text-sm text-muted-foreground">
-        No saved lists yet. Paste a deck above, or build one and come back.
+        No saved decks yet. Paste a deck above, or{' '}
+        <Link to="/lists" className="text-primary hover:underline">
+          build one
+        </Link>{' '}
+        and come back.
       </div>
     );
   }

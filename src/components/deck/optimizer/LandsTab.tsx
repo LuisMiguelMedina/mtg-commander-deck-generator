@@ -178,7 +178,7 @@ export function LandSummaryStrip({
   ];
 
   return (
-    <div className="-mx-3 sm:-mx-4 -mt-3 sm:-mt-4 grid grid-cols-2 sm:grid-cols-4 border-b border-border/30">
+    <div className="-mx-3 sm:-mx-4 -mt-3 sm:-mt-4 grid grid-cols-2 sm:grid-cols-4 border-b border-border/30 bg-background/80 backdrop-blur-sm">
       {tiles.map((tile, i) => {
         const Icon = tile.icon;
         const isActive = activeSection === tile.key;
@@ -406,7 +406,7 @@ export function LandCountDetail({
     content: (
       <div className="space-y-0.5">
         {mdfcLands.map(ac => (
-          <AnalyzedCardRow key={ac.card.name} ac={ac} onPreview={onPreview} showDetails onCardAction={onCardAction} menuProps={menuProps} />
+          <AnalyzedCardRow key={ac.card.name} ac={ac} onPreview={onPreview} showDetails hideChips hidePrice onCardAction={onCardAction} menuProps={menuProps} />
         ))}
       </div>
     ),
@@ -416,7 +416,7 @@ export function LandCountDetail({
     content: (
       <div className="space-y-0.5">
         {channelLands.map(ac => (
-          <AnalyzedCardRow key={ac.card.name} ac={ac} onPreview={onPreview} showDetails onCardAction={onCardAction} menuProps={menuProps} />
+          <AnalyzedCardRow key={ac.card.name} ac={ac} onPreview={onPreview} showDetails hideChips hidePrice onCardAction={onCardAction} menuProps={menuProps} />
         ))}
       </div>
     ),
@@ -426,7 +426,7 @@ export function LandCountDetail({
     content: (
       <div className="space-y-0.5">
         {nonbasicLands.map(ac => (
-          <AnalyzedCardRow key={ac.card.name} ac={ac} onPreview={onPreview} showDetails onCardAction={onCardAction} menuProps={menuProps} />
+          <AnalyzedCardRow key={ac.card.name} ac={ac} onPreview={onPreview} showDetails hideChips hidePrice onCardAction={onCardAction} menuProps={menuProps} />
         ))}
       </div>
     ),
@@ -436,7 +436,7 @@ export function LandCountDetail({
     content: (
       <div className="space-y-0.5">
         {utilityLands.map(ac => (
-          <AnalyzedCardRow key={ac.card.name} ac={ac} onPreview={onPreview} showDetails onCardAction={onCardAction} menuProps={menuProps} />
+          <AnalyzedCardRow key={ac.card.name} ac={ac} onPreview={onPreview} showDetails hideChips hidePrice onCardAction={onCardAction} menuProps={menuProps} />
         ))}
       </div>
     ),
@@ -1365,7 +1365,7 @@ export function MdfcDetail({
     content: (
       <div className="space-y-0.5">
         {mdfcLands.map(ac => (
-          <AnalyzedCardRow key={ac.card.name} ac={ac} onPreview={onPreview} showDetails onCardAction={onCardAction} menuProps={menuProps} />
+          <AnalyzedCardRow key={ac.card.name} ac={ac} onPreview={onPreview} showDetails hideChips hidePrice onCardAction={onCardAction} menuProps={menuProps} />
         ))}
       </div>
     ),
@@ -1375,7 +1375,7 @@ export function MdfcDetail({
     content: (
       <div className="space-y-0.5">
         {channelLands.map(ac => (
-          <AnalyzedCardRow key={ac.card.name} ac={ac} onPreview={onPreview} showDetails onCardAction={onCardAction} menuProps={menuProps} />
+          <AnalyzedCardRow key={ac.card.name} ac={ac} onPreview={onPreview} showDetails hideChips hidePrice onCardAction={onCardAction} menuProps={menuProps} />
         ))}
       </div>
     ),
@@ -1385,7 +1385,7 @@ export function MdfcDetail({
     content: (
       <div className="space-y-0.5">
         {nonbasicLands.map(ac => (
-          <AnalyzedCardRow key={ac.card.name} ac={ac} onPreview={onPreview} showDetails onCardAction={onCardAction} menuProps={menuProps} />
+          <AnalyzedCardRow key={ac.card.name} ac={ac} onPreview={onPreview} showDetails hideChips hidePrice onCardAction={onCardAction} menuProps={menuProps} />
         ))}
       </div>
     ),

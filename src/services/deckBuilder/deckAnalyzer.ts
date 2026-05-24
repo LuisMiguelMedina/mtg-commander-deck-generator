@@ -387,12 +387,12 @@ function letterFromScore(score: number): string {
   return 'F';
 }
 
-export function getRolesGrade(roleDeficits: RoleDeficit[]): GradeResult {
-  const totalDeficit = roleDeficits.reduce((sum, rd) => sum + rd.deficit, 0);
-  const maxSingleDeficit = Math.max(...roleDeficits.map(rd => rd.deficit), 0);
-  const rolesMet = roleDeficits.filter(rd => rd.current >= rd.target).length;
-  const totalRoles = roleDeficits.length;
-  const worstRole = roleDeficits.reduce((worst, rd) => rd.deficit > worst.deficit ? rd : worst, roleDeficits[0]);
+export function getRolesGrade(roleStats: Array<{ role: string; label: string; current: number; target: number; deficit: number }>): GradeResult {
+  const totalDeficit = roleStats.reduce((sum, rd) => sum + rd.deficit, 0);
+  const maxSingleDeficit = Math.max(...roleStats.map(rd => rd.deficit), 0);
+  const rolesMet = roleStats.filter(rd => rd.current >= rd.target).length;
+  const totalRoles = roleStats.length;
+  const worstRole = roleStats.reduce((worst, rd) => rd.deficit > worst.deficit ? rd : worst, roleStats[0]);
 
   if (totalDeficit === 0)
     return { letter: 'A', message: 'All roles on target — well-balanced deck.' };
@@ -692,11 +692,13 @@ export function getCurvePhases(
     // Per-phase role breakdowns with targets
     const prt = phaseRoleTargets?.[phase];
     const otherCount = cards.length - rampInPhase - interactionInPhase - cardDrawInPhase;
+    const rolesTargetSum = (prt?.ramp ?? 0) + (prt?.interaction ?? 0) + (prt?.cardDraw ?? 0);
+    const otherTarget = Math.max(0, target - rolesTargetSum);
     const phaseRoleBreakdowns: PhaseRoleBreakdown[] = [
       { roleGroup: 'ramp', label: 'Ramp', current: rampInPhase, target: prt?.ramp ?? 0, deficit: Math.max(0, (prt?.ramp ?? 0) - rampInPhase) },
       { roleGroup: 'interaction', label: 'Interaction', current: interactionInPhase, target: prt?.interaction ?? 0, deficit: Math.max(0, (prt?.interaction ?? 0) - interactionInPhase) },
       { roleGroup: 'cardDraw', label: 'Card Draw', current: cardDrawInPhase, target: prt?.cardDraw ?? 0, deficit: Math.max(0, (prt?.cardDraw ?? 0) - cardDrawInPhase) },
-      { roleGroup: 'other', label: 'Other', current: otherCount, target: 0, deficit: 0 },
+      { roleGroup: 'other', label: 'Other', current: otherCount, target: otherTarget, deficit: Math.max(0, otherTarget - otherCount) },
     ];
 
     return {
@@ -2437,7 +2439,9 @@ export function analyzeDeck(opts: AnalyzeDeckOptions): DeckAnalysis {
     .sort(sortByInclusion);
 
   // --- Macro Grades ---
-  const rolesGrade = getRolesGrade(roleDeficits);
+  // Use roleBreakdowns (which counts multi-role cards in each lane and includes
+  // role-bearing lands) so the Overview grade agrees with the Roles lane display.
+  const rolesGrade = getRolesGrade(roleBreakdowns);
   const flexCount = mdfcsInDeck.length + channelLandsInDeck.length;
   const manaGrade = getManaGrade(manaBase, manaSources, colorFixing, flexCount);
   const detected = detectPacing(currentCards, curveAnalysis);

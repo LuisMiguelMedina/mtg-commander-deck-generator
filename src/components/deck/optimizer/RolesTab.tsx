@@ -18,7 +18,7 @@ export function RoleSummaryStrip({
 }) {
   return (
     <div className="-mx-3 sm:-mx-4 -mt-3 sm:-mt-4">
-    <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-border/30">
+    <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-border/30 bg-background/80 backdrop-blur-sm">
       {roleBreakdowns.map((rb, i) => {
         const meta = ROLE_META[rb.role];
         const Icon = meta?.icon || Shield;

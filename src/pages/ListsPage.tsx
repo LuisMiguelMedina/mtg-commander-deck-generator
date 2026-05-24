@@ -459,7 +459,7 @@ export function ListsPage() {
         <div className="space-y-2">
           <h2 className="text-2xl font-bold">My Lists</h2>
           <p className="text-sm text-muted-foreground">
-            Save card lists for exclusions, must-includes, or full decks. Set a commander to unlock deck features.
+            A place to store your commander decks, or lists of cards to use with other site features.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -599,18 +599,27 @@ export function ListsPage() {
         <div className="text-center py-16 space-y-4">
           <BookOpen className="w-12 h-12 text-muted-foreground/30 mx-auto" />
           <div className="space-y-2">
-            <p className="text-lg font-medium text-muted-foreground">No lists yet</p>
+            <p className="text-lg font-medium text-muted-foreground">No lists or decks yet</p>
             <p className="text-sm text-muted-foreground/80">
-              Create your first list to save cards you want to quickly exclude or include in decks.
+              Build a deck to save and tune a Commander pile, or create a card list to save cards you want to quickly exclude or include.
             </p>
           </div>
-          <button
-            onClick={() => navigate('/lists/create')}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-lg hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Create your first list
-          </button>
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            <button
+              onClick={() => navigate('/lists/create?type=deck')}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Build your first deck
+            </button>
+            <button
+              onClick={() => navigate('/lists/create?type=list')}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg border border-primary text-primary hover:bg-primary/10 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Create a list
+            </button>
+          </div>
         </div>
       )}
 

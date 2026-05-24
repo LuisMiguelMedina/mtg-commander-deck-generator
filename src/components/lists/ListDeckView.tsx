@@ -1410,7 +1410,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
                   </div>
                 </div>
               ) : list.primer ? (
-                <div className="text-sm text-muted-foreground [&_strong]:text-foreground [&_em]:italic [&_h3]:text-base [&_h4]:text-sm" dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(list.primer) }} />
+                <div className="text-sm text-foreground [&_strong]:text-foreground [&_em]:italic [&_h3]:text-base [&_h4]:text-sm" dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(list.primer) }} />
               ) : (
                 <p className="text-sm text-muted-foreground/50 italic">No primer written yet.</p>
               )}

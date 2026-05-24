@@ -1,6 +1,7 @@
 // src/components/analyze/DeckBuildingArea.tsx
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowUpDown, Sprout, Swords, Flame, BookOpen, ArrowUp, ArrowDown, LayoutGrid } from 'lucide-react';
+import { ArrowUpDown, Sprout, Swords, Flame, BookOpen, ArrowUp, ArrowDown, LayoutGrid, Check, Eye, ChevronDown } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import type { ScryfallCard } from '@/types';
 import { buildCurveBuckets } from './DeckBuildingArea.buckets';
@@ -12,6 +13,7 @@ import type { CardRowMenuProps } from '@/components/deck/optimizer/shared';
 import type { ThemeMembership } from './themeMembership';
 import { getColumns, type Column, type GroupKey, GROUP_OPTIONS, shouldCollapseRows } from './groupColumns';
 import { computeSpillover } from './columnSpillover';
+import { useStore } from '@/store';
 
 interface DeckBuildingAreaProps {
   currentCards: ScryfallCard[];
@@ -138,6 +140,121 @@ const DEFAULT_DIR: Record<SortKey, SortDir> = {
   name: 'asc', color: 'asc', cmc: 'asc', price: 'desc',
 };
 
+// A row of mini-chips (Group / Sort / Visibility selectors) that collapses to a
+// single chip + popover when the toolbar runs out of width. `collapsed` is the
+// only thing that toggles which form renders.
+interface ChipStripOption {
+  key: string;
+  label: string;
+  disabled?: boolean;
+  disabledTitle?: string;
+}
+interface ChipStripProps {
+  icon: React.ReactNode;
+  iconTitle: string;
+  options: ChipStripOption[];
+  activeKey: string;
+  onSelect: (key: string) => void;
+  // For sort strip: click on the already-active option toggles direction.
+  onActiveReclick?: () => void;
+  // Optional arrow rendered next to the active option (sort direction).
+  activeArrow?: React.ReactNode;
+  collapsed: boolean;
+  ariaLabel: string;
+}
+function ChipStrip({ icon, iconTitle, options, activeKey, onSelect, onActiveReclick, activeArrow, collapsed, ariaLabel }: ChipStripProps) {
+  const [open, setOpen] = useState(false);
+  const active = options.find(o => o.key === activeKey);
+
+  if (collapsed) {
+    return (
+      <div className="flex items-center gap-1">
+        <span title={iconTitle} className="inline-flex">{icon}</span>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label={ariaLabel}
+              className="text-[10px] px-2 py-0.5 inline-flex items-center gap-1 bg-accent text-foreground font-medium border border-border/50 rounded-md hover:bg-accent/80 transition-colors"
+              onClick={() => {
+                // Tapping the trigger when already-active doesn't toggle dir —
+                // that's reserved for the in-popover row click.
+                setOpen(o => !o);
+              }}
+            >
+              {active?.label ?? ''}
+              {activeArrow}
+              <ChevronDown className="w-3 h-3 -mr-0.5 opacity-60" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" side="bottom" className="p-1 min-w-[8rem]">
+            <div className="flex flex-col">
+              {options.map(opt => {
+                const isActive = opt.key === activeKey;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    disabled={opt.disabled}
+                    onClick={() => {
+                      if (isActive && onActiveReclick) onActiveReclick();
+                      else onSelect(opt.key);
+                      if (!isActive) setOpen(false);
+                    }}
+                    className={`text-left text-xs px-2 py-1 rounded inline-flex items-center justify-between gap-2 transition-colors ${
+                      isActive
+                        ? 'bg-accent text-foreground font-medium'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
+                    } ${opt.disabled ? 'opacity-40 pointer-events-none' : ''}`}
+                    title={opt.disabled ? opt.disabledTitle : undefined}
+                  >
+                    <span>{opt.label}</span>
+                    {isActive && activeArrow}
+                  </button>
+                );
+              })}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <span title={iconTitle} className="inline-flex">{icon}</span>
+      <div className="flex items-center border border-border/50 rounded-md overflow-hidden">
+        {options.map((opt, i) => {
+          const isActive = opt.key === activeKey;
+          return (
+            <div key={opt.key} className="contents">
+              {i > 0 && <div className="w-px h-3 bg-border/50" />}
+              <button
+                type="button"
+                disabled={opt.disabled}
+                onClick={() => {
+                  if (isActive && onActiveReclick) onActiveReclick();
+                  else onSelect(opt.key);
+                }}
+                className={`text-[10px] px-2 py-0.5 inline-flex items-center gap-1 transition-colors ${
+                  isActive
+                    ? 'bg-accent text-foreground font-medium'
+                    : 'text-muted-foreground/60 hover:text-foreground hover:bg-accent/50'
+                } ${opt.disabled ? 'opacity-40 pointer-events-none' : ''}`}
+                aria-pressed={isActive}
+                title={opt.disabled ? opt.disabledTitle : opt.label}
+              >
+                {opt.label}
+                {isActive && activeArrow}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 interface HoverState {
   card: ScryfallCard;
   anchor: { left: number; right: number; top: number; height: number };
@@ -155,6 +272,9 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
     () => buildCurveBuckets(currentCards, { excludeNames }),
     [currentCards, excludeNames],
   );
+  const deckFormat = useStore(s => s.customization.deckFormat);
+  const partnerCommander = useStore(s => s.partnerCommander);
+  const targetDeckSize = deckFormat - (partnerCommander ? 1 : 0);
 
   const [view, setView] = useState<RightView>(() => {
     const stored = localStorage.getItem(VIEW_KEY);
@@ -201,11 +321,12 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
   useEffect(() => { localStorage.setItem(SORT_DIR_STORAGE_KEY, sortDir); }, [sortDir]);
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ sortKey?: SortKey }>).detail;
+      const detail = (e as CustomEvent<{ sortKey?: SortKey; sortDir?: SortDir }>).detail;
       const next = detail?.sortKey;
       if (next === 'name' || next === 'color' || next === 'cmc' || next === 'price') {
         setSortKey(next);
-        setSortDir(DEFAULT_DIR[next] ?? 'asc');
+        const explicitDir = detail?.sortDir;
+        setSortDir(explicitDir === 'asc' || explicitDir === 'desc' ? explicitDir : (DEFAULT_DIR[next] ?? 'asc'));
       }
     };
     document.addEventListener('analyze-set-sort', handler);
@@ -227,7 +348,7 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
     if (stored === 'off' || stored === 'dim' || stored === 'hide') return stored;
     // Legacy boolean values from before the 3-mode toggle.
     if (stored === 'false') return 'off';
-    return 'dim';
+    return 'hide';
   });
   useEffect(() => { localStorage.setItem(DIM_ROLES_KEY, filterMode); }, [filterMode]);
   const dimEnabled = filterMode === 'dim';
@@ -334,6 +455,14 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
     return () => ro.disconnect();
   }, []);
 
+  // Toolbar collapse thresholds. The header is the full content width, so we
+  // can key off `containerWidth`. Order is: Sort collapses first, then Group,
+  // then the (optional) visibility strip last. Tuned by eye against the chip
+  // widths + left-side Deck/Spells block.
+  const collapseSort = containerWidth !== Infinity && containerWidth < 820;
+  const collapseGroup = containerWidth !== Infinity && containerWidth < 680;
+  const collapseVisibility = containerWidth !== Infinity && containerWidth < 560;
+
   // Measure the playmat (the dot-grid area below the header) so the stack
   // overlap can tighten when the column would otherwise overflow off the
   // bottom of the screen. Both CurveRows share this height.
@@ -382,11 +511,20 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
 
 
   return (
-    <div ref={rootRef} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+    <div ref={rootRef} className="flex-1 min-h-0 flex flex-col overflow-hidden bg-background/85">
       {/* Header — bigger, with sort selector */}
       <div className="flex items-center justify-between gap-3 px-2 sm:px-4 py-2 min-h-[52px] border-b border-border/30 bg-background/40">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm font-bold uppercase tracking-wider">Deck ({totalNonLand + buckets.landCount - buckets.mdfcCount})</span>
+          {(() => {
+            const deckCount = totalNonLand + buckets.landCount - buckets.mdfcCount;
+            const atTarget = deckCount === targetDeckSize;
+            return (
+              <span className={`text-sm font-bold uppercase tracking-wider inline-flex items-center gap-1.5 ${atTarget ? 'text-emerald-400' : ''}`}>
+                Deck ({deckCount})
+                {atTarget && <Check className="w-3.5 h-3.5" />}
+              </span>
+            );
+          })()}
           {/* View toggle — Non-lands / Lands. Replaces the side drawer. */}
           <div
             className="flex items-center border border-border/50 rounded-md overflow-hidden"
@@ -403,7 +541,7 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
               }`}
               title="Show creatures and non-creatures"
             >
-              Non-lands <span className="text-muted-foreground/60">{totalNonLand}</span>
+              Spells <span className="text-muted-foreground/60">{totalNonLand}</span>
             </button>
             <div className="w-px h-3 bg-border/50" />
             <button
@@ -420,99 +558,65 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
               Lands <span className="text-muted-foreground/60">{buckets.landCount}</span>
             </button>
           </div>
-          {/* Role legend — only on Roles tab. Color swatches hide when narrow; All/Dim/Hide always shows. */}
+          {/* Role legend — only on Roles tab. Collapses to a popover when narrow. */}
           {highlightRoles && (
-          <div className="flex items-center gap-2 ml-3 text-[10px] text-muted-foreground/70">
-            {highlightRoles && (
-              <div className="ml-1 flex items-center border border-border/50 rounded-md overflow-hidden">
-                {(['off', 'dim', 'hide'] as FilterMode[]).map((mode, i) => (
-                  <div key={mode} className="contents">
-                    {i > 0 && <div className="w-px h-3 bg-border/50" />}
-                    <button
-                      type="button"
-                      onClick={() => setFilterMode(mode)}
-                      aria-pressed={filterMode === mode}
-                      className={`text-[10px] px-2 py-0.5 transition-colors ${
-                        filterMode === mode
-                          ? 'bg-accent text-foreground font-medium'
-                          : 'text-muted-foreground/60 hover:text-foreground hover:bg-accent/50'
-                      }`}
-                      title={
-                        mode === 'off' ? 'Show every card in full color'
-                        : mode === 'dim' ? 'Grey out non-matching cards'
-                        : 'Hide non-matching cards entirely'
-                      }
-                    >
-                      {mode === 'off' ? 'All' : mode === 'dim' ? 'Dim' : 'Hide'}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+            <div className="ml-3">
+              <ChipStrip
+                icon={<Eye className="w-3 h-3 text-muted-foreground/50" />}
+                iconTitle="Non-matching cards"
+                ariaLabel="Non-matching card visibility"
+                collapsed={collapseVisibility}
+                activeKey={filterMode}
+                onSelect={(k) => setFilterMode(k as FilterMode)}
+                options={[
+                  { key: 'off',  label: 'All'  },
+                  { key: 'dim',  label: 'Dim'  },
+                  { key: 'hide', label: 'Hide' },
+                ]}
+              />
+            </div>
           )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
           {/* Group-by chip strip. Disables Theme when no themes are selected. */}
-          <div className="flex items-center gap-1">
-            <LayoutGrid className="w-3 h-3 text-muted-foreground/50" />
-            <div className="flex items-center border border-border/50 rounded-md overflow-hidden">
-              {GROUP_OPTIONS.map((opt, i) => {
-                const themeDisabled = opt.key === 'theme'
-                  && (!themeMembership || themeMembership.themes.length === 0);
-                const active = groupKey === opt.key;
-                return (
-                  <div key={opt.key} className="contents">
-                    {i > 0 && <div className="w-px h-3 bg-border/50" />}
-                    <button
-                      type="button"
-                      disabled={themeDisabled}
-                      onClick={() => setGroupKey(opt.key)}
-                      className={`text-[10px] px-2 py-0.5 inline-flex items-center gap-1 transition-colors ${
-                        active
-                          ? 'bg-accent text-foreground font-medium'
-                          : 'text-muted-foreground/60 hover:text-foreground hover:bg-accent/50'
-                      } ${themeDisabled ? 'opacity-40 pointer-events-none' : ''}`}
-                      aria-pressed={active}
-                      title={themeDisabled ? 'Select themes first' : `Group by ${opt.label.toLowerCase()}`}
-                    >
-                      {opt.label}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          {(() => {
+            const themeDisabled = !themeMembership || themeMembership.themes.length === 0;
+            return (
+              <ChipStrip
+                icon={<LayoutGrid className="w-3 h-3 text-muted-foreground/50" />}
+                iconTitle="Group by"
+                ariaLabel="Group by"
+                collapsed={collapseGroup}
+                activeKey={groupKey}
+                onSelect={(k) => setGroupKey(k as GroupKey)}
+                options={GROUP_OPTIONS.map(opt => ({
+                  key: opt.key,
+                  label: opt.label,
+                  disabled: opt.key === 'theme' && themeDisabled,
+                  disabledTitle: 'Select themes first',
+                }))}
+              />
+            );
+          })()}
           {/* Sort button group. Click the active sort to flip direction. */}
-          <div className="flex items-center gap-1">
-            <ArrowUpDown className="w-3 h-3 text-muted-foreground/50" />
-            <div className="flex items-center border border-border/50 rounded-md overflow-hidden">
-              {SORT_OPTIONS.map((opt, i) => {
-                const active = sortKey === opt.key;
-                const ArrowIcon = sortDir === 'asc' ? ArrowUp : ArrowDown;
-                return (
-                  <div key={opt.key} className="contents">
-                    {i > 0 && <div className="w-px h-3 bg-border/50" />}
-                    <button
-                      type="button"
-                      onClick={() => active ? toggleSortDir() : handleSortKeyChange(opt.key)}
-                      className={`text-[10px] px-2 py-0.5 inline-flex items-center gap-1 transition-colors ${
-                        active
-                          ? 'bg-accent text-foreground font-medium'
-                          : 'text-muted-foreground/60 hover:text-foreground hover:bg-accent/50'
-                      }`}
-                      aria-pressed={active}
-                      title={active ? `${opt.label} — click to reverse direction` : `Sort by ${opt.label.toLowerCase()}`}
-                    >
-                      {opt.label}
-                      {active && <ArrowIcon className="w-3 h-3 -mr-0.5" />}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          {(() => {
+            const ArrowIcon = sortDir === 'asc' ? ArrowUp : ArrowDown;
+            const arrow = <ArrowIcon className="w-3 h-3 -mr-0.5" />;
+            return (
+              <ChipStrip
+                icon={<ArrowUpDown className="w-3 h-3 text-muted-foreground/50" />}
+                iconTitle="Sort by"
+                ariaLabel="Sort by"
+                collapsed={collapseSort}
+                activeKey={sortKey}
+                onSelect={(k) => handleSortKeyChange(k as SortKey)}
+                onActiveReclick={toggleSortDir}
+                activeArrow={arrow}
+                options={SORT_OPTIONS.map(opt => ({ key: opt.key, label: opt.label }))}
+              />
+            );
+          })()}
         </div>
       </div>
 

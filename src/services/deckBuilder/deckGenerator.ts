@@ -733,6 +733,12 @@ function categorizeCards(
 // Stamp all role subtypes on a card based on its deckRole
 export function stampRoleSubtypes(card: ScryfallCard): void {
   card.multiRole = hasMultipleRoles(card.name);
+  // Stamp deckRole if missing so cards added outside of the generator pipeline
+  // (e.g. from the optimizer's + button) bucket correctly in role-filtered views.
+  if (!card.deckRole) {
+    const role = getCardRole(card.name);
+    if (role) card.deckRole = role;
+  }
   // Stamp all subtypes so secondary-role contexts (e.g. a ramp card in the card draw panel) show the right badge
   card.rampSubtype = getRampSubtype(card.name) ?? undefined;
   card.removalSubtype = getRemovalSubtype(card.name) ?? undefined;
