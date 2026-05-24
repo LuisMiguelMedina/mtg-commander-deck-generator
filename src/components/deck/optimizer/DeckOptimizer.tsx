@@ -1,27 +1,27 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
-  Loader2, Sparkles, ShoppingCart, RefreshCw,
-  Scissors, RotateCcw, Zap, Wand2, ArrowLeft, Bookmark, ExternalLink,
+  Loader2, Sparkles, RefreshCw,
+  Zap, ArrowLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
-import { ColorIdentity } from '@/components/ui/mtg-icons';
 import type { ScryfallCard } from '@/types';
 import { fetchCommanderData, fetchPartnerCommanderData, fetchCommanderThemeData, fetchPartnerThemeData } from '@/services/edhrec/client';
 import { detectThemes, generateStrategyLabel, buildDetectionMessage, PACING_PHRASE, type DetectedThemeResult, type Pacing } from '@/services/deckBuilder/themeDetector';
-import { loadTaggerData, getCardRole } from '@/services/tagger/client';
-import { analyzeDeck, getDeckSummaryData, type DeckAnalysis, type RecommendedCard, type AnalyzedCard, type CurvePhase } from '@/services/deckBuilder/deckAnalyzer';
+import { loadTaggerData } from '@/services/tagger/client';
+import { analyzeDeck, getDeckSummaryData, type DeckAnalysis, type RecommendedCard, type CurvePhase } from '@/services/deckBuilder/deckAnalyzer';
 import { recomputeRoleTargetsForPacing } from '@/services/deckBuilder/roleTargets';
-import { getCardByName, getCardsByNames, getCardPrice, getCardImageUrl, isAnyLand, WUBRG } from '@/services/scryfall/client';
+import { getCardByName, getCardsByNames, getCardPrice, WUBRG } from '@/services/scryfall/client';
 import { CardPreviewModal } from '@/components/ui/CardPreviewModal';
 import { type CardAction } from '@/components/deck/DeckDisplay';
 import { useStore } from '@/store';
 import { useUserLists } from '@/hooks/useUserLists';
 import { buildThemeMembership } from '@/components/analyze/themeMembership';
 
-import { type DeckOptimizerProps, type TabKey, type LandSection, TABS, PACING_LABELS, ROLE_LABELS, HEALTH_GRADE_STYLES, BRACKET_COLORS, edhrecRankToInclusion } from './constants';
-import { CutRow, RecommendationRow } from './shared';
-import { DeckHealthStrip, AdjustPopoverContent } from './OverviewTab';
+import { type DeckOptimizerProps, type TabKey, type LandSection, TABS, PACING_LABELS, HEALTH_GRADE_STYLES, BRACKET_COLORS } from './constants';
+import { AdjustPopoverContent } from './OverviewTab';
+import { DashboardSummary } from './DashboardSummary';
+import { buildDashboardWarnings } from '@/services/deckBuilder/dashboardWarnings';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { RolesTabContent } from './RolesTab';
 import { LandsTabContent } from './LandsTab';
@@ -66,7 +66,6 @@ export function DeckOptimizer({
   const [error, setError] = useState<string | null>(null);
   const [addedCards, setAddedCards] = useState<Set<string>>(new Set());
   const [previewCard, setPreviewCard] = useState<ScryfallCard | null>(null);
-  const [commanderHover, setCommanderHover] = useState<{ card: ScryfallCard; rect: DOMRect } | null>(null);
   const cachedEdhrecDataRef = useRef<import('@/types').EDHRECCommanderData | null>(null);
   const prevCardKeyRef = useRef(currentCards.map(c => c.name).join('\0'));
   const [internalActiveTab, setInternalActiveTab] = useState<TabKey>('overview');
@@ -120,7 +119,7 @@ export function DeckOptimizer({
 
   // Theme detection state
   const [themeDetection, setThemeDetection] = useState<DetectedThemeResult | null>(null);
-  const [themeLoading, setThemeLoading] = useState(false);
+  const [, setThemeLoading] = useState(false);
   const [primaryThemeSlug, setPrimaryThemeSlug] = useState<string | null>(null);
   const [secondaryThemeSlug, setSecondaryThemeSlug] = useState<string | null>(null);
   const themeDataCacheRef = useRef<Map<string, import('@/types').EDHRECCommanderData>>(new Map());
@@ -230,14 +229,6 @@ export function DeckOptimizer({
       setActiveCurvePhases(new Set([analysis.curvePhases[0].phase]));
     }
   }, [analysis]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const totalRecCost = useMemo(() => {
-    if (!analysis) return 0;
-    return analysis.recommendations
-      .filter(r => !addedCards.has(r.name))
-      .reduce((sum, r) => sum + (r.price ? parseFloat(r.price) || 0 : 0), 0);
-  }, [analysis, addedCards]);
-
 
   /** Build inclusion map from EDHREC data, handling DFC front-face lookups.
    *  The EDHREC-derived portion is cached per data reference (it doesn't
@@ -952,12 +943,6 @@ export function DeckOptimizer({
     maybeboardNames: new Set(maybeboardNames || []),
   }), [userLists, customization.mustIncludeCards, customization.bannedCards, sideboardNames, maybeboardNames]);
 
-  // --- Cut candidates for over-target decks ---
-  const BASIC_LANDS = useMemo(() => new Set([
-    'Plains', 'Island', 'Swamp', 'Mountain', 'Forest',
-    'Snow-Covered Plains', 'Snow-Covered Island', 'Snow-Covered Swamp',
-    'Snow-Covered Mountain', 'Snow-Covered Forest', 'Wastes',
-  ]), []);
   const deckExcess = currentCards.length - deckSize;
 
   // True when the deck cards differ from what was analyzed — drives the
@@ -1018,76 +1003,6 @@ export function DeckOptimizer({
     if (deckTotalPrice >= 1000) return `$${(deckTotalPrice / 1000).toFixed(1)}k`;
     return `$${Math.round(deckTotalPrice)}`;
   }, [deckTotalPrice]);
-  const [removedCutCards, setRemovedCutCards] = useState<Set<string>>(new Set());
-  const [skippedCutCards, setSkippedCutCards] = useState<Set<string>>(new Set());
-  const [excludeLandsFromCuts, setExcludeLandsFromCuts] = useState(false);
-  const [showCutsView, setShowCutsView] = useState(true);
-  const toggleCutsView = useCallback((val: boolean) => {
-    const scrollY = window.scrollY;
-    setShowCutsView(val);
-    requestAnimationFrame(() => window.scrollTo({ top: scrollY }));
-  }, []);
-  const cutCandidates = useMemo(() => {
-    if (deckExcess <= 0) return [];
-    const inclusionMap = cardInclusionMap ?? {};
-    const dismissed = new Set([...removedCutCards, ...skippedCutCards]);
-    const candidates = currentCards
-      .filter(c => {
-        if (BASIC_LANDS.has(c.name) || c.name === commanderName || c.name === partnerCommanderName) return false;
-        if (menuProps.mustIncludeNames.has(c.name)) return false;
-        if (dismissed.has(c.name)) return false;
-        if (excludeLandsFromCuts && isAnyLand(c)) return false;
-        return true;
-      })
-      .map(c => {
-        // For lands, use the higher of commander-specific inclusion and global edhrec_rank
-        // so format staples (e.g. Urborg) aren't suggested as cuts for new/niche commanders.
-        // Treat 0 in the inclusion map as "not in this commander's pool" rather than
-        // "0% played" so the global edhrec_rank fallback kicks in — older decks were
-        // generated with 0 written for missing entries and would otherwise be pinned to 0%.
-        const isLand = isAnyLand(c);
-        const cmdInclusion = inclusionMap[c.name] || null;
-        const globalInclusion = edhrecRankToInclusion(c.edhrec_rank);
-        const inclusion = isLand
-          ? Math.max(cmdInclusion ?? 0, globalInclusion ?? 0) || null
-          : cmdInclusion ?? globalInclusion ?? null;
-        const role = c.deckRole || getCardRole(c.name);
-        return { card: c, inclusion, role, roleLabel: role ? (ROLE_LABELS[role as keyof typeof ROLE_LABELS] || role) : undefined } as AnalyzedCard;
-      })
-      .sort((a, b) => {
-        // Cards filling a role deficit are harder to cut — push them down
-        const aRole = a.card.deckRole || getCardRole(a.card.name);
-        const bRole = b.card.deckRole || getCardRole(b.card.name);
-        const aFillsDeficit = aRole && analysis?.roleDeficits.some(rd => rd.role === aRole && rd.deficit > 0);
-        const bFillsDeficit = bRole && analysis?.roleDeficits.some(rd => rd.role === bRole && rd.deficit > 0);
-        if (aFillsDeficit && !bFillsDeficit) return 1;
-        if (!aFillsDeficit && bFillsDeficit) return -1;
-        // Lower inclusion = better cut candidate
-        return (a.inclusion ?? 0) - (b.inclusion ?? 0);
-      });
-    // Ensure "other candidates" below the top box fills complete rows of 3
-    const otherCount = Math.ceil(Math.max(15 - deckExcess, 6) / 3) * 3;
-    return candidates.slice(0, deckExcess + otherCount);
-  }, [currentCards, deckSize, deckExcess, cardInclusionMap, commanderName, partnerCommanderName, BASIC_LANDS, analysis, menuProps.mustIncludeNames, excludeLandsFromCuts, removedCutCards, skippedCutCards]);
-
-  const handleRemoveCutCard = useCallback((card: ScryfallCard) => {
-    onRemoveCards?.([card.name]);
-    pushDeckHistory({ action: 'remove', cardName: card.name });
-    setRemovedCutCards(prev => new Set([...prev, card.name]));
-  }, [onRemoveCards, pushDeckHistory]);
-
-  const handleCutAll = useCallback(() => {
-    const toCut = cutCandidates.slice(0, deckExcess);
-    if (toCut.length === 0) return;
-    onRemoveCards?.(toCut.map(ac => ac.card.name));
-    for (const ac of toCut) pushDeckHistory({ action: 'remove', cardName: ac.card.name });
-    setRemovedCutCards(prev => new Set([...prev, ...toCut.map(ac => ac.card.name)]));
-  }, [cutCandidates, deckExcess, onRemoveCards, pushDeckHistory]);
-
-  const handleSkipCutCard = useCallback((card: ScryfallCard) => {
-    setSkippedCutCards(prev => new Set([...prev, card.name]));
-  }, []);
-
   const handleBasicLandAdd = useMemo(() => {
     const base = onAddBasicLandProp ?? (onAddCards ? (name: string) => onAddCards([name], 'deck') : undefined);
     if (!base) return undefined;
@@ -1167,6 +1082,23 @@ export function DeckOptimizer({
   }
 
   if (!analysis) return null;
+
+  // ═════════════════════════════════════════════════════════════════════
+  // Derived values for DashboardSummary
+  // ═════════════════════════════════════════════════════════════════════
+  const _findThemeInfo = (slug: string | null) => {
+    if (!slug) return null;
+    const match = themeDetection?.evaluatedThemes.find(t => t.theme.slug === slug);
+    return match ? { slug, name: match.theme.name } : null;
+  };
+  const dashboardThemeMembership = buildThemeMembership(
+    _findThemeInfo(primaryThemeSlug),
+    _findThemeInfo(secondaryThemeSlug),
+    themeDataCacheRef.current,
+  );
+  const dashboardPrimaryThemeData = primaryThemeSlug
+    ? (themeDataCacheRef.current.get(primaryThemeSlug) ?? null)
+    : null;
 
   // ═════════════════════════════════════════════════════════════════════
   // Dashboard Render
@@ -1388,250 +1320,47 @@ export function DeckOptimizer({
         ) : (<>
 
         {/* ── OVERVIEW TAB ── */}
-        {activeTab === 'overview' && (
-          <div className="space-y-3">
-            {commander && (
-              <div className="rounded-xl border border-border/40 bg-card/40 backdrop-blur-sm flex items-center gap-3 p-2.5">
-                <div
-                  className="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-muted/30 cursor-pointer"
-                  onMouseEnter={(e) => setCommanderHover({ card: commander, rect: (e.currentTarget as HTMLElement).getBoundingClientRect() })}
-                  onMouseLeave={() => setCommanderHover(null)}
-                >
-                  {(() => {
-                    const art = commander.image_uris?.art_crop
-                      ?? commander.card_faces?.[0]?.image_uris?.art_crop
-                      ?? getCardImageUrl(commander, 'normal');
-                    return art ? <img src={art} alt={commander.name} className="w-full h-full object-cover" /> : null;
-                  })()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-semibold truncate">
-                      {commander.name}
-                      {partnerCommander && (
-                        <span className="text-muted-foreground"> & {partnerCommander.name}</span>
-                      )}
-                    </p>
-                    {sourceLabel && (
-                      <span className="text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/15 text-primary">
-                        {sourceLabel}
-                      </span>
-                    )}
-                  </div>
-                  {commanderColorIdentity && commanderColorIdentity.length > 0 && (
-                    <div className="flex items-center gap-2 mt-1">
-                      <ColorIdentity colors={commanderColorIdentity} size="sm" />
-                    </div>
-                  )}
-                </div>
-                {onOpenInDeckView ? (
-                  <Button size="sm" variant="outline" onClick={onOpenInDeckView} className="shrink-0">
-                    <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-                    Open in deck view
-                  </Button>
-                ) : onSaveAsDeck ? (
-                  <Button size="sm" variant="outline" onClick={onSaveAsDeck} className="shrink-0">
-                    <Bookmark className="w-3.5 h-3.5 mr-1.5" />
-                    Save as deck
-                  </Button>
-                ) : null}
-              </div>
-            )}
-            <DeckHealthStrip
-              analysis={analysis}
-              onNavigate={setActiveTab}
-              onNavigateRole={setActiveRole}
-              deckExcess={deckExcess !== 0 ? deckExcess : undefined}
-              detection={themeDetection}
-              themeLoading={themeLoading}
-              allThemes={cachedEdhrecDataRef.current?.themes || []}
-              primaryThemeSlug={primaryThemeSlug}
-              secondaryThemeSlug={secondaryThemeSlug}
-              onThemeSelect={handleThemeSelect}
-              detectedPacing={detectedPacingRef.current ?? analysis.pacing}
-              userPacing={userPacing}
-              onPacingChange={handlePacingChange}
-              userLandTarget={userLandTarget}
-              onLandTargetChange={handleLandTargetChange}
-              deckSize={deckSize}
-              userDeckSize={userDeckSize}
-              onDeckSizeChange={handleDeckSizeChange}
-            />
-
-            {/* Optimize CTA */}
-            <div className="flex flex-col items-center gap-1.5 py-3">
-              <Button
-                onClick={() => setOptimizeView(true)}
-                className="btn-shimmer px-6 py-2 text-xs font-semibold gap-1.5"
-                size="sm"
-              >
-                <Wand2 className="w-3.5 h-3.5" />
-                Optimize Deck
-              </Button>
-              <p className="text-[11px] text-muted-foreground/60 leading-snug">
-                See all recommended swaps in one view
-              </p>
-            </div>
-
-            <div className="bg-card/60 border border-border/30 rounded-lg p-3">
-              {/* Cuts View */}
-              {deckExcess > 0 && cutCandidates.length > 0 && showCutsView ? (
-                <>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <Scissors className="w-3 h-3 text-red-400/70" />
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Quick Cuts
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">({cutCandidates.length})</span>
-                    <span className="ml-auto flex items-center gap-2">
-                      <span className="text-xs text-red-400/60">{deckExcess} over target</span>
-                      <div className="flex items-center border border-border/50 rounded-md overflow-hidden">
-                        <button
-                          onClick={() => toggleCutsView(true)}
-                          className="flex items-center gap-1 text-[10px] px-2 py-0.5 transition-colors bg-red-500/15 text-red-400 font-medium"
-                        >
-                          <Scissors className="w-2.5 h-2.5" />
-                          Cuts
-                        </button>
-                        <div className="w-px h-3 bg-border/50" />
-                        <button
-                          onClick={() => toggleCutsView(false)}
-                          className="flex items-center gap-1 text-[10px] px-2 py-0.5 transition-colors text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent/50"
-                        >
-                          <Sparkles className="w-2.5 h-2.5" />
-                          Suggestions
-                        </button>
-                      </div>
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 mb-1.5 ml-0.5">
-                    <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-muted-foreground cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={excludeLandsFromCuts}
-                        onChange={(e) => setExcludeLandsFromCuts(e.target.checked)}
-                        className="rounded border-border/50 w-3 h-3 accent-primary"
-                      />
-                      Exclude lands
-                    </label>
-                    {skippedCutCards.size > 0 && (
-                      <button
-                        onClick={() => setSkippedCutCards(new Set())}
-                        className="flex items-center gap-1 text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-                      >
-                        <RotateCcw className="w-2.5 h-2.5" />
-                        Reset {skippedCutCards.size} skipped
-                      </button>
-                    )}
-                  </div>
-                  {/* Top X cuts (where X = cards over target) in a highlighted box */}
-                  <div className="rounded-lg border border-red-500/25 bg-red-500/5 p-1.5 mb-2">
-                    <div className="flex items-center justify-between mb-1 px-1">
-                      <p className="text-[10px] font-medium text-red-400/80 uppercase tracking-wider">
-                        Cut these {Math.min(deckExcess, cutCandidates.length)} to hit {deckSize}
-                      </p>
-                      <button
-                        onClick={handleCutAll}
-                        className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded border border-red-500/30 text-red-400/80 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                      >
-                        <Scissors className="w-2.5 h-2.5" />
-                        Cut all
-                      </button>
-                    </div>
-                    <div className="grid sm:grid-cols-2 gap-x-2 gap-y-0.5">
-                      {cutCandidates.slice(0, deckExcess).map((ac, i) => (
-                        <CutRow
-                          key={ac.card.name}
-                          ac={ac}
-                          index={i}
-                          onRemove={handleRemoveCutCard}
-                          onSkip={handleSkipCutCard}
-                          onPreview={handlePreview}
-                          onCardAction={handleCardAction}
-                          menuProps={menuProps}
-                          cardInclusionMap={cardInclusionMap}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  {/* Remaining candidates below the divider */}
-                  {cutCandidates.length > deckExcess && (
-                    <>
-                      <div className="flex items-center gap-2 mb-1 px-1">
-                        <div className="flex-1 h-px bg-border/30" />
-                        <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Other candidates</span>
-                        <div className="flex-1 h-px bg-border/30" />
-                      </div>
-                      <div className="grid sm:grid-cols-2 gap-x-2 gap-y-0.5">
-                        {cutCandidates.slice(deckExcess).map((ac, i) => (
-                          <CutRow
-                            key={ac.card.name}
-                            ac={ac}
-                            index={i}
-                            onRemove={handleRemoveCutCard}
-                            onSkip={handleSkipCutCard}
-                            onPreview={handlePreview}
-                            onCardAction={handleCardAction}
-                            menuProps={menuProps}
-                            cardInclusionMap={cardInclusionMap}
-                          />
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </>
-              ) : (
-                /* Recommendations View */
-                <>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Recommended Cards
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">({analysis.recommendations.length})</span>
-                    <span className="ml-auto flex items-center gap-2">
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground/50">
-                        <ShoppingCart className="w-3 h-3" />
-                        ~${totalRecCost.toFixed(2)}
-                      </span>
-                      {deckExcess > 0 && cutCandidates.length > 0 && (
-                        <div className="flex items-center border border-border/50 rounded-md overflow-hidden">
-                          <button
-                            onClick={() => toggleCutsView(true)}
-                            className="flex items-center gap-1 text-[10px] px-2 py-0.5 transition-colors text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent/50"
-                          >
-                            <Scissors className="w-2.5 h-2.5" />
-                            Cuts
-                          </button>
-                          <div className="w-px h-3 bg-border/50" />
-                          <button
-                            onClick={() => toggleCutsView(false)}
-                            className="flex items-center gap-1 text-[10px] px-2 py-0.5 transition-colors bg-accent text-foreground font-medium"
-                          >
-                            <Sparkles className="w-2.5 h-2.5" />
-                            Suggestions
-                          </button>
-                        </div>
-                      )}
-                    </span>
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-x-2 gap-y-0.5">
-                    {analysis.recommendations.map((rec, i) => (
-                      <RecommendationRow
-                        key={rec.name}
-                        card={rec}
-                        rank={i}
-                        onAdd={handleAddCard}
-                        onPreview={handlePreview}
-                        added={addedCards.has(rec.name)}
-                        onCardAction={handleCardAction}
-                        menuProps={menuProps}
-                      />
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+        {activeTab === 'overview' && commander && (
+          <DashboardSummary
+            commander={commander}
+            partnerCommander={partnerCommander}
+            colorIdentity={commanderColorIdentity}
+            sourceLabel={sourceLabel ?? ''}
+            analysis={analysis}
+            cards={currentCards}
+            themeMembership={dashboardThemeMembership}
+            primaryThemeData={dashboardPrimaryThemeData}
+            planName={themeDetection?.strategyLabel ?? null}
+            sampleSize={cachedEdhrecDataRef.current?.stats?.numDecks ?? null}
+            warnings={buildDashboardWarnings({
+              analysis,
+              cards: currentCards,
+              deckTarget: deckSize,
+            })}
+            adjustContent={
+              themeDetection && cachedEdhrecDataRef.current?.themes ? (
+                <AdjustPopoverContent
+                  analysis={analysis}
+                  detection={themeDetection}
+                  allThemes={cachedEdhrecDataRef.current?.themes ?? []}
+                  primaryThemeSlug={primaryThemeSlug}
+                  secondaryThemeSlug={secondaryThemeSlug}
+                  onThemeSelect={handleThemeSelect}
+                  userLandTarget={userLandTarget}
+                  onLandTargetChange={handleLandTargetChange}
+                  deckSize={deckSize}
+                  userDeckSize={userDeckSize}
+                  onDeckSizeChange={handleDeckSizeChange}
+                  detectedPacing={detectedPacingRef.current ?? analysis.pacing}
+                  userPacing={userPacing}
+                  onPacingChange={handlePacingChange}
+                />
+              ) : undefined
+            }
+            onNavigate={setActiveTab}
+            onSaveAsDeck={onSaveAsDeck}
+            onOpenInDeckView={onOpenInDeckView}
+          />
         )}
 
         {/* ── ROLES TAB ── */}
@@ -1767,34 +1496,6 @@ export function DeckOptimizer({
       </div>
 
       <CardPreviewModal card={previewCard} onClose={() => setPreviewCard(null)} />
-
-      {commanderHover && (() => {
-        const PREVIEW_WIDTH = 256;
-        const GAP = 12;
-        const PAD = 8;
-        const vw = window.innerWidth;
-        const rightLeft = commanderHover.rect.right + GAP;
-        const leftLeft = commanderHover.rect.left - GAP - PREVIEW_WIDTH;
-        let left = rightLeft;
-        if (rightLeft + PREVIEW_WIDTH + PAD > vw && leftLeft >= PAD) left = leftLeft;
-        else if (rightLeft + PREVIEW_WIDTH + PAD > vw) left = Math.max(PAD, vw - PREVIEW_WIDTH - PAD);
-        const top = Math.min(
-          Math.max(8, commanderHover.rect.top + commanderHover.rect.height / 2 - 180),
-          window.innerHeight - 400,
-        );
-        const imgUrl = getCardImageUrl(commanderHover.card, 'normal');
-        return (
-          <div className="fixed z-[100] pointer-events-none hidden lg:block" style={{ left, top }}>
-            {imgUrl && (
-              <img
-                src={imgUrl}
-                alt={commanderHover.card.name}
-                className="w-64 rounded-lg shadow-2xl border border-border/50"
-              />
-            )}
-          </div>
-        );
-      })()}
     </div>
   );
 }
