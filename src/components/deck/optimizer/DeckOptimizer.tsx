@@ -29,6 +29,7 @@ import { CurveSummaryStrip, ManaCurveLineChart, CurveDetailPanel, type RoleGroup
 import { BracketTabContent } from './BracketTab';
 import { OptimizeView } from './OptimizeTab';
 import { CostTab } from './CostTab';
+import { CardFitTab } from './CardFitTab';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Main Component
@@ -1717,6 +1718,20 @@ export function DeckOptimizer({
             </div>
           );
         })()}
+
+        {/* ── CARD FIT TAB ── */}
+        {activeTab === 'cardFit' && analysis && (
+          <CardFitTab
+            misfits={analysis.misfits ?? []}
+            gapAnalysis={
+              useStore.getState().generatedDeck?.gapAnalysis ?? []
+            }
+            onPreview={name => handlePreview(name)}
+            onAddCard={onAddCards ? (name: string) => onAddCards([name], 'deck') : undefined}
+            onRemoveCard={onRemoveCards ? (card: ScryfallCard) => onRemoveCards([card.name]) : undefined}
+            sampleSize={cachedEdhrecDataRef.current?.stats?.numDecks ?? null}
+          />
+        )}
 
         {/* ── BRACKET TAB ── */}
         {activeTab === 'bracket' && (
