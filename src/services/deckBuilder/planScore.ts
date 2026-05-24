@@ -3,6 +3,8 @@ import type {
   ScryfallCard,
   EDHRECCommanderData,
   SubScore,
+  PlanScore,
+  SubScoreKey,
 } from '@/types';
 import type { ThemeMembership } from '@/components/analyze/themeMembership';
 import type { RoleBreakdown, CurvePhaseAnalysis } from './deckAnalyzer';
@@ -155,3 +157,50 @@ export function computeTempoSubscore(curvePhases: CurvePhaseAnalysis[]): SubScor
 // CMC_WEIGHTS kept for potential per-bin refinement; not used in the phase-level
 // version above. Leave in for the v2 enhancement (per-CMC-bin deviation).
 void CMC_WEIGHTS;
+
+const WEIGHTS: Record<SubScoreKey, number> = {
+  strategy: 0.30,
+  roles: 0.25,
+  tempo: 0.20,
+  cardFit: 0.25,
+};
+
+export interface ComposePlanScoreInputs {
+  strategy: SubScore;
+  roles: SubScore;
+  tempo: SubScore;
+  cardFit: SubScore;
+  planName?: string | null;
+  /** Sample size for byline. Pass null when unknown. */
+  sampleSize?: number | null;
+}
+
+export function composePlanScore(inputs: ComposePlanScoreInputs): PlanScore {
+  const subscores: Record<SubScoreKey, SubScore> = {
+    strategy: inputs.strategy,
+    roles: inputs.roles,
+    tempo: inputs.tempo,
+    cardFit: inputs.cardFit,
+  };
+
+  let weighted = 0;
+  let weightTotal = 0;
+  let limitedData = false;
+  for (const k of Object.keys(subscores) as SubScoreKey[]) {
+    const s = subscores[k];
+    if (s.partial) { limitedData = true; continue; }
+    weighted += s.value * WEIGHTS[k];
+    weightTotal += WEIGHTS[k];
+  }
+  const overall = Math.round(weightTotal > 0 ? weighted / weightTotal : 0);
+  const bandLabel = bandFor(overall);
+  const plan = inputs.planName ?? 'general-purpose';
+  const headline = inputs.planName
+    ? `Your ${plan} deck executes its plan at ${overall}%.`
+    : `Your deck scores ${overall}% on a general-purpose build.`;
+  const byline = inputs.sampleSize && inputs.sampleSize > 0
+    ? `Based on ${inputs.sampleSize.toLocaleString()} decklists.`
+    : 'Based on aggregated EDHREC data.';
+
+  return { overall, bandLabel, headline, byline, subscores, limitedData };
+}

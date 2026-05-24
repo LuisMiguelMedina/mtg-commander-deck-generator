@@ -1,9 +1,17 @@
-import type { ScryfallCard, EDHRECCommanderData, EDHRECCard, DetectedCombo } from '@/types';
+import type { ScryfallCard, EDHRECCommanderData, EDHRECCard, DetectedCombo, PlanScore, Misfit, GapAnalysisCard } from '@/types';
+import type { ThemeMembership } from '@/components/analyze/themeMembership';
 import { getCardRole, cardMatchesRole, getAllCardRoles, hasTag, getCardSubtype, isUtilityLand, isTapland, type RoleKey } from '@/services/tagger/client';
 import { getFrontFaceTypeLine, isMdfcLand, isChannelLand, getCachedCard, getCardImageUrl, CHANNEL_LANDS } from '@/services/scryfall/client';
 import { calculateCurvePercentages } from './curveUtils';
 import { detectPacing, type Pacing } from './themeDetector';
 import { PACING_CURVE_MULTIPLIERS, ROLE_LABELS } from './roleTargets';
+import {
+  computeStrategySubscore,
+  computeRolesSubscore,
+  computeTempoSubscore,
+  composePlanScore,
+} from './planScore';
+import { computeMisfits, computeCardFitSubscore } from './cardFit';
 
 export interface RoleDeficit {
   role: string;
@@ -204,6 +212,10 @@ export interface DeckAnalysis {
   curveGrade: GradeResult;
   pacing: Pacing;
   pacingLabel: string;
+  /** Plan Execution Score (data-driven dashboard hero). */
+  planScore?: PlanScore;
+  /** In-deck cards that don't fit the detected plan. */
+  misfits?: Misfit[];
 }
 
 /**
@@ -1581,6 +1593,16 @@ export interface AnalyzeDeckOptions {
   colorIdentity?: string[];
   overridePacing?: Pacing;
   overrideLandTarget?: number;
+  /** Theme membership for the active themes (Plan Score input). */
+  themeMembership?: ThemeMembership | null;
+  /** EDHREC payload for the primary detected theme (Plan Score input). */
+  primaryThemeData?: EDHRECCommanderData | null;
+  /** Detected plan display name, e.g. "+1/+1 Counters". */
+  planName?: string | null;
+  /** Per-card EDHREC synergy for in-deck cards. Optional. */
+  cardSynergyMap?: Record<string, number>;
+  /** Gap candidates (top EDHREC cards not in deck). Used for misfit replacements. */
+  gapCandidates?: GapAnalysisCard[];
 }
 
 export function analyzeDeck(opts: AnalyzeDeckOptions): DeckAnalysis {
@@ -2451,6 +2473,41 @@ export function analyzeDeck(opts: AnalyzeDeckOptions): DeckAnalysis {
     }
   }
 
+  // Plan Score computation (data-driven dashboard signal).
+  const themeMembership = opts.themeMembership ?? null;
+  const primaryThemeData = opts.primaryThemeData ?? null;
+  const planName = opts.planName ?? null;
+
+  const strategySub = computeStrategySubscore({
+    cards: opts.currentCards,
+    themeMembership,
+    primaryThemeData,
+    planName,
+  });
+  const rolesSub = computeRolesSubscore(roleBreakdowns);
+  const tempoSub = computeTempoSubscore(curvePhases);
+
+  const misfits = computeMisfits({
+    cards: opts.currentCards,
+    cardInclusionMap: opts.cardInclusionMap ?? {},
+    cardSynergyMap: opts.cardSynergyMap,
+    themeMembership,
+    gapCandidates: opts.gapCandidates,
+    commanderData: opts.edhrecData ?? null,
+  });
+  const gapCount = opts.gapCandidates?.length ?? 0;
+  const cardFitSub = computeCardFitSubscore(misfits, gapCount);
+
+  const planScore = composePlanScore({
+    strategy: strategySub,
+    roles: rolesSub,
+    tempo: tempoSub,
+    cardFit: cardFitSub,
+    planName,
+    // TODO: EDHRECCommanderData has no top-level sampleSize; using stats.numDecks as proxy.
+    sampleSize: opts.edhrecData?.stats?.numDecks ?? null,
+  });
+
   return {
     roleDeficits,
     curveAnalysis,
@@ -2473,5 +2530,7 @@ export function analyzeDeck(opts: AnalyzeDeckOptions): DeckAnalysis {
     curveGrade,
     pacing,
     pacingLabel,
+    planScore,
+    misfits,
   };
 }
