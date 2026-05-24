@@ -270,6 +270,60 @@ export interface GapAnalysisCard {
   roleLabel?: string;  // Display label (e.g. 'Ramp', 'Card Draw')
 }
 
+export type SubScoreKey = 'strategy' | 'roles' | 'tempo' | 'cardFit';
+
+export interface SubScore {
+  /** 0-100 */
+  value: number;
+  /** Short user-facing description shown on the dashboard tile. Must be data-grounded. */
+  surface: string;
+  /** Optional grade band label, e.g. "Healthy", "Thin", "Low". */
+  bandLabel?: string;
+  /** When true, the score is partial because data was missing. */
+  partial?: boolean;
+}
+
+export interface PlanScore {
+  /** 0-100 weighted composite of the four sub-scores. */
+  overall: number;
+  /** Grade band label for `overall`, e.g. "Well-built". */
+  bandLabel: string;
+  /** Hero copy. Cites the plan; format: "Your X deck executes its plan at Y%." */
+  headline: string;
+  /** Data-lineage byline. Format: "Based on N decklists." Omit number if unknown. */
+  byline: string;
+  /** Per-area sub-scores. */
+  subscores: Record<SubScoreKey, SubScore>;
+  /** True when EDHREC data was limited; sub-scores may have `partial: true`. */
+  limitedData: boolean;
+}
+
+export type WarningSeverity = 'info' | 'warn' | 'error';
+
+export interface DashboardWarning {
+  id: string;
+  severity: WarningSeverity;
+  /** Short user-facing copy with data citation. */
+  message: string;
+  /** Optional tab to navigate to when clicked. */
+  navigateTo?: 'roles' | 'lands' | 'curve' | 'cardFit' | 'bracket' | 'cost';
+}
+
+export interface MisfitReason {
+  /** Short label, e.g. "Low inclusion". */
+  label: string;
+  /** Citation text, e.g. "Plays in 2% of Skullbriar decks". */
+  detail: string;
+}
+
+export interface Misfit {
+  card: ScryfallCard;
+  /** Higher = worse fit. */
+  misfitScore: number;
+  reasons: MisfitReason[];
+  suggestedReplacement?: GapAnalysisCard;
+}
+
 /** Describes which data source was ultimately used for deck generation */
 export type DeckDataSource =
   | 'theme+bracket'   // Ideal: theme-specific data with bracket/power level
