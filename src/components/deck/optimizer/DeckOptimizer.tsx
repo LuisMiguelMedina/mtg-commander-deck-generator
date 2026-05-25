@@ -1441,7 +1441,8 @@ export function DeckOptimizer({
             })()}
             detectedCombos={useStore.getState().generatedDeck?.detectedCombos ?? []}
             deckTarget={deckSize}
-            onPreview={handlePreview}
+            roleBreakdowns={analysis.roleBreakdowns}
+            curvePhases={analysis.curvePhases}
           />
         )}
 
