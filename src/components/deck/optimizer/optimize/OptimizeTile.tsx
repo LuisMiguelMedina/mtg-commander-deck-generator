@@ -1,0 +1,106 @@
+import { Zap } from 'lucide-react';
+import type { OptimizeCard } from '@/services/deckBuilder/deckAnalyzer';
+import { scryfallImg, ROLE_BADGE_COLORS, ROLE_LABEL_ICONS } from '../constants';
+
+export type TileSide = 'remove' | 'add';
+
+interface OptimizeTileProps {
+  card: OptimizeCard;
+  side: TileSide;
+  checked: boolean;
+  active: boolean;  // is this tile's drill-down currently open
+  onClick: () => void;
+}
+
+const SIDE_CLASSES: Record<TileSide, {
+  border: string;
+  ring: string;
+  hover: string;
+}> = {
+  remove: {
+    border: 'border-red-500/30',
+    ring: 'ring-red-400/60',
+    hover: 'hover:border-red-400/60',
+  },
+  add: {
+    border: 'border-emerald-500/30',
+    ring: 'ring-emerald-400/60',
+    hover: 'hover:border-emerald-400/60',
+  },
+};
+
+export function OptimizeTile({ card, side, checked, active, onClick }: OptimizeTileProps) {
+  const sideCls = SIDE_CLASSES[side];
+  const imgUrl = card.imageUrl || scryfallImg(card.name, 'small');
+  const RoleIcon = card.roleLabel ? ROLE_LABEL_ICONS[card.roleLabel] : null;
+  const roleBadgeColor = card.roleLabel ? ROLE_BADGE_COLORS[card.roleLabel] : null;
+  const isComboEnabler = card.reasonCategory === 'combo-enabler';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group/tile relative block w-full text-left transition-all duration-200 rounded-lg overflow-visible ${
+        active ? `ring-2 ${sideCls.ring}` : ''
+      }`}
+      title={card.name}
+    >
+      <div
+        className={`relative rounded-lg overflow-hidden border ${sideCls.border} ${sideCls.hover} transition-all duration-200 ${
+          checked ? 'group-hover/tile:scale-[1.03]' : ''
+        }`}
+        style={{
+          filter: checked ? undefined : 'grayscale(0.6) brightness(0.7)',
+        }}
+      >
+        <img
+          src={imgUrl}
+          alt={card.name}
+          className="w-full aspect-[5/7] object-cover"
+          loading="lazy"
+          onError={(e) => { (e.target as HTMLImageElement).src = scryfallImg(card.name); }}
+        />
+
+        {!checked && (
+          <div
+            aria-hidden
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.10) 0 4px, transparent 4px 12px)',
+            }}
+          />
+        )}
+
+        {RoleIcon && roleBadgeColor && (
+          <span
+            className={`absolute top-1 left-1 inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-px rounded-full ${roleBadgeColor}`}
+            title={card.roleLabel}
+          >
+            <RoleIcon className="w-2.5 h-2.5" />
+          </span>
+        )}
+
+        {side === 'add' && isComboEnabler && (
+          <span
+            className="absolute top-1 right-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-violet-500/80 text-white"
+            title="Completes a combo"
+          >
+            <Zap className="w-3 h-3" />
+          </span>
+        )}
+
+        {!checked && (
+          <div className="absolute inset-x-0 bottom-1 flex justify-center opacity-0 group-hover/tile:opacity-100 transition-opacity">
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-black/70 text-white">
+              {side === 'remove' ? 'Re-keep' : 'Re-add'}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-1 text-[10px] text-center truncate text-foreground/80">
+        {card.name}
+      </div>
+    </button>
+  );
+}
