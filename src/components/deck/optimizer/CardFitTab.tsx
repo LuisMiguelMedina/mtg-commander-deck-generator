@@ -134,7 +134,6 @@ export function CardFitTab({
             onRemove={onRemoveCard}
             onSwap={(onAddCard && onRemoveCard) ? handleSwap : undefined}
             onSkip={next}
-            onNext={next}
             headerActions={viewToggle}
           />
           <div className="px-4">

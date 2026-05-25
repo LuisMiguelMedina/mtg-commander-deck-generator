@@ -14,7 +14,6 @@ interface CardFitHeroProps {
   onRemove?: (card: ScryfallCard) => void;
   onSwap?: (removeName: string, addName: string) => void;
   onSkip: () => void;
-  onNext: () => void;
   /** Optional control rendered in the hero's header rail (e.g. Misfits/Gaps toggle). */
   headerActions?: React.ReactNode;
 }
@@ -30,7 +29,7 @@ const REASON_ICON: Record<MisfitReasonKind, React.ComponentType<{ className?: st
 
 export function CardFitHero({
   misfit, index, total, sampleSize, fitImpact,
-  onPreview, onRemove, onSwap, onSkip, onNext, headerActions,
+  onPreview, onRemove, onSwap, onSkip, headerActions,
 }: CardFitHeroProps) {
   const colors = manaColorsFor(misfit.card);
   const imgUrl = getCardImageUrl(misfit.card, 'normal') ?? scryfallImg(misfit.card.name, 'normal');
@@ -279,13 +278,6 @@ export function CardFitHero({
             className="inline-flex items-center gap-1.5 text-violet-200/80 hover:text-violet-100 text-[12px] font-semibold"
           >
             <SkipForward className="w-3.5 h-3.5" /> Keep this card
-          </button>
-          <button
-            type="button"
-            onClick={onNext}
-            className="inline-flex items-center gap-1.5 text-violet-200 hover:text-white text-[12px] font-bold"
-          >
-            Next misfit <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
