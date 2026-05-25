@@ -5,7 +5,6 @@ import { SubScoreTile } from './dashboard/SubScoreTile';
 import { ConditionalWarnings } from './dashboard/ConditionalWarnings';
 import { StrategyDrillIn } from './dashboard/StrategyDrillIn';
 import { NextBestMove } from './dashboard/NextBestMove';
-import { HowThisDeckWins } from './dashboard/HowThisDeckWins';
 import type {
   ScryfallCard, EDHRECCommanderData, DashboardWarning, SubScoreKey, DetectedCombo,
 } from '@/types';
@@ -181,14 +180,6 @@ export function DashboardSummary(props: DashboardSummaryProps) {
         onNavigate={onNavigate}
       />
       <ConditionalWarnings warnings={warnings} onNavigate={onNavigate} />
-      <HowThisDeckWins
-        commander={commander}
-        partnerCommander={partnerCommander}
-        cards={cards}
-        detectedCombos={detectedCombos}
-        planName={planName}
-        gameChangerCount={cards.filter(c => c.isGameChanger).length}
-      />
     </div>
   );
 }
