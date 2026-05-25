@@ -52,10 +52,29 @@ export function CardFitTab({
     onFocusedMisfitChange(view === 'misfits' && current ? current.card.name : null);
   }, [current, view, onFocusedMisfitChange]);
 
-  const candidates = useMemo(
-    () => current ? getSwapCandidatesForCard(deck, current.card).slice(0, 6) : [],
-    [deck, current],
-  );
+  const candidates = useMemo<ScryfallCard[]>(() => {
+    if (!current) return [];
+    const fromDeck = getSwapCandidatesForCard(deck, current.card);
+    if (fromDeck.length > 0) return fromDeck.slice(0, 6);
+    // Fallback: synthesize candidates from gap analysis when the deck has no swap-candidate index.
+    const misfitRole = current.card.deckRole as RoleKey | undefined;
+    const misfitPrimaryType = current.card.type_line?.split('—')[0].trim().split(/\s+/).pop()?.toLowerCase();
+    const scored = gapAnalysis.map(g => {
+      let score = 0;
+      if (misfitRole && g.role === misfitRole) score += 2;
+      const gPrimaryType = g.typeLine?.split('—')[0].trim().split(/\s+/).pop()?.toLowerCase();
+      if (misfitPrimaryType && gPrimaryType === misfitPrimaryType) score += 1;
+      return { g, score };
+    });
+    scored.sort((a, b) => b.score - a.score || b.g.inclusion - a.g.inclusion);
+    return scored.slice(0, 6).map(({ g }) => ({
+      name: g.name,
+      type_line: g.typeLine,
+      image_uris: g.imageUrl ? { small: g.imageUrl, normal: g.imageUrl } : undefined,
+      deckRole: g.role as RoleKey | undefined,
+      cmc: g.cmc ?? 0,
+    } as ScryfallCard));
+  }, [deck, current, gapAnalysis]);
 
   // Reset selection whenever the focused misfit changes.
   useEffect(() => {
