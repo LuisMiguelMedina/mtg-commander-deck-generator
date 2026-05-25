@@ -26,7 +26,7 @@ export function SourceRow({
   onSaveAsDeck, onOpenInDeckView,
 }: SourceRowProps) {
   return (
-    <div className="flex items-center gap-3 pb-4 border-b border-border/30">
+    <div className="flex items-center gap-3 p-4 rounded-xl border border-border/30 bg-card/40">
       <img
         src={getCardImageUrl(commander, 'small') ?? ''}
         alt={commander.name}
