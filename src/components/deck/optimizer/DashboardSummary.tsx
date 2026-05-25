@@ -168,6 +168,7 @@ export function DashboardSummary(props: DashboardSummaryProps) {
           sampleSize={sampleSize}
         />
       )}
+      <ConditionalWarnings warnings={warnings} onNavigate={onNavigate} />
       <NextBestMove
         planScore={planScore}
         misfits={misfits}
@@ -179,7 +180,6 @@ export function DashboardSummary(props: DashboardSummaryProps) {
         commander={commander}
         onNavigate={onNavigate}
       />
-      <ConditionalWarnings warnings={warnings} onNavigate={onNavigate} />
     </div>
   );
 }
