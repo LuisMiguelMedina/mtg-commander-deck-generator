@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.4.0",
+    "notes": [
+      "The Card Fit tab is now the Optimize tab — see the whole tuning plan at a glance and apply it with one click.",
+      "Two-column view of cards worth cutting and cards worth adding, with card art front and center.",
+      "Click any card for a detailed reason, metrics, and swap candidates.",
+      "Combo analysis is built in: see complete and one-card-away combos, with quick links to add the missing piece."
+    ]
+  },
+  {
     "version": "1.3.2",
     "notes": [
       "Card Fit now shows a strip of swap candidates for each misfit — click any one to make it the focus.",
