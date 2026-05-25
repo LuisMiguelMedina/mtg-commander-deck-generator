@@ -156,11 +156,11 @@ export function DashboardSummary(props: DashboardSummaryProps) {
         suggestedLands={analysis.manaBase?.adjustedSuggestion}
         limitedData={planScore.limitedData}
       />
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 items-stretch">
         {(Object.keys(SUBSCORE_META) as SubScoreKey[]).map((key, i) => {
           const meta = SUBSCORE_META[key];
           return (
-            <div key={key} className="cascade-in" style={{ '--cascade-i': i } as React.CSSProperties}>
+            <div key={key} className="cascade-in flex" style={{ '--cascade-i': i } as React.CSSProperties}>
               <SubScoreTile
                 label={meta.label}
                 subscore={planScore.subscores[key]}

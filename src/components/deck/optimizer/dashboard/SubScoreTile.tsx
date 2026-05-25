@@ -28,7 +28,7 @@ export function SubScoreTile({ label, subscore, onClick, Icon, hint }: SubScoreT
       tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
       onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
-      className="group relative bg-card/40 border border-border/30 rounded-lg p-3 pb-6 text-left hover:bg-accent/30 hover:border-border/60 transition-all w-full cursor-pointer"
+      className="group relative bg-card/40 border border-border/30 rounded-lg p-3 pb-6 text-left hover:bg-accent/30 hover:border-border/60 transition-all w-full h-full cursor-pointer"
     >
       <span className={`absolute top-3 right-3 text-2xl font-black tabular-nums leading-none ${color}`}>
         {subscore.value}

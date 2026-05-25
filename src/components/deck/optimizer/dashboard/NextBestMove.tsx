@@ -1,9 +1,15 @@
 // src/components/deck/optimizer/dashboard/NextBestMove.tsx
 import { useState } from 'react';
 import { Lightbulb, ArrowRight, X } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { ScryfallCard, PlanScore, Misfit, GapAnalysisCard, DetectedCombo } from '@/types';
 import type { RoleBreakdown, CurvePhaseAnalysis } from '@/services/deckBuilder/deckAnalyzer';
-import type { TabKey } from '../constants';
+import { TABS, type TabKey } from '../constants';
+
+// Map TabKey → its sidebar icon (so suggestion nav buttons look like the tabs they open)
+const TAB_ICONS: Partial<Record<TabKey, LucideIcon>> = Object.fromEntries(
+  TABS.map(t => [t.key, t.icon]),
+);
 
 export interface NextBestMoveProps {
   planScore?: PlanScore;
@@ -346,12 +352,8 @@ function buildSuggestions(props: NextBestMoveProps): Suggestion[] {
 
 const MAX_SHOWN = 3;
 
-/** Numbered badge color per tier — communicates severity at the left. */
-const TIER_BADGE_STYLES = {
-  1: 'bg-amber-500/25 text-amber-300',
-  2: 'bg-violet-500/25 text-violet-300',
-  3: 'bg-sky-500/25 text-sky-300',
-} as const;
+/** Numbered badge — neutral violet for all rows (priority is just ordering). */
+const BADGE_STYLE = 'bg-violet-500/20 text-violet-200';
 
 export function NextBestMove(props: NextBestMoveProps) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
@@ -389,19 +391,26 @@ export function NextBestMove(props: NextBestMoveProps) {
                 className="flex-1 min-w-0 flex items-start gap-3 text-left px-2 py-2"
                 aria-label={`Open ${s.navLabel}`}
               >
-                <div className={`shrink-0 mt-0.5 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${TIER_BADGE_STYLES[s.tier]}`}>
+                <div className={`shrink-0 mt-0.5 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${BADGE_STYLE}`}>
                   {i + 1}
                 </div>
                 <div className="flex-1 min-w-0 text-sm text-foreground leading-relaxed">
                   {s.message}
                 </div>
-                <div className="shrink-0 self-center flex items-center text-xs text-violet-200 group-hover:text-violet-100 transition-colors whitespace-nowrap">
-                  {s.navLabel} <ArrowRight className="w-3 h-3 ml-0.5" />
-                </div>
+                {(() => {
+                  const TabIcon = TAB_ICONS[s.navigateTo!];
+                  return (
+                    <div className="shrink-0 self-center flex items-center gap-1.5 px-2 py-1 rounded-md border border-violet-500/40 bg-violet-500/10 text-xs text-violet-200 group-hover:bg-violet-500/20 group-hover:text-violet-100 group-hover:border-violet-500/60 transition-colors whitespace-nowrap">
+                      {TabIcon && <TabIcon className="w-3 h-3" />}
+                      <span>{s.navLabel}</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </div>
+                  );
+                })()}
               </button>
             ) : (
               <div className="flex-1 min-w-0 flex items-start gap-3 px-2 py-2">
-                <div className={`shrink-0 mt-0.5 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${TIER_BADGE_STYLES[s.tier]}`}>
+                <div className={`shrink-0 mt-0.5 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${BADGE_STYLE}`}>
                   {i + 1}
                 </div>
                 <div className="flex-1 min-w-0 text-sm text-foreground leading-relaxed">
