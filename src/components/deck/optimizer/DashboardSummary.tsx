@@ -179,6 +179,7 @@ export function DashboardSummary(props: DashboardSummaryProps) {
         gapAnalysis={gapAnalysis}
         roleBreakdowns={roleBreakdowns}
         curvePhases={curvePhases}
+        detectedCombos={detectedCombos}
         deckExcess={deckExcess}
         commander={commander}
         onNavigate={onNavigate}

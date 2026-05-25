@@ -1,6 +1,6 @@
 // src/components/deck/optimizer/dashboard/NextBestMove.tsx
-import { Lightbulb, ArrowRight } from 'lucide-react';
-import type { ScryfallCard, PlanScore, Misfit, GapAnalysisCard } from '@/types';
+import { Lightbulb, ArrowRight, AlertTriangle, Sparkles } from 'lucide-react';
+import type { ScryfallCard, PlanScore, Misfit, GapAnalysisCard, DetectedCombo } from '@/types';
 import type { RoleBreakdown, CurvePhaseAnalysis } from '@/services/deckBuilder/deckAnalyzer';
 import type { TabKey } from '../constants';
 
@@ -10,6 +10,7 @@ export interface NextBestMoveProps {
   gapAnalysis?: GapAnalysisCard[];
   roleBreakdowns?: RoleBreakdown[];
   curvePhases?: CurvePhaseAnalysis[];
+  detectedCombos?: DetectedCombo[];
   /** Number of cards over deck target (positive = over, negative = under). */
   deckExcess: number;
   commander: ScryfallCard;
@@ -17,177 +18,313 @@ export interface NextBestMoveProps {
 }
 
 interface Suggestion {
+  id: string;
+  tier: 1 | 2 | 3;
+  /** Card name recommended (used for dedup across suggestions). */
+  cardName?: string;
   message: React.ReactNode;
-  ctaLabel: string;
   navigateTo: TabKey;
+  navLabel: string;
 }
 
-function buildSuggestion(props: NextBestMoveProps): Suggestion | null {
-  const { planScore, misfits, gapAnalysis, roleBreakdowns, curvePhases, deckExcess } = props;
-  if (!planScore) return null;
+function buildSuggestions(props: NextBestMoveProps): Suggestion[] {
+  const { planScore, misfits, gapAnalysis, roleBreakdowns, curvePhases, detectedCombos, deckExcess } = props;
+  if (!planScore) return [];
 
-  // Priority 1: over-target deck with at least one misfit → trim the misfit
+  const candidates: Suggestion[] = [];
+
+  // ── Tier 1: Critical structural issues ──────────────────────────────
+
+  // trim-over-target
   if (deckExcess > 0 && misfits && misfits.length > 0) {
     const worst = misfits[0];
     const replacement = worst.suggestedReplacement;
-    return {
+    candidates.push({
+      id: `trim-${worst.card.name}`,
+      tier: 1,
+      cardName: worst.card.name,
       message: (
         <>
-          You're <strong>{deckExcess}</strong> over target. Start by trimming{' '}
-          <strong className="text-rose-300">{worst.card.name}</strong>
+          Trim <strong className="text-rose-300">{worst.card.name}</strong> — you're{' '}
+          <strong>{deckExcess}</strong> card{deckExcess !== 1 ? 's' : ''} over target
           {replacement && (
-            <> — consider swapping in <strong className="text-violet-300">{replacement.name}</strong> ({Math.round(replacement.inclusion)}% inclusion).</>
+            <>. Consider swapping in <strong className="text-violet-300">{replacement.name}</strong> ({Math.round(replacement.inclusion)}% of decks)</>
           )}
-          {!replacement && <>.</>}
+          {!replacement && <>.{' '}</>}
         </>
       ),
-      ctaLabel: 'Review Card Fit',
       navigateTo: 'cardFit',
-    };
+      navLabel: 'Card Fit',
+    });
   }
 
-  // Priority 2: lowest non-partial sub-score, with area-specific suggestion
+  // fill-under-target
+  if (deckExcess < 0 && gapAnalysis && gapAnalysis.length > 0) {
+    const topGap = gapAnalysis[0];
+    const abs = Math.abs(deckExcess);
+    candidates.push({
+      id: `fill-${topGap.name}`,
+      tier: 1,
+      cardName: topGap.name,
+      message: (
+        <>
+          Add <strong className="text-violet-300">{topGap.name}</strong> — you're{' '}
+          <strong>{abs}</strong> card{abs !== 1 ? 's' : ''} under target, and this one's in{' '}
+          {Math.round(topGap.inclusion)}% of decks.
+        </>
+      ),
+      navigateTo: 'cardFit',
+      navLabel: 'Card Fit',
+    });
+  }
+
+  // ── Tier 2: Quality — sub-score weak areas ───────────────────────────
+
   type SubKey = 'strategy' | 'roles' | 'tempo' | 'cardFit';
-  const order: SubKey[] = ['strategy', 'roles', 'tempo', 'cardFit'];
-  let weakest: SubKey | null = null;
-  let weakestValue = 101;
-  for (const k of order) {
+  const subOrder: SubKey[] = ['cardFit', 'roles', 'tempo', 'strategy'];
+
+  // Collect sub-scores below 75 (non-partial), sorted worst-first
+  const weakSubs: { key: SubKey; value: number }[] = [];
+  for (const k of subOrder) {
     const s = planScore.subscores[k];
-    if (!s.partial && s.value < weakestValue) {
-      weakest = k;
-      weakestValue = s.value;
+    if (!s.partial && s.value < 75) {
+      weakSubs.push({ key: k, value: s.value });
     }
   }
+  weakSubs.sort((a, b) => a.value - b.value);
 
-  // If all sub-scores are healthy (>= 85), no critical move
-  if (weakest === null || weakestValue >= 85) return null;
+  // Track suggested card names to avoid cross-suggestion dupes
+  const suggestedCards = new Set<string>(candidates.map(c => c.cardName).filter(Boolean) as string[]);
 
-  if (weakest === 'cardFit') {
-    if (misfits && misfits.length > 0) {
-      const worst = misfits[0];
-      const replacement = worst.suggestedReplacement;
-      return {
-        message: (
-          <>
-            Card Fit is your weakest area. <strong className="text-rose-300">{worst.card.name}</strong> doesn't fit your plan
-            {replacement && <> — consider <strong className="text-violet-300">{replacement.name}</strong> ({Math.round(replacement.inclusion)}% inclusion) instead</>}.
-          </>
-        ),
-        ctaLabel: 'Review Card Fit',
-        navigateTo: 'cardFit',
-      };
-    }
-    if (gapAnalysis && gapAnalysis.length > 0) {
-      const top = gapAnalysis[0];
-      return {
-        message: (
-          <>
-            Card Fit is your weakest area. Try adding <strong className="text-violet-300">{top.name}</strong> — played in {Math.round(top.inclusion)}% of decks for this commander.
-          </>
-        ),
-        ctaLabel: 'See gaps',
-        navigateTo: 'cardFit',
-      };
-    }
-  }
-
-  if (weakest === 'roles' && roleBreakdowns) {
-    // Find role with lowest current/target ratio
-    let worstRole: RoleBreakdown | null = null;
-    let worstRatio = Infinity;
-    for (const rb of roleBreakdowns) {
-      const target = rb.target || 1;
-      const ratio = rb.current / target;
-      if (ratio < worstRatio) {
-        worstRatio = ratio;
-        worstRole = rb;
+  for (const { key: weakest } of weakSubs) {
+    if (weakest === 'cardFit') {
+      // Only generate if not already covered by tier-1 trim/fill suggestions
+      const alreadyCovered = candidates.some(c => c.navigateTo === 'cardFit' && c.tier === 1);
+      if (!alreadyCovered) {
+        if (misfits && misfits.length > 0) {
+          const worst = misfits[0];
+          const replacement = worst.suggestedReplacement;
+          if (!suggestedCards.has(worst.card.name)) {
+            candidates.push({
+              id: `cardfit-trim-${worst.card.name}`,
+              tier: 2,
+              cardName: worst.card.name,
+              message: (
+                <>
+                  Card Fit is weak — <strong className="text-rose-300">{worst.card.name}</strong> doesn't fit your plan
+                  {replacement && !suggestedCards.has(replacement.name) && (
+                    <>. Try <strong className="text-violet-300">{replacement.name}</strong> ({Math.round(replacement.inclusion)}% of decks) instead</>
+                  )}
+                  .
+                </>
+              ),
+              navigateTo: 'cardFit',
+              navLabel: 'Card Fit',
+            });
+            suggestedCards.add(worst.card.name);
+          }
+        } else if (gapAnalysis && gapAnalysis.length > 0) {
+          const top = gapAnalysis.find(g => !suggestedCards.has(g.name));
+          if (top) {
+            candidates.push({
+              id: `cardfit-gap-${top.name}`,
+              tier: 2,
+              cardName: top.name,
+              message: (
+                <>
+                  Card Fit is weak — try adding <strong className="text-violet-300">{top.name}</strong>, played in {Math.round(top.inclusion)}% of decks like this.
+                </>
+              ),
+              navigateTo: 'cardFit',
+              navLabel: 'Card Fit',
+            });
+            suggestedCards.add(top.name);
+          }
+        }
       }
     }
-    if (worstRole) {
-      const deficit = Math.max(0, worstRole.target - worstRole.current);
-      const sameRoleGap = gapAnalysis?.find(g => g.role === worstRole!.role);
-      return {
-        message: (
-          <>
-            Roles is your weakest area — light on <strong className="text-amber-300">{worstRole.label}</strong> ({worstRole.current} of {worstRole.target}{deficit > 0 ? `, ${deficit} short` : ''})
-            {sameRoleGap && <>. Try <strong className="text-violet-300">{sameRoleGap.name}</strong> ({Math.round(sameRoleGap.inclusion)}% inclusion)</>}.
-          </>
-        ),
-        ctaLabel: 'Open Roles',
-        navigateTo: 'roles',
-      };
-    }
-  }
 
-  if (weakest === 'tempo' && curvePhases) {
-    // Find weakest curve phase
-    let worstPhase: CurvePhaseAnalysis | null = null;
-    let worstRatio = Infinity;
-    for (const phase of curvePhases) {
-      const target = phase.target || 1;
-      const ratio = phase.current / target;
-      if (ratio < worstRatio) {
-        worstRatio = ratio;
-        worstPhase = phase;
+    if (weakest === 'roles' && roleBreakdowns) {
+      // Find role with lowest current/target ratio and a deficit
+      let worstRole: RoleBreakdown | null = null;
+      let worstRatio = Infinity;
+      for (const rb of roleBreakdowns) {
+        const deficit = rb.target - rb.current;
+        if (deficit <= 0) continue;
+        const target = rb.target || 1;
+        const ratio = rb.current / target;
+        if (ratio < worstRatio) {
+          worstRatio = ratio;
+          worstRole = rb;
+        }
+      }
+      if (worstRole) {
+        const sameRoleGap = gapAnalysis?.find(g => g.role === worstRole!.role && !suggestedCards.has(g.name));
+        candidates.push({
+          id: `role-${worstRole.role}`,
+          tier: 2,
+          cardName: sameRoleGap?.name,
+          message: (
+            <>
+              Light on <strong className="text-foreground">{worstRole.label}</strong> ({worstRole.current} of {worstRole.target})
+              {sameRoleGap
+                ? <>. Try <strong className="text-violet-300">{sameRoleGap.name}</strong> ({Math.round(sameRoleGap.inclusion)}% inclusion).</>
+                : <> — add more {worstRole.label.toLowerCase()} pieces.</>
+              }
+            </>
+          ),
+          navigateTo: 'roles',
+          navLabel: 'Roles',
+        });
+        if (sameRoleGap) suggestedCards.add(sameRoleGap.name);
       }
     }
-    if (worstPhase) {
-      const deficit = Math.max(0, worstPhase.target - worstPhase.current);
-      return {
-        message: (
-          <>
-            Tempo is your weakest area — the <strong className="text-sky-300">{worstPhase.phase} game</strong> is light ({worstPhase.current} cards, target {worstPhase.target}{deficit > 0 ? `, ${deficit} short` : ''}).
-          </>
-        ),
-        ctaLabel: 'Open Tempo',
-        navigateTo: 'curve',
-      };
+
+    if (weakest === 'tempo' && curvePhases) {
+      // Find weakest curve phase by current/target ratio
+      let worstPhase: CurvePhaseAnalysis | null = null;
+      let worstRatio = Infinity;
+      for (const phase of curvePhases) {
+        const target = phase.target || 1;
+        const ratio = phase.current / target;
+        if (ratio < worstRatio) {
+          worstRatio = ratio;
+          worstPhase = phase;
+        }
+      }
+      if (worstPhase) {
+        const deficit = Math.max(0, worstPhase.target - worstPhase.current);
+        const [minCmc, maxCmc] = worstPhase.cmcRange;
+        // Try to find a gap card in the weak phase's CMC range
+        const phaseGap = gapAnalysis?.find(
+          g => g.cmc != null && g.cmc >= minCmc && g.cmc <= maxCmc && !suggestedCards.has(g.name)
+        );
+        candidates.push({
+          id: `tempo-${worstPhase.phase}`,
+          tier: 2,
+          cardName: phaseGap?.name,
+          message: (
+            <>
+              <strong className="text-sky-300">{worstPhase.label}</strong> is light ({worstPhase.current} cards, target {worstPhase.target}{deficit > 0 ? `, ${deficit} short` : ''})
+              {phaseGap
+                ? <>. <strong className="text-violet-300">{phaseGap.name}</strong> (CMC {phaseGap.cmc}) fits this window.</>
+                : <>. Look for cards in the CMC {minCmc}–{maxCmc} range.</>
+              }
+            </>
+          ),
+          navigateTo: 'curve',
+          navLabel: 'Tempo',
+        });
+        if (phaseGap) suggestedCards.add(phaseGap.name);
+      }
+    }
+
+    if (weakest === 'strategy') {
+      // Highest-synergy gap card not yet suggested
+      const themeGap = gapAnalysis?.find(g => g.synergy > 0 && !suggestedCards.has(g.name));
+      if (themeGap) {
+        candidates.push({
+          id: `strategy-${themeGap.name}`,
+          tier: 2,
+          cardName: themeGap.name,
+          message: (
+            <>
+              Strategy is thin — <strong className="text-violet-300">{themeGap.name}</strong> would help (synergy +{themeGap.synergy.toFixed(2)}, played in {Math.round(themeGap.inclusion)}% of builds).
+            </>
+          ),
+          navigateTo: 'cardFit',
+          navLabel: 'Card Fit',
+        });
+        suggestedCards.add(themeGap.name);
+      }
     }
   }
 
-  if (weakest === 'strategy') {
-    // Suggest a high-synergy gap card
-    const themeGap = gapAnalysis?.find(g => g.synergy > 0);
-    if (themeGap) {
-      return {
-        message: (
-          <>
-            Strategy is your weakest area — consider adding <strong className="text-violet-300">{themeGap.name}</strong> (synergy +{themeGap.synergy.toFixed(2)}, played in {Math.round(themeGap.inclusion)}% of builds).
-          </>
-        ),
-        ctaLabel: 'See gaps',
-        navigateTo: 'cardFit',
-      };
+  // ── Tier 3: Polish — near-miss combos ───────────────────────────────
+
+  if (detectedCombos) {
+    const nearMiss = detectedCombos.find(c => !c.isComplete && c.missingCards.length === 1);
+    if (nearMiss) {
+      const missing = nearMiss.missingCards[0];
+      const result = nearMiss.results[0] ?? 'this combo';
+      if (!suggestedCards.has(missing)) {
+        candidates.push({
+          id: `combo-${nearMiss.comboId}`,
+          tier: 3,
+          cardName: missing,
+          message: (
+            <>
+              Complete the <strong className="text-foreground">{result}</strong> combo — you're 1 card away (<strong className="text-violet-300">{missing}</strong>).
+            </>
+          ),
+          navigateTo: 'cardFit',
+          navLabel: 'Card Fit',
+        });
+        suggestedCards.add(missing);
+      }
     }
   }
 
-  return null;
+  // ── Dedup by id, sort by tier (stable), take top 3 ──────────────────
+  const seenIds = new Set<string>();
+  const deduped = candidates.filter(c => {
+    if (seenIds.has(c.id)) return false;
+    seenIds.add(c.id);
+    return true;
+  });
+  deduped.sort((a, b) => a.tier - b.tier);
+  return deduped.slice(0, 3);
 }
 
+const TIER_ICONS = {
+  1: AlertTriangle,
+  2: Lightbulb,
+  3: Sparkles,
+} as const;
+
+const TIER_ICON_COLORS = {
+  1: 'text-amber-400',
+  2: 'text-violet-300',
+  3: 'text-sky-400',
+} as const;
+
 export function NextBestMove(props: NextBestMoveProps) {
-  const suggestion = buildSuggestion(props);
-  if (!suggestion) return null;
+  const suggestions = buildSuggestions(props);
+  if (suggestions.length === 0) return null;
 
   return (
-    <button
-      type="button"
-      onClick={() => props.onNavigate(suggestion.navigateTo)}
-      className="group relative w-full text-left rounded-xl border border-violet-500/40 bg-gradient-to-br from-violet-500/10 via-violet-500/5 to-transparent p-4 hover:border-violet-500/60 hover:bg-violet-500/10 transition-all"
-    >
-      <div className="flex items-start gap-3">
-        <div className="shrink-0 mt-0.5 p-1.5 rounded-md bg-violet-500/20 text-violet-300">
-          <Lightbulb className="w-4 h-4" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-[10px] uppercase tracking-wider font-semibold text-violet-300/80 mb-1">
-            Try this first
-          </div>
-          <p className="text-sm text-foreground/95 leading-relaxed">{suggestion.message}</p>
-        </div>
-        <div className="shrink-0 self-center flex items-center text-xs text-violet-300/80 group-hover:text-violet-200 transition-colors">
-          {suggestion.ctaLabel} <ArrowRight className="w-3 h-3 ml-1" />
-        </div>
+    <div className="rounded-xl border border-violet-500/40 bg-gradient-to-br from-violet-500/10 via-violet-500/5 to-transparent p-4">
+      <div className="flex items-center gap-1.5 mb-3">
+        <Lightbulb className="w-3.5 h-3.5 text-violet-300" />
+        <span className="text-[10px] uppercase tracking-wider font-semibold text-violet-300/80">
+          Suggested next steps
+        </span>
       </div>
-    </button>
+      <div className="space-y-1.5">
+        {suggestions.map((s, i) => {
+          const Icon = TIER_ICONS[s.tier];
+          const iconColor = TIER_ICON_COLORS[s.tier];
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => props.onNavigate(s.navigateTo)}
+              className="group w-full flex items-start gap-3 text-left p-2 -mx-2 rounded-md hover:bg-violet-500/10 transition-colors"
+            >
+              <div className="shrink-0 mt-0.5 w-5 h-5 rounded-full bg-violet-500/20 text-violet-300 text-[10px] font-bold flex items-center justify-center">
+                {i + 1}
+              </div>
+              <div className="flex-1 min-w-0 text-sm text-foreground/95 leading-relaxed">
+                {s.message}
+              </div>
+              <div className={`shrink-0 self-center flex items-center gap-1 text-[11px] text-violet-300/80 group-hover:text-violet-200 transition-colors`}>
+                <Icon className={`w-3 h-3 ${iconColor}`} />
+                {s.navLabel} <ArrowRight className="w-3 h-3 ml-0.5" />
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
