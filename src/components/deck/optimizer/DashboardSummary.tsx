@@ -5,8 +5,7 @@ import { SubScoreTile } from './dashboard/SubScoreTile';
 import { ConditionalWarnings } from './dashboard/ConditionalWarnings';
 import { StrategyDrillIn } from './dashboard/StrategyDrillIn';
 import { NextBestMove } from './dashboard/NextBestMove';
-import { DeckShape } from './dashboard/DeckShape';
-import { CombosPanel } from './dashboard/CombosPanel';
+import { HowThisDeckWins } from './dashboard/HowThisDeckWins';
 import type {
   ScryfallCard, EDHRECCommanderData, DashboardWarning, SubScoreKey, DetectedCombo,
 } from '@/types';
@@ -34,11 +33,8 @@ export interface DashboardSummaryProps {
   onNavigate: (tab: TabKey) => void;
   onSaveAsDeck?: () => void;
   onOpenInDeckView?: () => void;
-  // New panel props
+  // Panel props
   cardSynergyMap?: Record<string, number>;
-  roleCounts?: Record<string, number>;
-  roleTargets?: Record<string, number>;
-  edhrecAvgCmc?: number | null;
   detectedCombos?: DetectedCombo[];
   deckTarget?: number;
   roleBreakdowns?: RoleBreakdown[];
@@ -62,7 +58,7 @@ export function DashboardSummary(props: DashboardSummaryProps) {
     analysis, cards, themeMembership, primaryThemeData, planName,
     sampleSize, warnings, adjustContent, onNavigate,
     onSaveAsDeck, onOpenInDeckView,
-    cardSynergyMap, roleCounts, roleTargets, edhrecAvgCmc,
+    cardSynergyMap,
     detectedCombos, deckTarget,
     roleBreakdowns, curvePhases,
   } = props;
@@ -185,20 +181,14 @@ export function DashboardSummary(props: DashboardSummaryProps) {
         onNavigate={onNavigate}
       />
       <ConditionalWarnings warnings={warnings} onNavigate={onNavigate} />
-      {roleCounts && roleTargets && deckTarget != null && (
-        <DeckShape
-          cards={cards}
-          deckTarget={deckTarget}
-          roleCounts={roleCounts}
-          roleTargets={roleTargets}
-          edhrecAvgCmc={edhrecAvgCmc}
-          commanderName={commander.name}
-          sampleSize={sampleSize}
-        />
-      )}
-      {detectedCombos && detectedCombos.length > 0 && (
-        <CombosPanel detectedCombos={detectedCombos} />
-      )}
+      <HowThisDeckWins
+        commander={commander}
+        partnerCommander={partnerCommander}
+        cards={cards}
+        detectedCombos={detectedCombos}
+        planName={planName}
+        gameChangerCount={cards.filter(c => c.isGameChanger).length}
+      />
     </div>
   );
 }
