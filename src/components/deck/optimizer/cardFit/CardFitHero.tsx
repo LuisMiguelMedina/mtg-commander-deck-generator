@@ -140,7 +140,7 @@ export function CardFitHero({
           <div className="pt-0.5 min-w-0">
             <div className="inline-flex items-center gap-1.5 text-[11px] text-rose-300 uppercase tracking-[0.22em] font-bold">
               <Trophy className="w-3 h-3" />
-              Worst offender
+              Hardest to defend
             </div>
             <h1
               className="text-[40px] font-extrabold text-white leading-[1.02] mt-1 mb-1.5 break-words"
@@ -241,49 +241,6 @@ export function CardFitHero({
           zIndex: 5,
         }}
       >
-        {roleProgress && activeReplacement && (() => {
-          const { role, current: cur, target, sameRole } = roleProgress;
-          const roleLabel = ROLE_LABEL[role];
-          const atOrAbove = cur >= target;
-          let copy: string;
-          if (sameRole) {
-            copy = inclusionDelta != null && inclusionDelta > 0
-              ? `Same ${roleLabel} slot — but played in ${inclusionDelta.toFixed(0)}% more decklists.`
-              : `Same ${roleLabel} slot.`;
-          } else if (atOrAbove) {
-            copy = `Already at ${cur}/${target} ${roleLabel} — this is a depth pick, not a gap fill.`;
-          } else {
-            copy = `+1 toward your ${target} ${roleLabel} pieces — currently at ${cur}/${target}.`;
-          }
-          return (
-            <div className="flex items-center gap-2 mb-3 text-[12px] text-violet-200/85">
-              <Target className="w-3.5 h-3.5 text-emerald-300" />
-              <span>{copy}</span>
-            </div>
-          );
-        })()}
-
-        {!roleProgress && activeReplacement && !activeReplacement.deckRole && (
-          <div className="flex items-center gap-2 mb-3 text-[12px] text-violet-200/85">
-            <Target className="w-3.5 h-3.5 text-violet-300/70" />
-            <span>No tagged role — swap improves synergy/inclusion, not role balance.</span>
-          </div>
-        )}
-
-        {activeReplacement && onSwap && (
-          <button
-            type="button"
-            onClick={() => onSwap(misfit.card.name, activeReplacement.name)}
-            className="w-full inline-flex items-center justify-center gap-2 text-white text-sm font-bold px-5 py-2.5 rounded-md mb-3"
-            style={{
-              background: 'linear-gradient(135deg,#10b981,#059669)',
-              boxShadow: '0 6px 18px rgba(16,185,129,0.55)',
-            }}
-          >
-            Swap in {activeReplacement.name} <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        )}
-
         <CardFitReplacementStrip
           candidates={candidates}
           activeName={activeReplacement?.name ?? null}
@@ -292,7 +249,52 @@ export function CardFitHero({
           onPreview={onPreview}
         />
 
-        <div className="flex items-center justify-end gap-3 mt-4">
+        {activeReplacement && (() => {
+          let copy: string | null = null;
+          if (roleProgress) {
+            const { role, current: cur, target, sameRole } = roleProgress;
+            const roleLabel = ROLE_LABEL[role];
+            if (sameRole) {
+              copy = inclusionDelta != null && inclusionDelta > 0
+                ? `Same ${roleLabel} slot — but played in ${inclusionDelta.toFixed(0)}% more decklists.`
+                : `Same ${roleLabel} slot.`;
+            } else if (cur >= target) {
+              copy = `Already at ${cur}/${target} ${roleLabel} — this is a depth pick, not a gap fill.`;
+            } else {
+              copy = `+1 toward your ${target} ${roleLabel} pieces — currently at ${cur}/${target}.`;
+            }
+          } else if (!activeReplacement.deckRole) {
+            if (activeInclusion != null) {
+              copy = inclusionDelta != null && inclusionDelta > 0
+                ? `Played in ${activeInclusion.toFixed(0)}% of decklists for this commander — that's +${inclusionDelta.toFixed(0)}% over the card you'd remove.`
+                : `Played in ${activeInclusion.toFixed(0)}% of decklists for this commander.`;
+            } else {
+              copy = 'A more on-theme upgrade — swap improves synergy, not role balance.';
+            }
+          }
+          if (!copy) return null;
+          return (
+            <div className="flex items-center gap-2 mt-3 text-[12px] text-violet-200/85">
+              <Target className="w-3.5 h-3.5 text-emerald-300" />
+              <span>{copy}</span>
+            </div>
+          );
+        })()}
+
+        <div className="flex items-center justify-end gap-3 mt-4 flex-wrap">
+          {activeReplacement && onSwap && (
+            <button
+              type="button"
+              onClick={() => onSwap(misfit.card.name, activeReplacement.name)}
+              className="inline-flex items-center gap-2 text-white text-[13px] font-bold px-4 py-2 rounded-md mr-auto"
+              style={{
+                background: 'linear-gradient(135deg,#10b981,#059669)',
+                boxShadow: '0 6px 18px rgba(16,185,129,0.45)',
+              }}
+            >
+              Swap in {activeReplacement.name} <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
           <button
             type="button"
             onClick={onSkip}

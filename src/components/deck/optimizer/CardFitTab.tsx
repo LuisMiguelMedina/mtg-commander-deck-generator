@@ -76,6 +76,16 @@ export function CardFitTab({
     } as ScryfallCard));
   }, [deck, current, gapAnalysis]);
 
+  // Merge gap-analysis inclusion into the inclusion map so synthesized candidates
+  // (which aren't in deck.cardInclusionMap) still show their EDHREC inclusion %.
+  const mergedInclusionMap = useMemo(() => {
+    const map: Record<string, number> = { ...cardInclusionMap };
+    for (const g of gapAnalysis) {
+      if (map[g.name] == null) map[g.name] = g.inclusion;
+    }
+    return map;
+  }, [cardInclusionMap, gapAnalysis]);
+
   // Reset selection whenever the focused misfit changes.
   useEffect(() => {
     setActiveReplacementName(null);
@@ -199,7 +209,7 @@ export function CardFitTab({
           candidates={candidates}
           activeReplacement={activeReplacement}
           onSelectReplacement={setActiveReplacementName}
-          cardInclusionMap={cardInclusionMap}
+          cardInclusionMap={mergedInclusionMap}
           roleProgress={roleProgress}
         >
           <CardFitFilmstrip
