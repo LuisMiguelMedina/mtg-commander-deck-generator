@@ -1,7 +1,5 @@
-import { useState } from 'react';
-import { ArrowRight, X } from 'lucide-react';
+import { ArrowRight, ChevronUp } from 'lucide-react';
 import type { Misfit, ScryfallCard } from '@/types';
-import { Drawer } from '@/components/ui/drawer';
 import { getCardImageUrl } from '@/services/scryfall/client';
 import { scryfallImg } from '../constants';
 
@@ -17,31 +15,32 @@ interface CardFitFullListProps {
 export function CardFitFullList({
   open, onClose, misfits, onPreview, onRemove, onAddReplacement,
 }: CardFitFullListProps) {
-  const [position, setPosition] = useState<'bottom' | 'left' | 'right'>('right');
+  if (!open) return null;
   return (
-    <Drawer open={open} onClose={onClose} position={position} onPositionChange={setPosition}>
-      <div className="p-4 h-full flex flex-col">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-foreground">
-            All misfits <span className="text-xs text-muted-foreground/70 font-normal">· {misfits.length}</span>
-          </h3>
-          <button onClick={onClose} className="text-muted-foreground/60 hover:text-foreground">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-          {misfits.map(m => (
-            <FullListRow
-              key={m.card.name}
-              misfit={m}
-              onPreview={onPreview}
-              onRemove={onRemove}
-              onAddReplacement={onAddReplacement}
-            />
-          ))}
-        </div>
+    <section className="mt-6 rounded-xl border border-border/30 bg-card/40 p-4 animate-fade-in">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-[11px] uppercase tracking-[0.18em] font-semibold text-muted-foreground/80">
+          All misfits <span className="text-foreground/90">· {misfits.length}</span>
+        </h3>
+        <button
+          onClick={onClose}
+          className="inline-flex items-center gap-1 text-[11px] text-violet-300 hover:text-violet-200 font-semibold transition-colors"
+        >
+          <ChevronUp className="w-3.5 h-3.5" /> Hide
+        </button>
       </div>
-    </Drawer>
+      <div className="space-y-2">
+        {misfits.map(m => (
+          <FullListRow
+            key={m.card.name}
+            misfit={m}
+            onPreview={onPreview}
+            onRemove={onRemove}
+            onAddReplacement={onAddReplacement}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 

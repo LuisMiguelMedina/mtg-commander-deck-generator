@@ -149,12 +149,20 @@ export function CardFitTab({
                 <b className="text-white text-sm font-extrabold">{featuredIndex + 1}</b> / {featured.length} featured
               </span>
               <button
-                onClick={() => setFullListOpen(true)}
+                onClick={() => setFullListOpen(v => !v)}
                 className="text-xs text-violet-300 hover:text-violet-200 font-semibold"
               >
-                See all {misfits.length} misfits →
+                {fullListOpen ? 'Hide full list' : `See all ${misfits.length} misfits →`}
               </button>
             </div>
+            <CardFitFullList
+              open={fullListOpen}
+              onClose={() => setFullListOpen(false)}
+              misfits={misfits}
+              onPreview={onPreview}
+              onRemove={onRemoveCard}
+              onAddReplacement={onAddCard}
+            />
           </div>
         </>
       )}
