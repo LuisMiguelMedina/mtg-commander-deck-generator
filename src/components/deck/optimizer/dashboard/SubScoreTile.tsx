@@ -1,5 +1,6 @@
 // src/components/deck/optimizer/dashboard/SubScoreTile.tsx
 import type { SubScore } from '@/types';
+import type { LucideIcon } from 'lucide-react';
 import { ArrowRight, Info } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -10,6 +11,8 @@ export interface SubScoreTileProps {
   onClick?: () => void;
   /** Optional explanation of how this number is computed (for the info popover). */
   explainer?: { sources: string; method: string };
+  /** Lucide icon component for the tile's category. */
+  Icon?: LucideIcon;
 }
 
 function colorForScore(value: number): string {
@@ -19,7 +22,7 @@ function colorForScore(value: number): string {
   return 'text-rose-400';
 }
 
-export function SubScoreTile({ label, subscore, onClick, explainer }: SubScoreTileProps) {
+export function SubScoreTile({ label, subscore, onClick, explainer, Icon }: SubScoreTileProps) {
   const color = colorForScore(subscore.value);
   return (
     <div
@@ -30,6 +33,7 @@ export function SubScoreTile({ label, subscore, onClick, explainer }: SubScoreTi
       className="group relative bg-card/40 border border-border/30 rounded-lg p-3 text-left hover:bg-accent/30 hover:border-border/60 transition-all w-full cursor-pointer"
     >
       <div className="flex items-baseline gap-2 mb-1">
+        {Icon && <Icon className={`w-3.5 h-3.5 self-center ${color} opacity-80`} />}
         <span className={`text-2xl font-black tabular-nums leading-none ${color}`}>
           {subscore.value}
         </span>

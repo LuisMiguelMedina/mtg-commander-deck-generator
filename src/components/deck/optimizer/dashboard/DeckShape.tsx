@@ -1,5 +1,6 @@
 // src/components/deck/optimizer/dashboard/DeckShape.tsx
 import type { ScryfallCard } from '@/types';
+import { GitCompare, TrendingUp, TrendingDown } from 'lucide-react';
 
 export interface DeckShapeProps {
   cards: ScryfallCard[];
@@ -22,8 +23,9 @@ function deltaColor(delta: number, tolerance: number): string {
   return delta > 0 ? 'text-emerald-400' : 'text-rose-400/90';
 }
 
-function deltaArrow(delta: number): string {
-  return delta > 0 ? '▲' : '▼';
+function DeltaArrow({ delta, color }: { delta: number; color: string }) {
+  const Icon = delta > 0 ? TrendingUp : TrendingDown;
+  return <Icon className={`w-3 h-3 ${color}`} />;
 }
 
 interface Tile {
@@ -106,9 +108,10 @@ export function DeckShape({
   return (
     <div className="space-y-2">
       <div>
-        <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/60">
-          How your build differs
-        </p>
+        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/80">
+          <GitCompare className="w-3 h-3 text-sky-300/80" />
+          <span>How your build differs</span>
+        </div>
         <p className="mt-0.5 text-[11px] text-muted-foreground/60">{subtitle}</p>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -133,8 +136,9 @@ export function DeckShape({
                   vs {tile.typical}
                 </span>
                 {showDelta && (
-                  <span className={`text-[10px] font-semibold tabular-nums ${color}`}>
-                    {deltaArrow(tile.delta)} {sign}{absDelta}
+                  <span className={`flex items-center gap-0.5 text-[10px] font-semibold tabular-nums ${color}`}>
+                    <DeltaArrow delta={tile.delta} color={color} />
+                    {sign}{absDelta}
                   </span>
                 )}
               </div>

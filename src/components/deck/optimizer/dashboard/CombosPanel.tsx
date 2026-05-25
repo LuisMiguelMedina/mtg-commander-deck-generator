@@ -1,5 +1,6 @@
 // src/components/deck/optimizer/dashboard/CombosPanel.tsx
 import type { DetectedCombo } from '@/types';
+import { Zap, CheckCircle2, CircleDashed } from 'lucide-react';
 
 export interface CombosPanelProps {
   detectedCombos: DetectedCombo[];
@@ -15,9 +16,10 @@ export function CombosPanel({ detectedCombos }: CombosPanelProps) {
 
   return (
     <div className="space-y-2">
-      <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/60">
-        Combos in this deck
-      </p>
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/80">
+        <Zap className="w-3 h-3 text-amber-300/80" />
+        <span>Combos in this deck</span>
+      </div>
       <div className="flex flex-col gap-1.5">
         {shown.map(combo => {
           const resultLabel = combo.results.slice(0, 2).join(' + ') || combo.comboId;
@@ -39,11 +41,13 @@ export function CombosPanel({ detectedCombos }: CombosPanelProps) {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {isComplete ? (
-                  <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                  <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                    <CheckCircle2 className="w-3 h-3" />
                     Complete
                   </span>
                 ) : (
-                  <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/25">
+                  <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/25">
+                    <CircleDashed className="w-3 h-3" />
                     Missing {missingCount}
                   </span>
                 )}

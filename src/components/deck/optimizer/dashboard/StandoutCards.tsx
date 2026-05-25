@@ -1,5 +1,6 @@
 // src/components/deck/optimizer/dashboard/StandoutCards.tsx
 import type { ScryfallCard } from '@/types';
+import { Sparkles } from 'lucide-react';
 
 export interface StandoutCardsProps {
   cards: ScryfallCard[];
@@ -30,9 +31,10 @@ export function StandoutCards({
   if (positiveEntries.length < 5) {
     return (
       <div className="space-y-1.5">
-        <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/60">
-          Standout in your build
-        </p>
+        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/80">
+          <Sparkles className="w-3 h-3 text-violet-300/80" />
+          <span>Standout in your build</span>
+        </div>
         <p className="text-xs text-muted-foreground/60">Synergy data not available for this commander.</p>
       </div>
     );
@@ -51,9 +53,10 @@ export function StandoutCards({
   return (
     <div className="space-y-2">
       <div>
-        <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/60">
-          Standout in your build
-        </p>
+        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/80">
+          <Sparkles className="w-3 h-3 text-violet-300/80" />
+          <span>Standout in your build</span>
+        </div>
         <p className="mt-0.5 text-[11px] text-muted-foreground/60">{subtitle}</p>
       </div>
       <div className="flex gap-2.5 overflow-x-auto pb-1">

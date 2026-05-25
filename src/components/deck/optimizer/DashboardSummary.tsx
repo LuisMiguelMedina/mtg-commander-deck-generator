@@ -14,6 +14,8 @@ import type { DeckAnalysis } from '@/services/deckBuilder/deckAnalyzer';
 import type { ThemeMembership } from '@/components/analyze/themeMembership';
 import type { TabKey } from './constants';
 import type { ReactNode } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import { Target, Shield, BarChart3, Wand2 } from 'lucide-react';
 
 export interface DashboardSummaryProps {
   commander: ScryfallCard;
@@ -45,6 +47,7 @@ const SUBSCORE_META: Record<SubScoreKey, {
   label: string;
   navigateTo: TabKey | null; // null = inline expand (Strategy)
   explainer: { sources: string; method: string };
+  Icon: LucideIcon;
 }> = {
   strategy: {
     label: 'Strategy',
@@ -53,6 +56,7 @@ const SUBSCORE_META: Record<SubScoreKey, {
       sources: 'EDHREC theme bucket + active theme membership',
       method: 'Weighted composite of theme density (60%) and top-60 overlap (40%)',
     },
+    Icon: Target,
   },
   roles: {
     label: 'Roles',
@@ -61,6 +65,7 @@ const SUBSCORE_META: Record<SubScoreKey, {
       sources: 'Oracle tags + EDHREC commander averages',
       method: 'Per-role current vs target, weighted by criticality',
     },
+    Icon: Shield,
   },
   tempo: {
     label: 'Tempo',
@@ -69,6 +74,7 @@ const SUBSCORE_META: Record<SubScoreKey, {
       sources: 'Deck CMC distribution vs EDHREC commander curve',
       method: 'Phase-level deviation; early-game weighted heavier',
     },
+    Icon: BarChart3,
   },
   cardFit: {
     label: 'Card Fit',
@@ -77,6 +83,7 @@ const SUBSCORE_META: Record<SubScoreKey, {
       sources: 'EDHREC inclusion + synergy + oracle tags + theme bucket',
       method: 'Penalty for low-fit cards in deck and high-value cards missing',
     },
+    Icon: Wand2,
   },
 };
 
@@ -120,6 +127,7 @@ export function DashboardSummary(props: DashboardSummaryProps) {
               label={meta.label}
               subscore={planScore.subscores[key]}
               explainer={meta.explainer}
+              Icon={meta.Icon}
               onClick={() => {
                 if (meta.navigateTo) onNavigate(meta.navigateTo);
                 else setStrategyOpen(v => !v);
