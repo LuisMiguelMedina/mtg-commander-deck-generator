@@ -309,10 +309,20 @@ export interface DashboardWarning {
   navigateTo?: 'roles' | 'lands' | 'curve' | 'cardFit' | 'bracket' | 'cost';
 }
 
+export type MisfitReasonKind =
+  | 'inclusion-low'      // present in EDHREC data but below floor
+  | 'inclusion-absent'   // not in EDHREC data at all (treat as 0%)
+  | 'synergy-low'        // synergy value <= 0
+  | 'synergy-absent'     // synergy not available (card not on commander's page)
+  | 'role-missing'       // no tagger role
+  | 'theme-off';         // not in any active theme bucket
+
 export interface MisfitReason {
-  /** Short label, e.g. "Low inclusion". */
+  /** Discriminator — drives copy variants and visual treatment downstream. */
+  kind: MisfitReasonKind;
+  /** Short label, e.g. "Played in 2% of decklists". */
   label: string;
-  /** Citation text, e.g. "Plays in 2% of Skullbriar decks". */
+  /** Citation text, e.g. "Below the inclusion floor (5%)". */
   detail: string;
 }
 

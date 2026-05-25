@@ -274,14 +274,16 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
     recomputeBreakdown(newCards);
   };
 
-  // Auto-set commander when *CMDR* marker is detected during import
+  // Auto-set commander when *CMDR* marker is detected during import.
+  // Skip in list mode — the commander UI is hidden there, so an auto-set
+  // would silently flip the entity to a deck on save.
   const handleCommanderDetected = useCallback((card: ScryfallCard) => {
-    // Only auto-set if no commander is currently selected
+    if (!isDeck) return;
     if (commanderName) return;
     setCommanderName(card.name);
     setCommanderCard(card);
     setDeckSize(prev => prev || 100);
-  }, [commanderName]);
+  }, [commanderName, isDeck]);
 
   // Auto-fill name/description from detected metadata (e.g. MTGGoldfish format)
   const handleMetaDetected = useCallback((meta: { deckName?: string }) => {

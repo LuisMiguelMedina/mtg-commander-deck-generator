@@ -194,7 +194,7 @@ export function BuilderPage() {
 
           setSelectedThemes(themeResults);
         } else {
-          setThemesError('No themes found on EDHREC');
+          setThemesError('No popular themes yet on EDHREC');
         }
       } catch {
         setThemesError('Could not fetch EDHREC themes');
@@ -344,7 +344,7 @@ export function BuilderPage() {
 
           setSelectedThemes(themeResults);
         } else {
-          setThemesError('No themes found on EDHREC');
+          setThemesError('No popular themes yet on EDHREC');
         }
       } catch {
         setThemesError('Could not fetch EDHREC themes');
@@ -1045,7 +1045,7 @@ export function BuilderPage() {
                     className="btn-shimmer"
                   >
                     <Microscope className="w-4 h-4 mr-2" />
-                    Check
+                    Inspect
                   </Button>
                   <Button onClick={onExport} className="btn-shimmer">
                     <Copy className="w-4 h-4 mr-2" />
@@ -1163,10 +1163,10 @@ export function BuilderPage() {
                     navigate('/analyze/overview');
                   }}
                   className="btn-shimmer"
-                  title="Open in Deck Check"
+                  title="Open in Inspector"
                 >
                   <Microscope className="w-4 h-4 mr-2" />
-                  Check
+                  Inspect
                 </Button>
                 <Button onClick={() => exportTriggerRef.current?.()} className="btn-shimmer">
                   <Copy className="w-4 h-4 mr-2" />

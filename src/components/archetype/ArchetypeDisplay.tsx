@@ -219,6 +219,8 @@ export function ArchetypeDisplay({}: ArchetypeDisplayProps) {
               </button>
               {' '}to defaults.
             </>
+          ) : edhrecNumDecks && edhrecNumDecks > 0 ? (
+            <>No popular themes on EDHREC yet — this commander is too new for theme data. Card recommendations are still available, so you can generate a deck without picking a theme.</>
           ) : (
             <>No EDHREC data available for this commander. This usually means the commander is banned or too new, or there may be a connection issue with EDHREC. Deck quality will be significantly impacted without EDHREC data.</>
           )}

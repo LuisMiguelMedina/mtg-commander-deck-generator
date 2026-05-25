@@ -4297,6 +4297,9 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
           deckSize: format,
           cardInclusionMap,
           colorIdentity: context.colorIdentity,
+          commanderNames: partnerCommander
+            ? [commander.name, partnerCommander.name]
+            : [commander.name],
         });
         const summary = getDeckSummaryData(analysis);
         return { letter: summary.gradeLetter, headline: summary.headline };

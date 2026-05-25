@@ -201,7 +201,7 @@ export function OptimizePage() {
           }));
           setSelectedThemes(themeResults);
         } else {
-          setThemesError('No themes found on EDHREC');
+          setThemesError('No popular themes yet on EDHREC');
         }
       } catch {
         setThemesError('Could not fetch EDHREC themes');

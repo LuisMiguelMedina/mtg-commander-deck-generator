@@ -55,7 +55,7 @@ export function CommanderStrip({ deck, colorIdentity, source, onChangeDeck, onSa
     if (savedListId) return;
     const today = new Date().toISOString().slice(0, 10);
     const defaultName = source.kind === 'generated'
-      ? `${deck.commander?.name ?? 'Untitled'} — Checked ${today}`
+      ? `${deck.commander?.name ?? 'Untitled'} — Inspected ${today}`
       : '';
     setSaveName(defaultName);
     setShowSaveInput(true);
@@ -120,7 +120,7 @@ export function CommanderStrip({ deck, colorIdentity, source, onChangeDeck, onSa
             className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 mt-1"
           >
             <ArrowLeft className="w-3 h-3" />
-            Check a different deck
+            Inspect a different deck
           </button>
         </div>
         <div className="flex items-center gap-2">

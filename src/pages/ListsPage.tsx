@@ -427,7 +427,7 @@ export function ListsPage() {
             const isDeck = list.type === 'deck' || !!commanderOptions?.commanderName;
             navigate(`/lists/${list.id}${isDeck ? '/deck-view' : ''}`, { replace: true });
           }}
-          onCancel={() => navigate(`/lists/${list.id}`)}
+          onCancel={() => navigate(`/lists/${list.id}${list.type === 'deck' ? '/deck-view' : ''}`)}
         />
       </main>
     );

@@ -51,6 +51,7 @@ export function DeckOptimizer({
   maybeboardNames,
   activeTab: controlledActiveTab,
   onTabChange,
+  getTabHref,
   initialSelectedCmc,
   commander,
   partnerCommander,
@@ -58,6 +59,8 @@ export function DeckOptimizer({
   sourceLabel,
   onChangeDeck,
   onThemeMembershipChange,
+  onMisfitNamesChange,
+  onFocusedMisfitChange,
   onSaveAsDeck,
   onOpenInDeckView,
 }: DeckOptimizerProps) {
@@ -206,6 +209,14 @@ export function DeckOptimizer({
     const membership = buildThemeMembership(primary, secondary, themeDataCacheRef.current);
     onThemeMembershipChange(membership);
   }, [primaryThemeSlug, secondaryThemeSlug, themeDetection, onThemeMembershipChange]);
+
+  // Emit the misfit name set so the deck-building area can highlight matching cards.
+  useEffect(() => {
+    if (!onMisfitNamesChange) return;
+    const names = new Set<string>();
+    for (const m of analysis?.misfits ?? []) names.add(m.card.name);
+    onMisfitNamesChange(names);
+  }, [analysis, onMisfitNamesChange]);
 
   // User-overridable tempo (null = use auto-detected)
   const [userPacing, setUserPacing] = useState<Pacing | null>(null);
@@ -401,11 +412,13 @@ export function DeckOptimizer({
     const baseData = cachedEdhrecDataRef.current;
     if (!baseData) return null;
 
+    const commanderNamesForAnalyze = partnerCommanderName ? [commanderName, partnerCommanderName] : [commanderName];
     const baseInclusionMap = buildInclusionMap(baseData);
     const baseResult = analyzeDeck({
       edhrecData: baseData, currentCards, roleCounts, roleTargets: opts.targets, deckSize,
       cardInclusionMap: baseInclusionMap, colorIdentity,
       overridePacing: opts.pacing, overrideLandTarget: opts.landTarget,
+      commanderNames: commanderNamesForAnalyze,
     });
 
     const themeData = themeEnhancedDataRef.current;
@@ -416,6 +429,7 @@ export function DeckOptimizer({
       edhrecData: themeData, currentCards, roleCounts, roleTargets: opts.targets, deckSize,
       cardInclusionMap: themeInclusionMap, colorIdentity,
       overridePacing: opts.pacing, overrideLandTarget: opts.landTarget,
+      commanderNames: commanderNamesForAnalyze,
     });
     const mergedRecs = mergeRecommendations(baseResult.recommendations, themeResult.recommendations);
     const mergedRoleBreakdowns = baseResult.roleBreakdowns.map((baseRb, idx) => {
@@ -512,6 +526,7 @@ export function DeckOptimizer({
         overrideLandTarget: userLandTarget ?? undefined,
         cardSynergyMap: storedDeck?.cardSynergyMap,
         gapCandidates: storedDeck?.gapAnalysis,
+        commanderNames: partnerCommanderName ? [commanderName, partnerCommanderName] : [commanderName],
       });
 
       // Enrich recommendations with Scryfall prices/colors
@@ -633,6 +648,7 @@ export function DeckOptimizer({
             planName: detection.strategyLabel || null,
             cardSynergyMap: storedDeckForTheme?.cardSynergyMap,
             gapCandidates: storedDeckForTheme?.gapAnalysis,
+            commanderNames: partnerCommanderName ? [commanderName, partnerCommanderName] : [commanderName],
           });
 
           // Theme drives; base staples (50%+ inclusion) backfill
@@ -775,6 +791,7 @@ export function DeckOptimizer({
         overridePacing: userPacing ?? undefined, overrideLandTarget: userLandTarget ?? undefined,
         cardSynergyMap: storedDeckForBase?.cardSynergyMap,
         gapCandidates: storedDeckForBase?.gapAnalysis,
+        commanderNames: partnerCommanderName ? [commanderName, partnerCommanderName] : [commanderName],
       });
 
       setAnalysis(prev => prev ? {
@@ -800,6 +817,7 @@ export function DeckOptimizer({
       edhrecData: cachedBase, currentCards, roleCounts, roleTargets: effectiveRoleTargets, deckSize,
       cardInclusionMap: baseInclusionMap, colorIdentity,
       overridePacing: userPacing ?? undefined, overrideLandTarget: userLandTarget ?? undefined,
+      commanderNames: partnerCommanderName ? [commanderName, partnerCommanderName] : [commanderName],
     });
 
     // Primary theme → main data source, backfilled with base staples
@@ -824,6 +842,7 @@ export function DeckOptimizer({
         planName: planNameForScore,
         cardSynergyMap: storedDeckForTheme?.cardSynergyMap,
         gapCandidates: storedDeckForTheme?.gapAnalysis,
+        commanderNames: partnerCommanderName ? [commanderName, partnerCommanderName] : [commanderName],
       });
 
       // Theme drives recommendations; base staples (50%+ inclusion) backfill gaps
@@ -1096,7 +1115,7 @@ export function DeckOptimizer({
     return (
       <div id="deck-optimizer" className="mt-8 flex flex-col items-center gap-3">
         <p className="text-xs text-muted-foreground text-center max-w-sm">
-          Check your deck's roles, mana base, and curve against EDHREC data with tailored suggestions to fill gaps
+          Inspect your deck's roles, mana base, and curve against EDHREC data with tailored suggestions to fill gaps
         </p>
         <Button
           onClick={handleOptimize}
@@ -1120,7 +1139,7 @@ export function DeckOptimizer({
             <Sparkles className="absolute -top-1 -right-1 w-3 h-3 text-primary/50 animate-pulse" />
           </div>
           <div className="text-center">
-            <p className="text-sm font-medium">Checking your deck...</p>
+            <p className="text-sm font-medium">Inspecting your deck...</p>
             <p className="text-xs text-muted-foreground mt-1">Fetching EDHREC data for {commanderName}</p>
           </div>
         </div>
@@ -1237,7 +1256,7 @@ export function DeckOptimizer({
               <TooltipTrigger asChild>
                 <button
                   onClick={onChangeDeck}
-                  aria-label="Check a different deck"
+                  aria-label="Inspect a different deck"
                   className="flex items-center justify-center min-h-[52px] text-muted-foreground hover:text-foreground hover:bg-accent/20 border-b border-border/40 transition-colors"
                 >
                   <ArrowLeft className="w-5 h-5" />
@@ -1251,14 +1270,20 @@ export function DeckOptimizer({
             const tabGrade = tabGrades[tab.key];
             const gradeStyle = tabGrade ? (HEALTH_GRADE_STYLES[tabGrade] || HEALTH_GRADE_STYLES.C) : null;
             const bracketBadge = tab.key === 'bracket' && bracketLevel ? BRACKET_COLORS[bracketLevel] : null;
+            const misfitCount = tab.key === 'cardFit' ? (analysis?.misfits?.length ?? 0) : 0;
+            const tabHref = getTabHref?.(tab.key);
             return (
               <Tooltip key={tab.key}>
                 <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setActiveTab(tab.key)}
+                  <a
+                    href={tabHref ?? '#'}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setActiveTab(tab.key);
+                    }}
                     aria-label={tab.label}
-                    aria-pressed={isActive}
-                    className={`relative flex flex-col items-center justify-center gap-1 py-3 transition-all duration-200 ${
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`relative flex flex-col items-center justify-center gap-1 py-3 transition-all duration-200 no-underline ${
                       isActive
                         ? 'text-primary bg-accent/30'
                         : 'text-muted-foreground hover:text-foreground hover:bg-accent/20'
@@ -1278,7 +1303,12 @@ export function DeckOptimizer({
                         {bracketLevel}
                       </span>
                     )}
-                  </button>
+                    {misfitCount > 0 && (
+                      <span className="text-[9px] font-bold leading-none px-1 py-0.5 rounded tabular-nums text-rose-300 bg-rose-500/25">
+                        {misfitCount}
+                      </span>
+                    )}
+                  </a>
                 </TooltipTrigger>
                 <TooltipContent side="right">{tab.label}</TooltipContent>
               </Tooltip>
@@ -1289,14 +1319,19 @@ export function DeckOptimizer({
             const costTab = TABS.find(t => t.key === 'cost');
             if (!costTab) return null;
             const isActive = activeTab === 'cost';
+            const costHref = getTabHref?.('cost');
             return (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setActiveTab('cost')}
+                  <a
+                    href={costHref ?? '#'}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setActiveTab('cost');
+                    }}
                     aria-label={costTab.label}
-                    aria-pressed={isActive}
-                    className={`relative flex flex-col items-center justify-center gap-1 py-3 transition-all duration-200 ${
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`relative flex flex-col items-center justify-center gap-1 py-3 transition-all duration-200 no-underline ${
                       isActive
                         ? 'text-primary bg-accent/30'
                         : 'text-muted-foreground hover:text-foreground hover:bg-accent/20'
@@ -1311,7 +1346,7 @@ export function DeckOptimizer({
                         {costBadgeLabel}
                       </span>
                     )}
-                  </button>
+                  </a>
                 </TooltipTrigger>
                 <TooltipContent side="right">{costTab.label}</TooltipContent>
               </Tooltip>
@@ -1360,7 +1395,7 @@ export function DeckOptimizer({
         )}
 
         {/* Tab Content */}
-        <div className={`p-3 sm:p-4 flex-1 min-h-0 overflow-y-auto ${activeTab === 'roles' ? 'flex flex-col' : ''} ${activeTab === 'cost' ? 'pt-0 sm:pt-0' : ''}`}>
+        <div className={`flex-1 min-h-0 overflow-y-auto ${activeTab === 'cardFit' ? 'p-0' : 'p-3 sm:p-4'} ${activeTab === 'roles' ? 'flex flex-col' : ''} ${activeTab === 'cost' ? 'pt-0 sm:pt-0' : ''}`}>
 
         {/* ── OPTIMIZE VIEW (replaces tabs) ── */}
         {optimizeView ? (
@@ -1525,6 +1560,7 @@ export function DeckOptimizer({
             onAddCard={onAddCards ? (name: string) => onAddCards([name], 'deck') : undefined}
             onRemoveCard={onRemoveCards ? (card: ScryfallCard) => onRemoveCards([card.name]) : undefined}
             sampleSize={cachedEdhrecDataRef.current?.stats?.numDecks ?? null}
+            onFocusedMisfitChange={onFocusedMisfitChange}
           />
         )}
 

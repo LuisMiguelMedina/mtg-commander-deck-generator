@@ -23,6 +23,10 @@ interface DeckBuildingAreaProps {
   activeCmcRange?: [number, number] | null;
   activeRoleGroup?: string | null;
   removalNames?: Set<string>;
+  /** Card names flagged as misfits — rendered with a red border. */
+  misfitNames?: Set<string>;
+  /** Name of the misfit currently in focus in the Card Fit hero — rendered with a stronger red ring. */
+  focusedMisfitName?: string | null;
   focusLands?: boolean;
   onCardAction?: (card: ScryfallCard, action: CardAction) => void;
   menuProps?: CardRowMenuProps;
@@ -267,7 +271,7 @@ const GROUP_STORAGE_KEY = 'analyze-play-area-group';
 const SORT_DIR_STORAGE_KEY = 'analyze-play-area-sort-dir';
 const DIM_ROLES_KEY = 'analyze-play-area-dim-roles';
 
-export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = false, activeRole = null, activeCmcRange = null, activeRoleGroup = null, removalNames, focusLands = false, onCardAction, menuProps, themeMembership = null }: DeckBuildingAreaProps) {
+export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = false, activeRole = null, activeCmcRange = null, activeRoleGroup = null, removalNames, misfitNames, focusedMisfitName = null, focusLands = false, onCardAction, menuProps, themeMembership = null }: DeckBuildingAreaProps) {
   const buckets = useMemo(
     () => buildCurveBuckets(currentCards, { excludeNames }),
     [currentCards, excludeNames],
@@ -667,15 +671,15 @@ export function DeckBuildingArea({ currentCards, excludeNames, highlightRoles = 
                   onHover={handleHover} onSelect={setPreviewCard}
                   dimNonRoles={highlightRoles && dimEnabled}
                   activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup}
-                  removalNames={removalNames} showPrice={sortKey === 'price'}
+                  removalNames={removalNames} misfitNames={misfitNames} focusedMisfitName={focusedMisfitName} showPrice={sortKey === 'price'}
                   onCardAction={onCardAction} menuProps={menuProps}
                   themeMembership={groupKey === 'theme' ? themeMembership : null}
                   showRoleChip={groupKey === 'role'}
                 />
               ) : (
                 <>
-                  <CurveRow rowCards={subColumns.map(s => s.creatures)} columnKeys={subColumns.map(s => s.key)} gridTemplate={gridTemplate} onHover={handleHover} onSelect={setPreviewCard} dimNonRoles={highlightRoles && dimEnabled} activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup} removalNames={removalNames} showPrice={sortKey === 'price'} onCardAction={onCardAction} menuProps={menuProps} themeMembership={groupKey === 'theme' ? themeMembership : null} showRoleChip={groupKey === 'role'} />
-                  <CurveRow rowCards={subColumns.map(s => s.noncreatures)} columnKeys={subColumns.map(s => s.key)} gridTemplate={gridTemplate} onHover={handleHover} onSelect={setPreviewCard} dimNonRoles={highlightRoles && dimEnabled} activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup} removalNames={removalNames} showPrice={sortKey === 'price'} onCardAction={onCardAction} menuProps={menuProps} themeMembership={groupKey === 'theme' ? themeMembership : null} showRoleChip={groupKey === 'role'} />
+                  <CurveRow rowCards={subColumns.map(s => s.creatures)} columnKeys={subColumns.map(s => s.key)} gridTemplate={gridTemplate} onHover={handleHover} onSelect={setPreviewCard} dimNonRoles={highlightRoles && dimEnabled} activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup} removalNames={removalNames} misfitNames={misfitNames} focusedMisfitName={focusedMisfitName} showPrice={sortKey === 'price'} onCardAction={onCardAction} menuProps={menuProps} themeMembership={groupKey === 'theme' ? themeMembership : null} showRoleChip={groupKey === 'role'} />
+                  <CurveRow rowCards={subColumns.map(s => s.noncreatures)} columnKeys={subColumns.map(s => s.key)} gridTemplate={gridTemplate} onHover={handleHover} onSelect={setPreviewCard} dimNonRoles={highlightRoles && dimEnabled} activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup} removalNames={removalNames} misfitNames={misfitNames} focusedMisfitName={focusedMisfitName} showPrice={sortKey === 'price'} onCardAction={onCardAction} menuProps={menuProps} themeMembership={groupKey === 'theme' ? themeMembership : null} showRoleChip={groupKey === 'role'} />
                 </>
               )}
             </div>
@@ -763,6 +767,8 @@ interface CurveRowProps {
   activeCmcRange?: [number, number] | null;
   activeRoleGroup?: string | null;
   removalNames?: Set<string>;
+  misfitNames?: Set<string>;
+  focusedMisfitName?: string | null;
   showPrice?: boolean;
   onCardAction?: (card: ScryfallCard, action: CardAction) => void;
   menuProps?: CardRowMenuProps;
@@ -770,14 +776,14 @@ interface CurveRowProps {
   showRoleChip?: boolean;
 }
 
-function CurveRow({ rowCards, columnKeys, gridTemplate, onHover, onSelect, dimNonRoles, activeRole, activeCmcRange, activeRoleGroup, removalNames, showPrice, onCardAction, menuProps, themeMembership, showRoleChip }: CurveRowProps) {
+function CurveRow({ rowCards, columnKeys, gridTemplate, onHover, onSelect, dimNonRoles, activeRole, activeCmcRange, activeRoleGroup, removalNames, misfitNames, focusedMisfitName, showPrice, onCardAction, menuProps, themeMembership, showRoleChip }: CurveRowProps) {
   return (
     <div
       className="grid justify-start gap-2 py-2 items-end"
       style={{ gridTemplateColumns: gridTemplate }}
     >
       {columnKeys.map((key, col) => (
-        <CurveCell key={key} cards={rowCards[col]} cascadeIndex={col} onHover={onHover} onSelect={onSelect} dimNonRoles={dimNonRoles} activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup} removalNames={removalNames} showPrice={showPrice} onCardAction={onCardAction} menuProps={menuProps} themeMembership={themeMembership} showRoleChip={showRoleChip} />
+        <CurveCell key={key} cards={rowCards[col]} cascadeIndex={col} onHover={onHover} onSelect={onSelect} dimNonRoles={dimNonRoles} activeRole={activeRole} activeCmcRange={activeCmcRange} activeRoleGroup={activeRoleGroup} removalNames={removalNames} misfitNames={misfitNames} focusedMisfitName={focusedMisfitName} showPrice={showPrice} onCardAction={onCardAction} menuProps={menuProps} themeMembership={themeMembership} showRoleChip={showRoleChip} />
       ))}
     </div>
   );
@@ -792,6 +798,8 @@ interface CurveCellProps {
   activeCmcRange?: [number, number] | null;
   activeRoleGroup?: string | null;
   removalNames?: Set<string>;
+  misfitNames?: Set<string>;
+  focusedMisfitName?: string | null;
   cascadeIndex?: number;
   showPrice?: boolean;
   onCardAction?: (card: ScryfallCard, action: CardAction) => void;
@@ -800,7 +808,7 @@ interface CurveCellProps {
   showRoleChip?: boolean;
 }
 
-function CurveCell({ cards, onHover, onSelect, dimNonRoles, activeRole, activeCmcRange, activeRoleGroup, removalNames, cascadeIndex = 0, showPrice = false, onCardAction, menuProps, themeMembership, showRoleChip = false }: CurveCellProps) {
+function CurveCell({ cards, onHover, onSelect, dimNonRoles, activeRole, activeCmcRange, activeRoleGroup, removalNames, misfitNames, focusedMisfitName, cascadeIndex = 0, showPrice = false, onCardAction, menuProps, themeMembership, showRoleChip = false }: CurveCellProps) {
   // FLIP-based reorder animation when sort changes. ~280ms feels right for
   // a card "settling" gesture — long enough to track, short enough not to
   // feel sluggish on a multi-column update.
@@ -838,6 +846,8 @@ function CurveCell({ cards, onHover, onSelect, dimNonRoles, activeRole, activeCm
         const stableKey = `${card.name}#${occurrence}`;
         const hasRemovals = !!(removalNames && removalNames.size > 0);
         const flaggedForRemoval = hasRemovals && removalNames!.has(card.name);
+        const flaggedAsMisfit = !!(misfitNames && misfitNames.has(card.name));
+        const flaggedAsFocusedMisfit = !!focusedMisfitName && card.name === focusedMisfitName;
         // When optimize mode is up, dim everything except the removal targets
         // so the spotlight reads at a glance.
         const dimForRemoval = hasRemovals && !flaggedForRemoval;
@@ -864,6 +874,8 @@ function CurveCell({ cards, onHover, onSelect, dimNonRoles, activeRole, activeCm
             badgeLabel={badgeLabel}
             BadgeIcon={BadgeIcon}
             flaggedForRemoval={flaggedForRemoval}
+            flaggedAsMisfit={flaggedAsMisfit}
+            flaggedAsFocusedMisfit={flaggedAsFocusedMisfit}
             dimForRemoval={dimForRemoval}
             dimForRole={!!dimForRole}
             dimForCurve={!!dimForCurve}
@@ -892,6 +904,8 @@ interface CurveCardProps {
   badgeLabel: string;
   BadgeIcon: typeof Sprout | null;
   flaggedForRemoval: boolean;
+  flaggedAsMisfit?: boolean;
+  flaggedAsFocusedMisfit?: boolean;
   dimForRemoval: boolean;
   dimForRole: boolean;
   dimForCurve: boolean;
@@ -908,17 +922,17 @@ interface CurveCardProps {
 
 function CurveCard({
   card, idx, cascadeIndex, imgUrl, badgeClass, badgeLabel, BadgeIcon,
-  flaggedForRemoval, dimForRemoval, dimForRole, dimForCurve, dimNonRoles,
+  flaggedForRemoval, flaggedAsMisfit, flaggedAsFocusedMisfit, dimForRemoval, dimForRole, dimForCurve, dimNonRoles,
   hasRemovals, showPrice, onSelect, onHover, onCardAction, menuProps,
   themeIndices, themeNames,
 }: CurveCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const canMenu = !!(onCardAction && menuProps);
   return (
-    <div className="relative w-full" style={{ marginTop: idx > 0 ? '-120%' : undefined, zIndex: idx }}>
+    <div className="relative w-full" style={{ marginTop: idx > 0 ? '-120%' : undefined, zIndex: flaggedAsFocusedMisfit ? 999 : idx }}>
       <button
         type="button"
-        className={`relative w-full aspect-[5/7] text-left p-0 bg-transparent border-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background overflow-hidden rounded-[8px] transition-[filter] duration-300 animate-deal-in ${flaggedForRemoval ? 'ring-2 ring-rose-500 ring-offset-1 ring-offset-background scale-[1.02]' : ''} ${dimForRemoval ? 'saturate-0 opacity-50 hover:saturate-100 hover:opacity-100' : ''} ${!hasRemovals && (dimForRole || dimForCurve) ? 'saturate-0 hover:saturate-100' : ''}`}
+        className={`relative w-full aspect-[5/7] text-left p-0 bg-transparent border-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background overflow-hidden rounded-[8px] transition-[filter,transform,box-shadow] duration-300 animate-deal-in ${flaggedAsFocusedMisfit ? 'ring-4 ring-rose-500 ring-offset-2 ring-offset-background scale-[1.06] shadow-[0_0_28px_rgba(244,63,94,0.7)]' : ''} ${flaggedForRemoval && !flaggedAsFocusedMisfit ? 'ring-2 ring-rose-500 ring-offset-1 ring-offset-background scale-[1.02]' : ''} ${flaggedAsMisfit && !flaggedForRemoval && !flaggedAsFocusedMisfit ? 'ring-1 ring-rose-500/25' : ''} ${dimForRemoval ? 'saturate-0 opacity-50 hover:saturate-100 hover:opacity-100' : ''} ${!hasRemovals && (dimForRole || dimForCurve) ? 'saturate-0 hover:saturate-100' : ''}`}
         style={{ animationDelay: `${cascadeIndex * 70 + idx * 40}ms` }}
         onClick={() => onSelect(card)}
         onMouseEnter={(e) => onHover(card, e)}

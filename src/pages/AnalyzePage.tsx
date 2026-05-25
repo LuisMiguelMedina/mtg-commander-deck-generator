@@ -93,6 +93,8 @@ export function AnalyzePage() {
 
   const activeAnalyzerTab: TabKey = (tabSlug && TAB_KEY_BY_SLUG[tabSlug]) || 'overview';
   const [themeMembership, setThemeMembership] = useState<ThemeMembership | null>(null);
+  const [misfitNames, setMisfitNames] = useState<Set<string>>(new Set());
+  const [focusedMisfitName, setFocusedMisfitName] = useState<string | null>(null);
   const handleAnalyzerTabChange = useCallback((next: TabKey) => {
     const slug = TAB_SLUG_BY_KEY[next];
     // Replace so tab switches don't accumulate in history — keeps the browser
@@ -100,6 +102,11 @@ export function AnalyzePage() {
     // real prior page rather than walking through tab changes.
     navigate(listIdParam ? `/analyze/${listIdParam}/${slug}` : `/analyze/${slug}`, { replace: true });
   }, [navigate, listIdParam]);
+  const getAnalyzerTabHref = useCallback((next: TabKey) => {
+    const slug = TAB_SLUG_BY_KEY[next];
+    const path = listIdParam ? `analyze/${listIdParam}/${slug}` : `analyze/${slug}`;
+    return `${import.meta.env.BASE_URL}${path}`;
+  }, [listIdParam]);
 
   const prevLaneRef = useRef<LaneKey>(activeLane);
   useEffect(() => {
@@ -543,7 +550,7 @@ export function AnalyzePage() {
 
     const handleSaveAsDeck = () => {
       const today = new Date().toISOString().slice(0, 10);
-      const name = `${generatedDeck.commander?.name ?? 'Untitled'} — Checked ${today}`;
+      const name = `${generatedDeck.commander?.name ?? 'Untitled'} — Inspected ${today}`;
       const cardNames: string[] = [];
       if (generatedDeck.commander) cardNames.push(generatedDeck.commander.name);
       if (generatedDeck.partnerCommander) cardNames.push(generatedDeck.partnerCommander.name);
@@ -579,6 +586,7 @@ export function AnalyzePage() {
                 cardInclusionMap={generatedDeck.cardInclusionMap}
                 activeTab={activeAnalyzerTab}
                 onTabChange={handleAnalyzerTabChange}
+                getTabHref={getAnalyzerTabHref}
                 onAddCards={handleAddCardsToAnalyzerDeck}
                 onRemoveCards={handleRemoveCardsFromAnalyzerDeck}
                 commander={generatedDeck.commander}
@@ -587,6 +595,8 @@ export function AnalyzePage() {
                 sourceLabel={sourceLabel}
                 onChangeDeck={handleChangeDeck}
                 onThemeMembershipChange={setThemeMembership}
+                onMisfitNamesChange={setMisfitNames}
+                onFocusedMisfitChange={setFocusedMisfitName}
                 onSaveAsDeck={source.kind === 'list' ? undefined : handleSaveAsDeck}
                 onOpenInDeckView={handleOpenInDeckView}
               />
@@ -605,6 +615,8 @@ export function AnalyzePage() {
                 activeCmcRange={activeAnalyzerTab === 'curve' ? activeOptimizerCmcRange : null}
                 activeRoleGroup={activeAnalyzerTab === 'curve' ? activeOptimizerRoleGroup : null}
                 removalNames={pendingRemovals}
+                misfitNames={activeAnalyzerTab === 'cardFit' ? misfitNames : undefined}
+                focusedMisfitName={activeAnalyzerTab === 'cardFit' ? focusedMisfitName : null}
                 focusLands={activeAnalyzerTab === 'lands'}
                 onCardAction={handleAnalyzerCardAction}
                 menuProps={analyzerMenuProps}
@@ -621,7 +633,7 @@ export function AnalyzePage() {
     <main className="flex-1 px-4 sm:px-8 lg:px-12 py-8">
       <div className="text-center py-6 max-w-2xl mx-auto animate-fade-in">
         <h2 className="text-4xl font-bold mb-3">
-          Check any{' '}
+          Inspect any{' '}
           <span className="gradient-text">Commander deck</span>
         </h2>
         <p className="text-base text-muted-foreground">

@@ -49,6 +49,8 @@ export interface MisfitInputs {
   gapCandidates?: GapAnalysisCard[];
   /** EDHREC commander payload (for citing decklist count). */
   commanderData?: EDHRECCommanderData | null;
+  /** Commander name (and partner if any) — never suggest these as replacements. */
+  commanderNames?: string[];
 }
 
 export function computeMisfits(inputs: MisfitInputs): Misfit[] {
@@ -63,35 +65,61 @@ export function computeMisfits(inputs: MisfitInputs): Misfit[] {
   const misfits: Misfit[] = [];
   const themeByCard = themeMembership?.byCard;
 
+  const excludeBase = new Set<string>();
+  for (const c of cards) excludeBase.add(c.name);
+  for (const n of inputs.commanderNames ?? []) excludeBase.add(n);
+
   for (const card of cards) {
     if (isAnyLand(card)) continue; // lands evaluated separately, not as misfits here
 
     const reasons: MisfitReason[] = [];
 
     const incl = cardInclusionMap[card.name];
-    if (incl != null && incl < INCLUSION_LOW) {
+    if (incl == null) {
       reasons.push({
-        label: 'Low inclusion',
-        detail: `Plays in ${incl.toFixed(0)}% of decklists for this commander`,
+        kind: 'inclusion-absent',
+        label: 'Not played in this commander\'s decks',
+        detail: 'Card has no inclusion data on EDHREC for this commander',
+      });
+    } else if (incl < INCLUSION_LOW) {
+      reasons.push({
+        kind: 'inclusion-low',
+        label: `Played in ${incl.toFixed(0)}% of decklists`,
+        detail: `Below the inclusion floor (${INCLUSION_LOW}%)`,
       });
     }
 
     const syn = cardSynergyMap?.[card.name];
-    if (syn != null && syn <= SYNERGY_LOW) {
+    if (syn == null) {
       reasons.push({
-        label: 'No synergy',
+        kind: 'synergy-absent',
+        label: 'No commander synergy data',
+        detail: 'Card isn\'t on this commander\'s EDHREC page',
+      });
+    } else if (syn <= SYNERGY_LOW) {
+      reasons.push({
+        kind: 'synergy-low',
+        label: 'Low commander synergy',
         detail: `EDHREC synergy ${syn >= 0 ? '+' : ''}${syn.toFixed(2)} for this commander`,
       });
     }
 
     const role = getCardRole(card.name);
     if (!role) {
-      reasons.push({ label: 'No role', detail: 'No tagger role (ramp / removal / draw / wipe)' });
+      reasons.push({
+        kind: 'role-missing',
+        label: 'No tagged role',
+        detail: 'Doesn\'t fill ramp / removal / draw / wipe',
+      });
     }
 
     const themed = themeByCard?.has(card.name.toLowerCase());
     if (themeByCard && themeByCard.size > 0 && !themed) {
-      reasons.push({ label: 'Off theme', detail: 'Not in your detected theme bucket' });
+      reasons.push({
+        kind: 'theme-off',
+        label: 'Off detected themes',
+        detail: 'Not in any active theme bucket',
+      });
     }
 
     if (reasons.length >= MISFIT_REASON_THRESHOLD) {
@@ -99,7 +127,9 @@ export function computeMisfits(inputs: MisfitInputs): Misfit[] {
         (reasons.length * MISFIT_REASON_WEIGHT) +
         (incl != null ? Math.max(0, INCLUSION_LOW - incl) : 0) +
         (syn != null ? Math.max(0, -syn * MISFIT_SYNERGY_WEIGHT) : 0);
-      const suggestedReplacement = pickReplacement(card, role, gapCandidates);
+      const excludeNames = new Set(excludeBase);
+      excludeNames.add(card.name);
+      const suggestedReplacement = pickReplacement(card, role, gapCandidates, excludeNames);
       misfits.push({ card, misfitScore, reasons, suggestedReplacement });
     }
   }
@@ -112,19 +142,16 @@ export function computeMisfits(inputs: MisfitInputs): Misfit[] {
 function pickReplacement(
   card: ScryfallCard,
   role: string | null,
-  gapCandidates?: GapAnalysisCard[],
+  gapCandidates: GapAnalysisCard[] | undefined,
+  excludeNames: Set<string>,
 ): GapAnalysisCard | undefined {
   if (!gapCandidates || gapCandidates.length === 0) return undefined;
-  // Never suggest the card being replaced as its own replacement.
-  const candidates = gapCandidates.filter(g => g.name !== card.name);
+  const candidates = gapCandidates.filter(g => !excludeNames.has(g.name));
   if (candidates.length === 0) return undefined;
-  // Prefer a same-role gap candidate first; otherwise the strongest overall.
   if (role) {
     const sameRole = candidates.find(g => g.role === role);
     if (sameRole) return sameRole;
   }
-  // Match same primary type as a softer fallback (e.g. Creature → Creature).
-  // Uses primaryType() to strip supertypes like "Legendary" before comparing.
   const cardPrimary = primaryType(card.type_line ?? '');
   if (cardPrimary) {
     const sameType = candidates.find(
@@ -132,7 +159,7 @@ function pickReplacement(
     );
     if (sameType) return sameType;
   }
-  return undefined; // no suitable match; UI will omit the "replace with" line
+  return undefined;
 }
 
 export function computeCardFitSubscore(misfits: Misfit[], gapCount: number) {
@@ -152,6 +179,40 @@ function bandForCardFit(score: number): string {
   if (score >= 60) return 'Solid';
   if (score >= 40) return 'Loose';
   return 'Bloated';
+}
+
+const FEATURED_MIN_STRIKES = 3;
+const FEATURED_MAX = 8;
+
+/**
+ * Cinematic slideshow rolls over the worst offenders only.
+ * - "Worst" = ≥ 3 reasons triggered (a "strike" per reason).
+ * - Capped at 8 so a fringe commander doesn't drag through 50 cards.
+ * - Returns [] for a clean deck — UI shows the empty state.
+ * `misfits` is assumed pre-sorted by misfitScore (computeMisfits does this).
+ */
+export function featuredMisfits(misfits: Misfit[]): Misfit[] {
+  return misfits
+    .filter(m => m.reasons.length >= FEATURED_MIN_STRIKES)
+    .slice(0, FEATURED_MAX);
+}
+
+/**
+ * Returns the Card Fit score delta if `replacement` were swapped in for `misfit.card`.
+ * If `replacement` is undefined, returns the delta from removing the card outright.
+ * Positive delta = improvement.
+ */
+export function simulateSwapImpact(
+  misfits: Misfit[],
+  misfit: Misfit,
+  gapCount: number,
+  replacement: GapAnalysisCard | undefined,
+): number {
+  const before = computeCardFitSubscore(misfits, gapCount).value;
+  const afterMisfits = misfits.filter(m => m.card.name !== misfit.card.name);
+  const afterGapCount = replacement ? Math.max(0, gapCount - 1) : gapCount;
+  const after = computeCardFitSubscore(afterMisfits, afterGapCount).value;
+  return Math.round(after - before);
 }
 
 export { ROLE_LABELS };

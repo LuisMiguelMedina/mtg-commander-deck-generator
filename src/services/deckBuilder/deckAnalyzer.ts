@@ -1607,6 +1607,8 @@ export interface AnalyzeDeckOptions {
   cardSynergyMap?: Record<string, number>;
   /** Gap candidates (top EDHREC cards not in deck). Used for misfit replacements. */
   gapCandidates?: GapAnalysisCard[];
+  /** Commander name (+ partner if any) — used to guard replacement suggestions. */
+  commanderNames?: string[];
 }
 
 export function analyzeDeck(opts: AnalyzeDeckOptions): DeckAnalysis {
@@ -2500,6 +2502,9 @@ export function analyzeDeck(opts: AnalyzeDeckOptions): DeckAnalysis {
     liveDeckNames.add(c.name);
     if (c.name.includes(' // ')) liveDeckNames.add(c.name.split(' // ')[0]);
   }
+  // Also exclude commander names — these can leak into the gap pool from EDHREC's
+  // own data and must never be suggested as replacements.
+  for (const n of opts.commanderNames ?? []) liveDeckNames.add(n);
   const liveGapCandidates = (opts.gapCandidates ?? []).filter(g => !liveDeckNames.has(g.name));
 
   const misfits = computeMisfits({
@@ -2509,6 +2514,7 @@ export function analyzeDeck(opts: AnalyzeDeckOptions): DeckAnalysis {
     themeMembership,
     gapCandidates: liveGapCandidates,
     commanderData: opts.edhrecData ?? null,
+    commanderNames: opts.commanderNames,
   });
   const gapCount = liveGapCandidates.length;
   const cardFitSub = computeCardFitSubscore(misfits, gapCount);

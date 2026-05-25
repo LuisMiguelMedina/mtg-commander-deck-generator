@@ -34,6 +34,8 @@ export interface DeckOptimizerProps {
   activeTab?: TabKey;
   /** Fired when the user clicks a tab. Required if `activeTab` is provided. */
   onTabChange?: (tab: TabKey) => void;
+  /** Optional href resolver for tab anchors. When provided, the sidebar renders <a> tags so tabs work as real links. */
+  getTabHref?: (tab: TabKey) => string;
   /** Optional initial value for the Curve tab's CMC focus. */
   initialSelectedCmc?: number | null;
   /** Commander card (for Overview header on /analyze). */
@@ -48,6 +50,10 @@ export interface DeckOptimizerProps {
   onChangeDeck?: () => void;
   /** Fired when theme membership for the currently selected themes is (re)computed. */
   onThemeMembershipChange?: (membership: ThemeMembership | null) => void;
+  /** Fired when the misfit set changes — used to highlight misfit cards in the deck view. */
+  onMisfitNamesChange?: (names: Set<string>) => void;
+  /** Fired with the name of the currently focused misfit in the Card Fit hero (or null). */
+  onFocusedMisfitChange?: (name: string | null) => void;
   /** Save the current deck as a new list. Shown as a CTA in the Overview header when the deck is not yet saved. */
   onSaveAsDeck?: () => void;
   /** Open the saved deck in the deck view. Shown as a CTA in the Overview header when the deck originates from a saved list. */
