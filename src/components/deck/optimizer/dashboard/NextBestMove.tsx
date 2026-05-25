@@ -16,6 +16,14 @@ export interface NextBestMoveProps {
   deckExcess: number;
   commander: ScryfallCard;
   onNavigate: (tab: TabKey) => void;
+  /** Mana base verdict from analysis.manaBase.verdict */
+  manaVerdict?: 'critically-low' | 'low' | 'slightly-low' | 'ok' | 'high';
+  /** Current land count */
+  currentLands?: number;
+  /** Adjusted land suggestion from analysis.manaBase.adjustedSuggestion */
+  suggestedLands?: number;
+  /** True when EDHREC data is limited for this commander */
+  limitedData?: boolean;
 }
 
 interface Suggestion {
@@ -24,12 +32,15 @@ interface Suggestion {
   /** Card name recommended (used for dedup across suggestions). */
   cardName?: string;
   message: React.ReactNode;
-  navigateTo: TabKey;
-  navLabel: string;
+  navigateTo?: TabKey;
+  navLabel?: string;
 }
 
 function buildSuggestions(props: NextBestMoveProps): Suggestion[] {
-  const { planScore, misfits, gapAnalysis, roleBreakdowns, curvePhases, detectedCombos, deckExcess } = props;
+  const {
+    planScore, misfits, gapAnalysis, roleBreakdowns, curvePhases, detectedCombos, deckExcess,
+    manaVerdict, currentLands, suggestedLands, limitedData,
+  } = props;
   if (!planScore) return [];
 
   const candidates: Suggestion[] = [];
@@ -76,6 +87,38 @@ function buildSuggestions(props: NextBestMoveProps): Suggestion[] {
       ),
       navigateTo: 'cardFit',
       navLabel: 'Card Fit',
+    });
+  }
+
+  // mana starved (tier 1, critical)
+  if (manaVerdict === 'critically-low' && currentLands != null && suggestedLands != null) {
+    candidates.push({
+      id: 'mana-starved',
+      tier: 1,
+      message: (
+        <>
+          Mana base is starved — only <strong>{currentLands}</strong> lands, deck wants{' '}
+          <strong>{suggestedLands}+</strong>. Add lands or trim non-land cards.
+        </>
+      ),
+      navigateTo: 'lands',
+      navLabel: 'Mana',
+    });
+  }
+
+  // mana light (tier 1)
+  if ((manaVerdict === 'low' || manaVerdict === 'slightly-low') && currentLands != null && suggestedLands != null) {
+    candidates.push({
+      id: 'mana-low',
+      tier: 1,
+      message: (
+        <>
+          Mana may be light — <strong>{currentLands}</strong> lands vs target{' '}
+          <strong>{suggestedLands}</strong>.
+        </>
+      ),
+      navigateTo: 'lands',
+      navLabel: 'Mana',
     });
   }
 
@@ -266,6 +309,30 @@ function buildSuggestions(props: NextBestMoveProps): Suggestion[] {
     }
   }
 
+  // mana heavy (tier 3, info)
+  if (manaVerdict === 'high' && currentLands != null && suggestedLands != null) {
+    candidates.push({
+      id: 'mana-heavy',
+      tier: 3,
+      message: (
+        <>
+          Running heavy on lands (<strong>{currentLands}</strong>, deck wants ~<strong>{suggestedLands}</strong>).
+        </>
+      ),
+      navigateTo: 'lands',
+      navLabel: 'Mana',
+    });
+  }
+
+  // limited data (tier 3, info)
+  if (limitedData) {
+    candidates.push({
+      id: 'limited-data',
+      tier: 3,
+      message: <>Limited EDHREC data for this commander — some sub-scores excluded.</>,
+    });
+  }
+
   // ── Dedup by id, sort by tier (stable), take top 3 ──────────────────
   const seenIds = new Set<string>();
   const deduped = candidates.filter(c => {
@@ -281,9 +348,9 @@ const MAX_SHOWN = 3;
 
 /** Numbered badge color per tier — communicates severity at the left. */
 const TIER_BADGE_STYLES = {
-  1: 'bg-amber-500/20 text-amber-300',
-  2: 'bg-violet-500/20 text-violet-300',
-  3: 'bg-sky-500/20 text-sky-300',
+  1: 'bg-amber-500/25 text-amber-300',
+  2: 'bg-violet-500/25 text-violet-300',
+  3: 'bg-sky-500/25 text-sky-300',
 } as const;
 
 export function NextBestMove(props: NextBestMoveProps) {
@@ -304,7 +371,7 @@ export function NextBestMove(props: NextBestMoveProps) {
     <div className="rounded-xl border border-violet-500/40 bg-gradient-to-br from-violet-500/10 via-violet-500/5 to-transparent p-4">
       <div className="flex items-center gap-1.5 mb-3">
         <Lightbulb className="w-3.5 h-3.5 text-violet-300" />
-        <span className="text-[10px] uppercase tracking-wider font-semibold text-violet-300/80">
+        <span className="text-[11px] uppercase tracking-wider font-semibold text-violet-300/80">
           Suggested next steps
         </span>
       </div>
@@ -314,28 +381,39 @@ export function NextBestMove(props: NextBestMoveProps) {
             key={s.id}
             className="group relative flex items-stretch gap-1 rounded-md hover:bg-violet-500/5 transition-colors"
           >
-            <button
-              type="button"
-              onClick={() => props.onNavigate(s.navigateTo)}
-              className="flex-1 min-w-0 flex items-start gap-3 text-left px-2 py-2"
-              aria-label={`Open ${s.navLabel}`}
-            >
-              <div className={`shrink-0 mt-0.5 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${TIER_BADGE_STYLES[s.tier]}`}>
-                {i + 1}
+            {s.navigateTo ? (
+              <button
+                type="button"
+                onClick={() => props.onNavigate(s.navigateTo!)}
+                className="flex-1 min-w-0 flex items-start gap-3 text-left px-2 py-2"
+                aria-label={`Open ${s.navLabel}`}
+              >
+                <div className={`shrink-0 mt-0.5 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${TIER_BADGE_STYLES[s.tier]}`}>
+                  {i + 1}
+                </div>
+                <div className="flex-1 min-w-0 text-sm text-foreground leading-relaxed">
+                  {s.message}
+                </div>
+                <div className="shrink-0 self-center flex items-center text-xs text-violet-200 group-hover:text-violet-100 transition-colors whitespace-nowrap">
+                  {s.navLabel} <ArrowRight className="w-3 h-3 ml-0.5" />
+                </div>
+              </button>
+            ) : (
+              <div className="flex-1 min-w-0 flex items-start gap-3 px-2 py-2">
+                <div className={`shrink-0 mt-0.5 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${TIER_BADGE_STYLES[s.tier]}`}>
+                  {i + 1}
+                </div>
+                <div className="flex-1 min-w-0 text-sm text-foreground leading-relaxed">
+                  {s.message}
+                </div>
               </div>
-              <div className="flex-1 min-w-0 text-sm text-foreground/95 leading-relaxed">
-                {s.message}
-              </div>
-              <div className="shrink-0 self-center flex items-center text-[11px] text-violet-300/80 group-hover:text-violet-200 transition-colors whitespace-nowrap">
-                {s.navLabel} <ArrowRight className="w-3 h-3 ml-0.5" />
-              </div>
-            </button>
+            )}
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); dismiss(s.id); }}
               aria-label="Dismiss suggestion"
               title="Dismiss"
-              className="shrink-0 self-center p-1.5 rounded text-muted-foreground/60 hover:text-foreground hover:bg-violet-500/20 transition-colors"
+              className="shrink-0 self-center p-1.5 rounded text-muted-foreground/80 hover:text-foreground hover:bg-violet-500/20 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
             </button>
