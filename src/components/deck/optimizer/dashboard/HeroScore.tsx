@@ -72,8 +72,26 @@ export function HeroScore({
       {/* All content sits above backdrop layers */}
       <div className="relative flex flex-col gap-5" style={{ zIndex: 1 }}>
 
-        {/* TOP ROW: commander info + action buttons */}
+        {/* TOP ROW: commander art + info + action buttons */}
         <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+          {/* Commander card thumbnail(s) */}
+          <div className="flex items-start gap-1.5 shrink-0">
+            {(commander.image_uris?.small ?? commander.card_faces?.[0]?.image_uris?.small) && (
+              <img
+                src={commander.image_uris?.small ?? commander.card_faces?.[0]?.image_uris?.small ?? ''}
+                alt={commander.name}
+                className="w-12 h-[4.2rem] rounded-md border border-border/50 object-cover shadow-md"
+              />
+            )}
+            {partnerCommander && (partnerCommander.image_uris?.small ?? partnerCommander.card_faces?.[0]?.image_uris?.small) && (
+              <img
+                src={partnerCommander.image_uris?.small ?? partnerCommander.card_faces?.[0]?.image_uris?.small ?? ''}
+                alt={partnerCommander.name}
+                className="w-12 h-[4.2rem] rounded-md border border-border/50 object-cover shadow-md -ml-3"
+              />
+            )}
+          </div>
+
           {/* Commander info */}
           <div className="flex-1 min-w-0">
             <div className="text-base sm:text-lg font-bold text-foreground leading-snug">
