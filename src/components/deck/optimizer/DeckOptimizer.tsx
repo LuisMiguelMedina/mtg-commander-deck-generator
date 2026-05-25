@@ -109,6 +109,69 @@ export function DeckOptimizer({
     return () => document.removeEventListener('deck-optimizer-reanalyze', handler);
   }, []);
 
+  // When AnalyzePage adds cards via the UI, it dispatches 'analyze-cards-added'
+  // with the added card names so we can patch the store with real EDHREC
+  // inclusion/synergy instead of the 0 that AnalyzePage would stamp.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const names: string[] = (e as CustomEvent<{ names?: string[] }>).detail?.names ?? [];
+      if (names.length === 0) return;
+      const edhrecData = cachedEdhrecDataRef.current;
+      if (!edhrecData) return;
+      const deck = useStore.getState().generatedDeck;
+      if (!deck) return;
+
+      // Build a lookup from the EDHREC payload (allNonLand + lands).
+      const edhrecInclusion: Record<string, number> = {};
+      const edhrecSynergy: Record<string, number> = {};
+      const indexCard = (c: { name: string; inclusion: number; synergy?: number }) => {
+        edhrecInclusion[c.name] = c.inclusion;
+        if (c.synergy != null) edhrecSynergy[c.name] = c.synergy;
+        // Also index front face of DFCs.
+        if (c.name.includes(' // ')) {
+          const front = c.name.split(' // ')[0];
+          edhrecInclusion[front] = c.inclusion;
+          if (c.synergy != null) edhrecSynergy[front] = c.synergy;
+        }
+      };
+      for (const c of edhrecData.cardlists.allNonLand) indexCard(c);
+      for (const c of edhrecData.cardlists.lands) indexCard(c);
+
+      let changed = false;
+      const newInclusionMap = { ...(deck.cardInclusionMap ?? {}) };
+      const newSynergyMap = deck.cardSynergyMap ? { ...deck.cardSynergyMap } : undefined;
+      let scoreDelta = 0;
+
+      for (const name of names) {
+        const realInclusion = edhrecInclusion[name];
+        if (realInclusion != null && newInclusionMap[name] === 0) {
+          // Correct the stamped-zero with the real EDHREC value.
+          scoreDelta += realInclusion; // previously added 0, now add the real value
+          newInclusionMap[name] = realInclusion;
+          changed = true;
+        }
+        const realSynergy = edhrecSynergy[name];
+        if (realSynergy != null && newSynergyMap && newSynergyMap[name] === 0) {
+          newSynergyMap[name] = realSynergy;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        useStore.setState({
+          generatedDeck: {
+            ...deck,
+            cardInclusionMap: newInclusionMap,
+            cardSynergyMap: newSynergyMap,
+            deckScore: (deck.deckScore ?? 0) + scoreDelta,
+          },
+        });
+      }
+    };
+    document.addEventListener('analyze-cards-added', handler);
+    return () => document.removeEventListener('analyze-cards-added', handler);
+  }, []);
+
   // Card key of the last completed analysis. Compared against currentCards
   // each render to surface a "dirty" indicator on the Re-analyze button
   // when the deck has changed since the last analysis snapshot.

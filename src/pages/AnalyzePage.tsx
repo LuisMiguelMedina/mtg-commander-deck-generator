@@ -320,6 +320,8 @@ export function AnalyzePage() {
     const newInclusionMap = { ...(deck.cardInclusionMap || {}) };
     let scoreDelta = 0;
     for (const name of addedNames) {
+      // Stamp 0 only if there is truly no value — never overwrite an existing entry
+      // (a card may already be in the map if it was in the gap/swap pools).
       if (newInclusionMap[name] == null) newInclusionMap[name] = 0;
       scoreDelta += newInclusionMap[name];
     }
@@ -332,6 +334,10 @@ export function AnalyzePage() {
         deckScore: (deck.deckScore ?? 0) + scoreDelta,
       },
     });
+
+    // Notify DeckOptimizer (which holds the live EDHREC ref) so it can patch
+    // any 0-stamped entries with real inclusion/synergy from the EDHREC payload.
+    document.dispatchEvent(new CustomEvent('analyze-cards-added', { detail: { names: addedNames } }));
 
     if (source?.kind === 'list') {
       const list = lists.find(l => l.id === source.listId);
