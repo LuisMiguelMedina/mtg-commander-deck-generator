@@ -1,8 +1,11 @@
 // src/components/deck/optimizer/dashboard/HeroScore.tsx
+import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Pencil, Bookmark, ExternalLink } from 'lucide-react';
 import { ColorIdentity } from '@/components/ui/mtg-icons';
+import { getCardImageUrl } from '@/services/scryfall/client';
 import type { PlanScore, ScryfallCard } from '@/types';
 import type { ReactNode } from 'react';
 
@@ -31,6 +34,7 @@ export function HeroScore({
   onSaveAsDeck,
   onOpenInDeckView,
 }: HeroScoreProps) {
+  const [hover, setHover] = useState<{ card: ScryfallCard; rect: DOMRect } | null>(null);
   const pct = Math.max(0, Math.min(100, planScore.overall));
   const ringStyle = {
     background: `conic-gradient(hsl(var(--primary)) 0% ${pct}%, rgba(255,255,255,0.14) ${pct}% 100%)`,
@@ -74,20 +78,24 @@ export function HeroScore({
 
         {/* TOP ROW: commander art + info + action buttons */}
         <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-          {/* Commander card thumbnail(s) */}
+          {/* Commander card thumbnail(s) — hover to preview */}
           <div className="flex items-start gap-1.5 shrink-0">
             {(commander.image_uris?.small ?? commander.card_faces?.[0]?.image_uris?.small) && (
               <img
                 src={commander.image_uris?.small ?? commander.card_faces?.[0]?.image_uris?.small ?? ''}
                 alt={commander.name}
-                className="w-12 h-[4.2rem] rounded-md border border-border/50 object-cover shadow-md"
+                onMouseEnter={(e) => setHover({ card: commander, rect: e.currentTarget.getBoundingClientRect() })}
+                onMouseLeave={() => setHover(null)}
+                className="w-12 h-[4.2rem] rounded-md border border-border/50 object-cover shadow-md cursor-pointer transition-transform hover:scale-105"
               />
             )}
             {partnerCommander && (partnerCommander.image_uris?.small ?? partnerCommander.card_faces?.[0]?.image_uris?.small) && (
               <img
                 src={partnerCommander.image_uris?.small ?? partnerCommander.card_faces?.[0]?.image_uris?.small ?? ''}
                 alt={partnerCommander.name}
-                className="w-12 h-[4.2rem] rounded-md border border-border/50 object-cover shadow-md -ml-3"
+                onMouseEnter={(e) => setHover({ card: partnerCommander, rect: e.currentTarget.getBoundingClientRect() })}
+                onMouseLeave={() => setHover(null)}
+                className="w-12 h-[4.2rem] rounded-md border border-border/50 object-cover shadow-md -ml-3 cursor-pointer transition-transform hover:scale-105"
               />
             )}
           </div>
@@ -178,6 +186,23 @@ export function HeroScore({
         </div>
 
       </div>
+
+      {hover && createPortal(
+        <div
+          className="fixed pointer-events-none hidden md:block z-50"
+          style={{
+            top: Math.max(8, Math.min(hover.rect.top - 20, window.innerHeight - 360)),
+            left: hover.rect.right + 12,
+          }}
+        >
+          <img
+            src={getCardImageUrl(hover.card, 'normal') ?? ''}
+            alt={hover.card.name}
+            className="w-[250px] rounded-xl shadow-2xl border border-border/50"
+          />
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
