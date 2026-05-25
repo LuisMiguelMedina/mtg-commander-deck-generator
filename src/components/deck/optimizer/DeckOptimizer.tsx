@@ -27,9 +27,8 @@ import { RolesTabContent } from './RolesTab';
 import { LandsTabContent } from './LandsTab';
 import { CurveSummaryStrip, ManaCurveLineChart, CurveDetailPanel, type RoleGroupKey, ROLE_GROUP_ORDER } from './CurveTab';
 import { BracketTabContent } from './BracketTab';
-import { OptimizeView } from './OptimizeTab';
 import { CostTab } from './CostTab';
-import { CardFitTab } from './CardFitTab';
+import { OptimizeTabContent } from './optimize/OptimizeTabContent';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Main Component
@@ -92,8 +91,6 @@ export function DeckOptimizer({
       setSelectedCmc(initialSelectedCmc);
     }
   }, [initialSelectedCmc]);
-  const [optimizeView, setOptimizeView] = useState(false);
-
   // Listen for "See more" from deck grade badge
   const handleOptimizeRef = useRef<(() => void) | null>(null);
   useEffect(() => {
@@ -930,7 +927,6 @@ export function DeckOptimizer({
   const updateCustomization = useStore(s => s.updateCustomization);
   const storeSelectedThemes = useStore(s => s.selectedThemes);
   const usedThemes = useStore(s => s.generatedDeck?.usedThemes);
-  const detectedCombos = useStore(s => s.generatedDeck?.detectedCombos);
   const bracketLevel = useStore(s => s.generatedDeck?.bracketEstimation?.bracket);
   const displayThemeNames = useMemo(() => {
     // 1. If user selected themes in the optimizer, show those
@@ -1051,12 +1047,12 @@ export function DeckOptimizer({
       ? [...activeRoleGroups][0] : null;
     document.dispatchEvent(new CustomEvent('deck-optimizer-state', {
       detail: {
-        dirty: isAnalysisDirty, loading, hasAnalysis: !!analysis, optimizeView, activeTab, activeRole,
+        dirty: isAnalysisDirty, loading, hasAnalysis: !!analysis, activeTab, activeRole,
         activeCmcRange: curvePhaseRange,
         activeRoleGroup: curveRoleGroup,
       },
     }));
-  }, [isAnalysisDirty, loading, analysis, optimizeView, activeTab, activeRole, activeCurvePhases, activeRoleGroups, selectedCmc]);
+  }, [isAnalysisDirty, loading, analysis, activeTab, activeRole, activeCurvePhases, activeRoleGroups, selectedCmc]);
 
   // Per-tab rollup grades shown in the tab bar — same letters as the
   // overview summary card so the user sees consistent grading at a glance.
@@ -1107,7 +1103,6 @@ export function DeckOptimizer({
       for (const name of additions) pushDeckHistory({ action: 'add', cardName: name });
     }
     setAddedCards(new Set());
-    setOptimizeView(false);
   }, [onRemoveCards, onAddCards, pushDeckHistory]);
 
   // --- Pre-analysis: prominent CTA ---
@@ -1185,7 +1180,7 @@ export function DeckOptimizer({
   // ═════════════════════════════════════════════════════════════════════
   // Dashboard Render
   // ═════════════════════════════════════════════════════════════════════
-  const themePacingStrip = !optimizeView && (
+  const themePacingStrip = (
     themeDetection && analysis ? (
       <Popover>
         <PopoverTrigger asChild>
@@ -1247,9 +1242,8 @@ export function DeckOptimizer({
 
   return (
     <div id="deck-optimizer" className="flex flex-1 min-h-0 border-b-4 border-border/60 lg:border-b-0">
-      {/* Vertical sidebar — hidden in optimize view */}
-      {!optimizeView && (
-        <aside className="w-12 shrink-0 flex flex-col items-stretch border-r border-border/40 bg-background/60">
+      {/* Vertical sidebar */}
+      <aside className="w-12 shrink-0 flex flex-col items-stretch border-r border-border/40 bg-background/60">
           <TooltipProvider delayDuration={200}>
           {onChangeDeck && (
             <Tooltip>
@@ -1354,7 +1348,6 @@ export function DeckOptimizer({
           })()}
           </TooltipProvider>
         </aside>
-      )}
 
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
         {/* Themes / Pacing strip above tab content */}
@@ -1396,26 +1389,6 @@ export function DeckOptimizer({
 
         {/* Tab Content */}
         <div className={`flex-1 min-h-0 overflow-y-auto ${activeTab === 'optimize' ? 'p-0' : 'p-3 sm:p-4'} ${activeTab === 'roles' ? 'flex flex-col' : ''} ${activeTab === 'cost' ? 'pt-0 sm:pt-0' : ''}`}>
-
-        {/* ── OPTIMIZE VIEW (replaces tabs) ── */}
-        {optimizeView ? (
-          <OptimizeView
-            analysis={analysis}
-            currentCards={currentCards}
-            commanderName={commanderName}
-            partnerCommanderName={partnerCommanderName}
-            cardInclusionMap={cardInclusionMap}
-            mustIncludeNames={menuProps.mustIncludeNames}
-            bannedNames={menuProps.bannedNames}
-            detectedCombos={detectedCombos}
-            onApply={handleApplyOptimize}
-            onBack={() => setOptimizeView(false)}
-            userLandTarget={userLandTarget}
-            onLandTargetChange={handleLandTargetChange}
-            deckSize={deckSize}
-            onPreview={handlePreview}
-          />
-        ) : (<>
 
         {/* ── OVERVIEW TAB ── */}
         {activeTab === 'overview' && commander && (
@@ -1551,26 +1524,25 @@ export function DeckOptimizer({
           );
         })()}
 
-        {/* ── CARD FIT TAB ── */}
-        {activeTab === 'optimize' && analysis && (() => {
-          const deck = useStore.getState().generatedDeck;
-          if (!deck) return null;
-          return (
-            <CardFitTab
-              misfits={analysis.misfits ?? []}
-              gapAnalysis={analysis.gapAnalysis ?? []}
-              onPreview={name => handlePreview(name)}
-              onAddCard={onAddCards ? (name: string) => onAddCards([name], 'deck') : undefined}
-              onRemoveCard={onRemoveCards ? (card: ScryfallCard) => onRemoveCards([card.name]) : undefined}
-              sampleSize={cachedEdhrecDataRef.current?.stats?.numDecks ?? null}
-              onFocusedMisfitChange={onFocusedMisfitChange}
-              deck={deck}
-              cardInclusionMap={cardInclusionMap ?? {}}
-              roleCounts={roleCounts}
-              roleTargets={roleTargets}
-            />
-          );
-        })()}
+        {/* ── OPTIMIZE TAB ── */}
+        {activeTab === 'optimize' && analysis && (
+          <OptimizeTabContent
+            analysis={analysis}
+            currentCards={currentCards}
+            commanderName={commanderName}
+            partnerCommanderName={partnerCommanderName}
+            cardInclusionMap={cardInclusionMap}
+            mustIncludeNames={menuProps.mustIncludeNames}
+            bannedNames={menuProps.bannedNames}
+            detectedCombos={useStore.getState().generatedDeck?.detectedCombos ?? []}
+            onApply={handleApplyOptimize}
+            onPreviewCard={handlePreview}
+            userLandTarget={userLandTarget}
+            onLandTargetChange={handleLandTargetChange}
+            deckSize={deckSize}
+            onFocusedMisfitChange={onFocusedMisfitChange}
+          />
+        )}
 
         {/* ── BRACKET TAB ── */}
         {activeTab === 'bracket' && (
@@ -1601,7 +1573,6 @@ export function DeckOptimizer({
           />
         )}
 
-        </>)}
         </div>
       </div>
 
