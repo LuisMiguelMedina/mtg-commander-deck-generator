@@ -78,9 +78,33 @@ export interface OptimizeColumnProps {
   renderDrilldown: (card: OptimizeCard) => ReactNode;
 }
 
-const SIDE_HEADER: Record<TileSide, { label: string; Icon: typeof TrendingDown; tintText: string; tintBg: string; tintBorder: string }> = {
-  remove: { label: 'REMOVE', Icon: TrendingDown,  tintText: 'text-red-400/80',     tintBg: 'bg-red-500/[0.03]',     tintBorder: 'border-red-500/15' },
-  add:    { label: 'ADD',    Icon: TrendingUp,    tintText: 'text-emerald-400/80', tintBg: 'bg-emerald-500/[0.03]', tintBorder: 'border-emerald-500/15' },
+const SIDE_HEADER: Record<TileSide, {
+  label: string;
+  Icon: typeof TrendingDown;
+  tintText: string;
+  tintBg: string;
+  tintBorder: string;
+  leftAccent: string;
+  stickyBg: string;
+}> = {
+  remove: {
+    label: 'REMOVE',
+    Icon: TrendingDown,
+    tintText: 'text-red-400/90',
+    tintBg: 'bg-red-500/[0.06]',
+    tintBorder: 'border-red-500/25',
+    leftAccent: 'border-l-2 border-l-red-500/50',
+    stickyBg: 'bg-red-950/85',
+  },
+  add: {
+    label: 'ADD',
+    Icon: TrendingUp,
+    tintText: 'text-emerald-400/90',
+    tintBg: 'bg-emerald-500/[0.06]',
+    tintBorder: 'border-emerald-500/25',
+    leftAccent: 'border-l-2 border-l-emerald-500/50',
+    stickyBg: 'bg-emerald-950/85',
+  },
 };
 
 export function OptimizeColumn({
@@ -93,8 +117,12 @@ export function OptimizeColumn({
   const allUnchecked = cards.length > 0 && cards.every(c => uncheckedNames.has(c.name));
 
   return (
-    <div className={`${headerMeta.tintBg} border ${headerMeta.tintBorder} rounded-xl p-3 sm:p-4 space-y-4`}>
-      <div className="flex items-center gap-2 pb-2 border-b border-border/20">
+    <div className={`${headerMeta.tintBg} ${headerMeta.leftAccent} border ${headerMeta.tintBorder} rounded-xl p-3 sm:p-4 space-y-4`}>
+      {/* Column header — sticky so the side label and select-all stay visible while scrolling.
+          top-24 sits flush below the sticky hero bar. */}
+      <div
+        className={`sticky top-24 z-10 -mx-3 sm:-mx-4 px-3 sm:px-4 -mt-3 sm:-mt-4 pt-3 sm:pt-4 pb-2 border-b border-border/30 ${headerMeta.stickyBg} backdrop-blur-md flex items-center gap-2`}
+      >
         <headerMeta.Icon className={`w-3.5 h-3.5 ${headerMeta.tintText}`} />
         <span className={`text-xs font-semibold uppercase tracking-wider ${headerMeta.tintText}`}>
           {headerMeta.label} ({totalCount})
@@ -110,11 +138,13 @@ export function OptimizeColumn({
 
       {groups.map(group => (
         <section key={group.category}>
-          <div className="flex items-baseline gap-2 mb-2 px-0.5">
+          {/* Group label — sticky just below the sticky column header so the user
+              always knows which category they're scrolling through. */}
+          <div className={`sticky top-[8.5rem] z-[5] -mx-3 sm:-mx-4 px-3 sm:px-4 py-1 mb-2 ${headerMeta.stickyBg} backdrop-blur-md flex items-baseline gap-2`}>
             <span className={`text-[11px] font-semibold uppercase tracking-wider ${headerMeta.tintText}`}>
               {group.label}
             </span>
-            <span className="text-[10px] text-muted-foreground/60">{group.cards.length}</span>
+            <span className="text-[10px] text-foreground/60">{group.cards.length}</span>
           </div>
 
           {/* grid-flow-dense lets following tiles back-fill gaps left when
