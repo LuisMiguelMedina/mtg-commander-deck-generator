@@ -1534,7 +1534,6 @@ export function DeckOptimizer({
             cardInclusionMap={cardInclusionMap}
             mustIncludeNames={menuProps.mustIncludeNames}
             bannedNames={menuProps.bannedNames}
-            detectedCombos={useStore.getState().generatedDeck?.detectedCombos ?? []}
             onApply={handleApplyOptimize}
             onPreviewCard={handlePreview}
             onFocusedMisfitChange={onFocusedMisfitChange}

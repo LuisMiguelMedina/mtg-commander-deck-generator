@@ -9,6 +9,10 @@ import { OptimizeDrilldown } from './OptimizeDrilldown';
 import { OptimizeComboFooter } from './OptimizeComboFooter';
 import { useOptimizePlan } from './useOptimizePlan';
 
+// Module-level constant so optional-prop fallbacks don't allocate fresh arrays
+// each render (which would invalidate downstream useMemo deps).
+const EMPTY_COMBOS: DetectedCombo[] = [];
+
 export interface OptimizeTabContentProps {
   analysis: DeckAnalysis;
   currentCards: ScryfallCard[];
@@ -17,7 +21,6 @@ export interface OptimizeTabContentProps {
   cardInclusionMap?: Record<string, number>;
   mustIncludeNames: Set<string>;
   bannedNames: Set<string>;
-  detectedCombos?: DetectedCombo[];
   onApply: (removals: string[], additions: string[]) => void | Promise<void>;
   onPreviewCard: (name: string) => void;
   /** Fired when the user opens the drill-down for a cut card. Enables deck-view highlight. */
@@ -26,10 +29,15 @@ export interface OptimizeTabContentProps {
 
 export function OptimizeTabContent({
   analysis, currentCards, commanderName, partnerCommanderName,
-  cardInclusionMap, mustIncludeNames, bannedNames, detectedCombos,
+  cardInclusionMap, mustIncludeNames, bannedNames,
   onApply, onPreviewCard,
   onFocusedMisfitChange,
 }: OptimizeTabContentProps) {
+  // Subscribe to store directly so we get a stable reference for the combos
+  // array (Zustand returns the same slice instance until it actually changes).
+  const deck = useStore(s => s.generatedDeck);
+  const detectedCombos = deck?.detectedCombos ?? EMPTY_COMBOS;
+
   const plan = useOptimizePlan({
     analysis, currentCards, cardInclusionMap,
     commanderName, partnerCommanderName,
@@ -42,8 +50,6 @@ export function OptimizeTabContent({
   const [highlightedComboId, setHighlightedComboId] = useState<string | null>(null);
   const highlightTimerRef = useRef<number | null>(null);
   const footerRef = useRef<HTMLDivElement | null>(null);
-
-  const deck = useStore(s => s.generatedDeck);
 
   const handleToggleRemove = useCallback((name: string) => {
     setActiveRemoveName(curr => (curr === name ? null : name));
@@ -147,7 +153,7 @@ export function OptimizeTabContent({
 
       <div ref={footerRef}>
         <OptimizeComboFooter
-          combos={detectedCombos ?? []}
+          combos={detectedCombos}
           bannedNames={bannedNames}
           addColumnNames={addColumnNames}
           uncheckedAdditions={plan.uncheckedAdditions}

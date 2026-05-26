@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ScryfallCard, DetectedCombo } from '@/types';
 import {
   computeOptimizeSwaps,
@@ -162,9 +162,17 @@ export function useOptimizePlan(opts: UseOptimizePlanOptions) {
     setTimeout(() => setApplying(false), 600);
   }, [totals.totalChanges, applying, checkedRemovals, checkedAdditions, onApply]);
 
+  // Only dispatch the highlight event when the actual set of removed names
+  // changes — comparing by joined string avoids the rerender loop that
+  // happens when listeners setState on every reference change.
+  const lastDispatchedKeyRef = useRef<string>('');
   useEffect(() => {
+    const names = checkedRemovals.map(c => c.name);
+    const key = names.join('\0');
+    if (key === lastDispatchedKeyRef.current) return;
+    lastDispatchedKeyRef.current = key;
     document.dispatchEvent(new CustomEvent('deck-optimizer-removals', {
-      detail: { names: checkedRemovals.map(c => c.name) },
+      detail: { names },
     }));
   }, [checkedRemovals]);
 
