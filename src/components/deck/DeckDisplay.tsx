@@ -51,7 +51,7 @@ import { parseCollectionList } from '@/services/collection/parseCollectionList';
 import { getCardsByNames, autocompleteCardName } from '@/services/scryfall/client';
 import { InfoTooltip } from '@/components/ui/info-tooltip';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
-import { getSwapCandidatesForCard } from '@/services/deckBuilder/cardSwap';
+import { getSwapCandidatesForCard, swapCard, pickReplacementCandidate, type ReplaceMode } from '@/services/deckBuilder/cardSwap';
 import { HEALTH_GRADE_STYLES } from '@/components/deck/optimizer/constants';
 import { cardMatchesRole, type RoleKey } from '@/services/tagger/client';
 import { trackEvent } from '@/services/analytics';
@@ -2043,7 +2043,7 @@ interface DeckDisplayProps {
 
 export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerateProgress, regenerateMessage, onRemoveCards, onAddCards, onMoveToSideboard, onMoveToMaybeboard, toolbarExtra, boardCounts, deckFooter, renderHeaderActions, onChangeQuantity, onEditModeChange, sidebarHeader, sidebarLeftActions, sideboardNames, maybeboardNames, onSetSideboard, onSetMaybeboard, children }: DeckDisplayProps) {
   const navigate = useNavigate();
-  const { generatedDeck, commander, customization, swapDeckCard, updateCustomization, pushDeckHistory } = useStore();
+  const { generatedDeck, commander, customization, swapDeckCard, setGeneratedDeck, updateCustomization, pushDeckHistory } = useStore();
   const { lists: userLists, createList, updateList, deleteList } = useUserLists();
   const formatConfig = getDeckFormatConfig(customization.deckFormat);
   const [previewCard, setPreviewCard] = useState<ScryfallCard | null>(null);
@@ -2534,54 +2534,108 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
     return getCardImageUrl(flatCardList[previewCardIndex + 1], 'small');
   }, [previewCardIndex, flatCardList]);
 
-  const handleReplaceSelected = useCallback(() => {
+  const handleReplaceWithMode = useCallback((mode: ReplaceMode) => {
+    if (!generatedDeck) return;
+
     const allCards = Object.values(groupedCards).flat();
-    const namesToBan: string[] = [];
-    const idsToMark = new Set<string>();
-
+    const selected: ScryfallCard[] = [];
     for (const { card } of allCards) {
-      if (selectedCards.has(card.id)) {
-        namesToBan.push(card.name);
-        idsToMark.add(card.id);
+      if (selectedCards.has(card.id)) selected.push(card);
+    }
+    if (selected.length === 0) return;
+
+    const normName = (n: string) => (n.includes(' // ') ? n.split(' // ')[0] : n);
+
+    const banned = new Set<string>([
+      ...customization.bannedCards.map(normName),
+      ...(customization.tempBannedCards ?? []).map(normName),
+    ]);
+    const mustInclude = new Set<string>([
+      ...customization.mustIncludeCards.map(normName),
+      ...(customization.tempMustIncludeCards ?? []).map(normName),
+    ]);
+
+    let workingDeck = generatedDeck;
+    const pairs: Array<{ oldName: string; newName: string }> = [];
+    const unreplaced: string[] = [];
+
+    for (const oldCard of selected) {
+      const inDeck = new Set<string>();
+      for (const arr of Object.values(workingDeck.categories)) {
+        for (const c of arr) inDeck.add(normName(c.name));
       }
+      if (workingDeck.commander) inDeck.add(normName(workingDeck.commander.name));
+      if (workingDeck.partnerCommander) inDeck.add(normName(workingDeck.partnerCommander.name));
+
+      const candidate = pickReplacementCandidate(workingDeck, oldCard, mode, {
+        banned,
+        mustInclude,
+        inDeck,
+      });
+
+      if (!candidate) {
+        unreplaced.push(oldCard.name);
+        continue;
+      }
+
+      const result = swapCard(workingDeck, oldCard, candidate);
+      if (!result.success) {
+        unreplaced.push(oldCard.name);
+        continue;
+      }
+
+      workingDeck = result.deck;
+      pairs.push({ oldName: oldCard.name, newName: candidate.name });
     }
 
-    if (namesToBan.length === 0) return;
-
-    const currentBanned = tempBannedRef.current;
-    const newBanned = [...currentBanned];
-    for (const name of namesToBan) {
-      if (!newBanned.includes(name)) {
-        newBanned.push(name);
-      }
+    if (pairs.length === 0) {
+      setToastMessage({ text: 'No replacements found for the selected card(s).' });
+      return;
     }
-    // Also remove any of these cards from both must-include lists
-    const banSet = new Set(namesToBan);
-    const currentTempIncludes = customization.tempMustIncludeCards ?? [];
-    const filteredTempIncludes = currentTempIncludes.filter(n => !banSet.has(n));
-    const currentMustIncludes = customization.mustIncludeCards;
-    const filteredMustIncludes = currentMustIncludes.filter(n => !banSet.has(n));
-    updateCustomization({
-      tempBannedCards: newBanned,
-      ...(filteredTempIncludes.length !== currentTempIncludes.length ? { tempMustIncludeCards: filteredTempIncludes } : {}),
-      ...(filteredMustIncludes.length !== currentMustIncludes.length ? { mustIncludeCards: filteredMustIncludes } : {}),
-    });
-    trackEvent('cards_removed', { commanderName: commander?.name ?? 'unknown', cardCount: namesToBan.length });
 
-    setRemovedCards(prev => {
-      const next = new Set(prev);
-      for (const id of idsToMark) {
-        next.add(id);
-      }
-      return next;
+    setGeneratedDeck(workingDeck);
+
+    for (const p of pairs) {
+      pushDeckHistory({ action: 'remove', cardName: p.oldName });
+      pushDeckHistory({ action: 'add', cardName: p.newName });
+    }
+
+    trackEvent('cards_removed', {
+      commanderName: commander?.name ?? 'unknown',
+      cardCount: pairs.length,
     });
 
-    setToastMessage({ text: `Replacing ${namesToBan.length} card${namesToBan.length > 1 ? 's' : ''}...` });
     setSelectedCards(new Set());
-    pendingReplaceRef.current = namesToBan;
-    // Trigger regeneration immediately
-    handleRegenerate();
-  }, [selectedCards, groupedCards, updateCustomization, handleRegenerate]);
+
+    const formatPair = (p: { oldName: string; newName: string }) => `${p.oldName} → ${p.newName}`;
+    let text: string;
+    if (pairs.length === 1) {
+      text = `${formatPair(pairs[0])}. Deck updated.`;
+    } else if (pairs.length <= 3) {
+      text = `Replaced ${pairs.length} cards: ${pairs.map(formatPair).join(', ')}`;
+    } else {
+      text = `${formatPair(pairs[0])}, +${pairs.length - 1} more replaced. Deck updated.`;
+    }
+    if (unreplaced.length > 0) {
+      text += ` No replacement found for ${unreplaced.join(', ')}.`;
+    }
+    setToastMessage({ text });
+  }, [
+    generatedDeck,
+    groupedCards,
+    selectedCards,
+    customization.bannedCards,
+    customization.tempBannedCards,
+    customization.mustIncludeCards,
+    customization.tempMustIncludeCards,
+    commander,
+    pushDeckHistory,
+    setGeneratedDeck,
+  ]);
+
+  const handleReplaceSelected = useCallback(() => {
+    handleReplaceWithMode('similar');
+  }, [handleReplaceWithMode]);
 
   const handleBanSelected = useCallback(() => {
     const allCards = Object.values(groupedCards).flat();
