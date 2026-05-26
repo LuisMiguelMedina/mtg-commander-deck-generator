@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { X, Zap, ArrowRight } from 'lucide-react';
 import type { ScryfallCard, DetectedCombo } from '@/types';
 import type { OptimizeCard } from '@/services/deckBuilder/deckAnalyzer';
@@ -59,8 +60,18 @@ export function OptimizeDrilldown({
     ? (checked ? 'Keep in deck' : 'Swap out')
     : (checked ? 'Skip this card' : 'Add to deck');
 
+  // Scroll the panel into view when it opens, leaving room below the sticky plan header.
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [card.name]);
+
   return (
-    <div className={`relative rounded-xl border ${style.panelBorder} bg-card/60 backdrop-blur-sm p-3 sm:p-4 animate-fade-in`}>
+    <div
+      ref={panelRef}
+      // scroll-mt leaves clearance for the sticky plan header above the panel
+      className={`relative rounded-xl border ${style.panelBorder} bg-card/95 backdrop-blur-lg shadow-lg p-3 sm:p-4 scroll-mt-40 animate-fade-in`}
+    >
       <button
         type="button"
         onClick={onClose}
