@@ -4119,17 +4119,20 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
         document.body
       )}
       {isEditMode && createPortal(
-        <div className="fixed bottom-0 left-0 right-0 z-40 animate-slide-up">
+        <div className="fixed bottom-0 left-0 right-0 z-40 animate-slide-up pointer-events-none">
           {/* Desktop toolbar */}
           <div className="hidden sm:block max-w-4xl mx-auto px-4 pb-4">
-            <div className="flex items-center justify-between gap-4 bg-card/95 backdrop-blur-md border border-border rounded-xl shadow-2xl px-5 py-3">
-              <span className="text-sm font-medium shrink-0">
+            {/* Selection count chip — floats above the toolbar */}
+            <div className="flex justify-start pl-1 pb-2">
+              <div className="pointer-events-auto inline-flex items-center px-3 py-1 rounded-full bg-card/95 backdrop-blur-md border border-border shadow-lg text-xs font-medium">
                 {selectedCards.size > 0 ? (
                   <>{selectedCards.size} card{selectedCards.size !== 1 ? 's' : ''} selected</>
                 ) : (
                   <span className="text-muted-foreground">Select cards</span>
                 )}
-              </span>
+              </div>
+            </div>
+            <div className="pointer-events-auto flex items-center justify-between gap-4 bg-card/95 backdrop-blur-md border border-border rounded-xl shadow-2xl px-5 py-3">
               {toolbarExtra}
               <div className="flex items-center gap-2">
                 {onRemoveCards && (
@@ -4310,7 +4313,7 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
               ? listsOnly.filter(l => l.name.toLowerCase().includes(listSearchQuery.toLowerCase()))
               : listsOnly;
             return (
-              <div className="sm:hidden bg-card/95 backdrop-blur-md border-t border-border shadow-2xl">
+              <div className="sm:hidden pointer-events-auto bg-card/95 backdrop-blur-md border-t border-border shadow-2xl">
                 {/* Handle + Header */}
                 <div className="flex items-center justify-between px-4 pt-3 pb-2">
                   <span className="text-sm font-medium">
