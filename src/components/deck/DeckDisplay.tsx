@@ -4122,9 +4122,9 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
         <div className="fixed bottom-0 left-0 right-0 z-40 animate-slide-up pointer-events-none">
           {/* Desktop toolbar */}
           <div className="hidden sm:block max-w-4xl mx-auto px-4 pb-4">
-            {/* Selection count chip — floats above the toolbar */}
-            <div className="flex justify-start pl-1 pb-2">
-              <div className="pointer-events-auto inline-flex items-center px-3 py-1 rounded-full bg-card/95 backdrop-blur-md border border-border shadow-lg text-xs font-medium">
+            {/* Selection count tab — sticks up off the toolbar */}
+            <div className="flex justify-start pl-4">
+              <div className="pointer-events-auto inline-flex items-center px-3 py-1 rounded-t-md bg-card/95 backdrop-blur-md border border-b-0 border-border text-xs font-medium">
                 {selectedCards.size > 0 ? (
                   <>{selectedCards.size} card{selectedCards.size !== 1 ? 's' : ''} selected</>
                 ) : (
@@ -4132,7 +4132,7 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
                 )}
               </div>
             </div>
-            <div className="pointer-events-auto flex items-center justify-between gap-4 bg-card/95 backdrop-blur-md border border-border rounded-xl shadow-2xl px-5 py-3">
+            <div className="pointer-events-auto flex items-center gap-3 bg-card/95 backdrop-blur-md border border-border rounded-xl shadow-2xl px-5 py-3">
               {toolbarExtra}
               <div className="flex items-center gap-2">
                 {onRemoveCards && (
@@ -4170,7 +4170,12 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
                       <Ban className="w-3.5 h-3.5" />
                       <span>Exclude</span>
                     </button>
-                    <div className="w-px h-5 bg-border mx-0.5" />
+                  </>
+                )}
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                {onRegenerate && (
+                  <>
                     <button
                       onClick={handleReplaceSelected}
                       disabled={selectedCards.size === 0}
