@@ -93,7 +93,7 @@ export function OptimizeDrilldown({
 
         <div className="flex-1 min-w-0 flex flex-col gap-3">
           <div>
-            <div className="flex items-start gap-2">
+            <div className="flex items-start gap-2 pr-8">
               <h4 className="text-sm font-semibold flex items-center gap-2 flex-1 min-w-0">
                 <span className="truncate">{card.name}</span>
                 {card.isGameChanger && (
