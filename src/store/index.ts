@@ -232,6 +232,7 @@ export const useStore = create<AppState>((set, get) => ({
   isLoading: false,
   loadingMessage: '',
   error: null,
+  isModifyMode: false,
 
   // Actions
   setCommander: (card: ScryfallCard | null) => set((state) => {
@@ -375,6 +376,8 @@ export const useStore = create<AppState>((set, get) => ({
   }),
 
   setError: (error: string | null) => set({ error }),
+
+  setModifyMode: (on: boolean) => set({ isModifyMode: on }),
 
   reset: () => set((state) => ({
     commander: null,

@@ -547,6 +547,7 @@ export interface AppState {
   isLoading: boolean;
   loadingMessage: string;
   error: string | null;
+  isModifyMode: boolean;
 
   // Actions
   setCommander: (card: ScryfallCard | null) => void;
@@ -566,5 +567,6 @@ export interface AppState {
   clearDeckHistory: () => void;
   setLoading: (loading: boolean, message?: string) => void;
   setError: (error: string | null) => void;
+  setModifyMode: (on: boolean) => void;
   reset: () => void;
 }

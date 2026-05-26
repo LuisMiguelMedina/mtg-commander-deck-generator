@@ -2038,7 +2038,7 @@ interface DeckDisplayProps {
 
 export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerateProgress, regenerateMessage, onRemoveCards, onAddCards, onMoveToSideboard, onMoveToMaybeboard, toolbarExtra, boardCounts, deckFooter, renderHeaderActions, onChangeQuantity, onEditModeChange, sidebarHeader, sidebarLeftActions, sideboardNames, maybeboardNames, onSetSideboard, onSetMaybeboard, children }: DeckDisplayProps) {
   const navigate = useNavigate();
-  const { generatedDeck, commander, customization, swapDeckCard, setGeneratedDeck, updateCustomization, pushDeckHistory } = useStore();
+  const { generatedDeck, commander, customization, swapDeckCard, setGeneratedDeck, updateCustomization, pushDeckHistory, setModifyMode } = useStore();
   const { lists: userLists, createList, updateList, deleteList } = useUserLists();
   const formatConfig = getDeckFormatConfig(customization.deckFormat);
   const [previewCard, setPreviewCard] = useState<ScryfallCard | null>(null);
@@ -2053,7 +2053,7 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
       return next;
     });
   }, []);
-  const [sortBy, setSortBy] = useState<'name' | 'cmc' | 'price' | 'score' | 'relevancy' | 'edhrank'>('name');
+  const [sortBy, setSortBy] = useState<'name' | 'cmc' | 'price' | 'score' | 'relevancy' | 'edhrank' | 'color'>('name');
   const [gridAnimateRef] = useAutoAnimate({ duration: 250 });
   const [statsFilter, setStatsFilter] = useState<StatsFilter>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -2090,7 +2090,9 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
   // Notify parent of edit mode changes outside of render
   useEffect(() => {
     onEditModeChange?.(isEditMode);
-  }, [isEditMode, onEditModeChange]);
+    setModifyMode(isEditMode);
+  }, [isEditMode, onEditModeChange, setModifyMode]);
+  useEffect(() => () => { setModifyMode(false); }, [setModifyMode]);
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set());
   const [showAddToDropdown, setShowAddToDropdown] = useState(false);
   const [editDrawerTab, setEditDrawerTab] = useState<'actions' | 'move' | 'add'>('actions');
@@ -2427,6 +2429,16 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
           const rankA = a.card.edhrec_rank ?? Number.MAX_SAFE_INTEGER;
           const rankB = b.card.edhrec_rank ?? Number.MAX_SAFE_INTEGER;
           return rankA - rankB || a.card.name.localeCompare(b.card.name);
+        }
+        if (sortBy === 'color') {
+          const colorKey = (c: typeof a.card) => {
+            const ci = c.color_identity || [];
+            if (ci.length === 0) return 6; // colorless
+            if (ci.length > 1) return 5;   // multicolor
+            const order: Record<string, number> = { W: 0, U: 1, B: 2, R: 3, G: 4 };
+            return order[ci[0]] ?? 6;
+          };
+          return colorKey(a.card) - colorKey(b.card) || a.card.name.localeCompare(b.card.name);
         }
         return 0;
       });
@@ -3330,11 +3342,12 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
               <span className="text-xs text-muted-foreground">SORT:</span>
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'name' | 'cmc' | 'price' | 'score' | 'relevancy')}
+                onChange={(e) => setSortBy(e.target.value as 'name' | 'cmc' | 'price' | 'score' | 'relevancy' | 'edhrank' | 'color')}
                 className="bg-transparent text-xs text-primary font-medium focus:outline-none cursor-pointer"
               >
                 <option value="name">NAME</option>
                 <option value="cmc">CMC</option>
+                <option value="color">COLOR</option>
                 <option value="price">PRICE</option>
                 {showInclusion && generatedDeck?.cardInclusionMap && <option value="score">INCLUSION</option>}
                 {showRelevancy && generatedDeck?.cardRelevancyMap && <option value="relevancy">RELEVANCY</option>}
@@ -3620,11 +3633,12 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
             <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'name' | 'cmc' | 'price' | 'score' | 'relevancy')}
+              onChange={(e) => setSortBy(e.target.value as 'name' | 'cmc' | 'price' | 'score' | 'relevancy' | 'edhrank' | 'color')}
               className="bg-transparent text-xs text-primary font-medium focus:outline-none cursor-pointer"
             >
               <option value="name">NAME</option>
               <option value="cmc">CMC</option>
+              <option value="color">COLOR</option>
               <option value="price">PRICE</option>
               {showInclusion && generatedDeck?.cardInclusionMap && <option value="score">INCLUSION</option>}
               {showRelevancy && generatedDeck?.cardRelevancyMap && <option value="relevancy">RELEVANCY</option>}
