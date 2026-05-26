@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.2.29",
+    "notes": [
+      "Replace cards in place — no more full deck regenerate when swapping one card",
+      "New 'Replace with…' option lets you pick a category: Ramp, Removal, Boardwipe, Draw, or Synergy",
+      "Toast now names the swapped pair so you can see exactly what changed"
+    ]
+  },
+  {
     "version": "1.2.28",
     "notes": [
       "An experimental Inspector page has been released to EA (previously the analyzer). Quickly check your deck for role coverage, mana curve strength, and new card suggestions with ease.",
