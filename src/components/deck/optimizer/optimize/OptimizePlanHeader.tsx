@@ -48,8 +48,8 @@ export function OptimizePlanHeader({
 
   return (
     <div className="sticky top-0 z-20 -mx-3 sm:-mx-4 px-3 sm:px-4 py-3 sm:py-4 mb-6 sm:mb-8 border-b-2 border-border/60 shadow-lg shadow-black/40 bg-gradient-to-b from-violet-900/25 via-background/95 to-background backdrop-blur-lg">
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+        <div className="min-w-0 flex-1">
           <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-violet-300" />
             Tune your deck
@@ -59,54 +59,56 @@ export function OptimizePlanHeader({
           </p>
         </div>
 
-        <div
-          role="tablist"
-          aria-label="Tune view"
-          className="ml-auto sm:ml-0 sm:mx-auto flex items-center gap-1 p-1 rounded-lg bg-background/40 border border-border/40"
-        >
-          {toggleOptions.map(opt => {
-            const isActive = view === opt.key;
-            return (
-              <button
-                key={opt.key}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => onViewChange(opt.key)}
-                className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md border transition-colors ${
-                  isActive
-                    ? opt.activeClass
-                    : 'bg-transparent text-foreground/70 border-transparent hover:bg-white/5 hover:text-foreground'
-                }`}
-              >
-                <opt.Icon className="w-3.5 h-3.5" />
-                <span>{opt.label}</span>
-                <span className={`tabular-nums text-[10px] font-bold ${isActive ? '' : 'text-foreground/60'}`}>
-                  {opt.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        <div className="flex flex-col items-stretch sm:items-end gap-2">
+          <Button
+            type="button"
+            onClick={onApply}
+            disabled={totalChanges === 0 || applying}
+            className="btn-shimmer px-4 py-2 text-sm font-semibold gap-2"
+          >
+            {applying ? (
+              <>
+                <Check className="w-4 h-4" />
+                Applied!
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                Apply {totalChanges} Change{totalChanges !== 1 ? 's' : ''}
+              </>
+            )}
+          </Button>
 
-        <Button
-          type="button"
-          onClick={onApply}
-          disabled={totalChanges === 0 || applying}
-          className="btn-shimmer px-4 py-2 text-sm font-semibold gap-2 self-center"
-        >
-          {applying ? (
-            <>
-              <Check className="w-4 h-4" />
-              Applied!
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-4 h-4" />
-              Apply {totalChanges} Change{totalChanges !== 1 ? 's' : ''}
-            </>
-          )}
-        </Button>
+          <div
+            role="tablist"
+            aria-label="Tune view"
+            className="flex items-center gap-1 p-1 rounded-lg bg-background/40 border border-border/40"
+          >
+            {toggleOptions.map(opt => {
+              const isActive = view === opt.key;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => onViewChange(opt.key)}
+                  className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md border transition-colors ${
+                    isActive
+                      ? opt.activeClass
+                      : 'bg-transparent text-foreground/70 border-transparent hover:bg-white/5 hover:text-foreground'
+                  }`}
+                >
+                  <opt.Icon className="w-3.5 h-3.5" />
+                  <span>{opt.label}</span>
+                  <span className={`tabular-nums text-[10px] font-bold ${isActive ? '' : 'text-foreground/60'}`}>
+                    {opt.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <div className="mt-2 flex items-center gap-1.5 text-[10px] font-semibold tabular-nums">
