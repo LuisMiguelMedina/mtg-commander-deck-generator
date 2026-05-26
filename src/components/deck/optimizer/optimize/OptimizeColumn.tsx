@@ -82,28 +82,22 @@ const SIDE_HEADER: Record<TileSide, {
   label: string;
   Icon: typeof TrendingDown;
   tintText: string;
-  tintBg: string;
-  tintBorder: string;
-  leftAccent: string;
+  cardBg: string;
   stickyBg: string;
 }> = {
   remove: {
     label: 'REMOVE',
     Icon: TrendingDown,
     tintText: 'text-red-400/90',
-    tintBg: 'bg-red-500/[0.06]',
-    tintBorder: 'border-red-500/25',
-    leftAccent: 'border-l-2 border-l-red-500/50',
-    stickyBg: 'bg-red-950/85',
+    cardBg: 'bg-red-500/[0.08]',
+    stickyBg: 'bg-red-950/55',
   },
   add: {
     label: 'ADD',
     Icon: TrendingUp,
     tintText: 'text-emerald-400/90',
-    tintBg: 'bg-emerald-500/[0.06]',
-    tintBorder: 'border-emerald-500/25',
-    leftAccent: 'border-l-2 border-l-emerald-500/50',
-    stickyBg: 'bg-emerald-950/85',
+    cardBg: 'bg-emerald-500/[0.08]',
+    stickyBg: 'bg-emerald-950/55',
   },
 };
 
@@ -117,11 +111,11 @@ export function OptimizeColumn({
   const allUnchecked = cards.length > 0 && cards.every(c => uncheckedNames.has(c.name));
 
   return (
-    <div className={`${headerMeta.tintBg} ${headerMeta.leftAccent} border ${headerMeta.tintBorder} rounded-xl p-3 sm:p-4 space-y-4`}>
-      {/* Column header — sticky so the side label and select-all stay visible while scrolling.
-          top-24 sits flush below the sticky hero bar. */}
+    // No outer column backdrop or border — each section card stands on its own.
+    <div className="space-y-3">
+      {/* Column header — its own glassy card, sticky just below the hero bar. */}
       <div
-        className={`sticky top-24 z-10 -mx-3 sm:-mx-4 px-3 sm:px-4 -mt-3 sm:-mt-4 pt-3 sm:pt-4 pb-2 border-b border-border/30 ${headerMeta.stickyBg} backdrop-blur-md flex items-center gap-2`}
+        className={`sticky top-[6.5rem] z-10 px-3 py-2 rounded-xl ${headerMeta.stickyBg} backdrop-blur-md flex items-center gap-2 shadow-md shadow-black/30`}
       >
         <headerMeta.Icon className={`w-3.5 h-3.5 ${headerMeta.tintText}`} />
         <span className={`text-xs font-semibold uppercase tracking-wider ${headerMeta.tintText}`}>
@@ -130,17 +124,20 @@ export function OptimizeColumn({
         <button
           type="button"
           onClick={() => (allUnchecked ? onSelectAll() : onDeselectAll())}
-          className={`ml-auto text-[10px] font-medium px-2 py-1 rounded border transition-colors ${headerMeta.tintText} border-border/30 hover:border-border/60 hover:bg-accent/30`}
+          className={`ml-auto text-[10px] font-medium px-2 py-1 rounded transition-colors ${headerMeta.tintText} hover:bg-white/10`}
         >
           {allUnchecked ? 'Select all' : 'Deselect all'}
         </button>
       </div>
 
+      {/* Each group is its own glassy card — no border. */}
       {groups.map(group => (
-        <section key={group.category}>
-          {/* Group label — sticky just below the sticky column header so the user
-              always knows which category they're scrolling through. */}
-          <div className={`sticky top-[8.5rem] z-[5] -mx-3 sm:-mx-4 px-3 sm:px-4 py-1 mb-2 ${headerMeta.stickyBg} backdrop-blur-md flex items-baseline gap-2`}>
+        <section
+          key={group.category}
+          className={`${headerMeta.cardBg} rounded-xl p-3`}
+        >
+          {/* Group label — sticky inside its section card, just below the column header. */}
+          <div className={`sticky top-[9.5rem] z-[5] -mx-3 px-3 py-1.5 mb-2 rounded-md ${headerMeta.stickyBg} backdrop-blur-md flex items-baseline gap-2`}>
             <span className={`text-[11px] font-semibold uppercase tracking-wider ${headerMeta.tintText}`}>
               {group.label}
             </span>
@@ -169,7 +166,7 @@ export function OptimizeColumn({
       ))}
 
       {groups.length === 0 && (
-        <p className="text-xs text-muted-foreground/60 italic py-6 text-center">
+        <p className="text-xs text-foreground/60 italic py-6 text-center">
           {side === 'remove' ? 'No cuts recommended.' : 'No additions recommended.'}
         </p>
       )}
