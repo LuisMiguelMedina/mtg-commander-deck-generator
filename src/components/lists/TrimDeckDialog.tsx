@@ -28,7 +28,12 @@ export interface TrimDeckDialogProps {
 export function TrimDeckDialog(props: TrimDeckDialogProps) {
   const { open, onClose, onConfirm, cards, commanderName, partnerCommanderName, targetSize } = props;
 
-  const [landTarget, setLandTarget] = useState<number>(36);
+  const currentLandCount = useMemo(
+    () => cards.filter(c => getFrontFaceTypeLine(c).toLowerCase().includes('land')).length,
+    [cards],
+  );
+
+  const [landTarget, setLandTarget] = useState<number>(Math.max(30, currentLandCount));
 
   const plan: TrimResult = useMemo(() => planTrim({
     cards,
@@ -54,8 +59,8 @@ export function TrimDeckDialog(props: TrimDeckDialogProps) {
   }, [defaultsKey]);
 
   useEffect(() => {
-    if (open) setLandTarget(36);
-  }, [open]);
+    if (open) setLandTarget(Math.max(30, currentLandCount));
+  }, [open, currentLandCount]);
 
   useEffect(() => {
     if (!open) return;
@@ -97,10 +102,41 @@ export function TrimDeckDialog(props: TrimDeckDialogProps) {
           </button>
         </div>
 
-        {/* Controls strip (filled in Task 5) */}
-        <div className="px-5 py-3 border-b border-border bg-muted/30 text-sm text-muted-foreground">
-          Land target: {landTarget} — controls wired in next step
+        {/* Controls strip */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-border bg-muted/30">
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Keep</span>
+            <input
+              type="number"
+              min={30}
+              max={currentLandCount}
+              value={landTarget}
+              onChange={(e) => setLandTarget(parseInt(e.target.value, 10) || 0)}
+              onBlur={(e) => {
+                const v = parseInt(e.target.value, 10) || 0;
+                const clamped = Math.max(30, Math.min(currentLandCount, v));
+                if (clamped !== v) setLandTarget(clamped);
+              }}
+              className="w-16 px-2 py-1 rounded border border-border bg-background text-center"
+              aria-label="Land count to keep"
+            />
+            <span className="text-muted-foreground">lands</span>
+            <span className="text-xs text-violet-300/80">
+              → cut {plan.cutLands} land{plan.cutLands === 1 ? '' : 's'}
+            </span>
+          </label>
+          <div className="text-xs text-muted-foreground">
+            Cutting <span className="font-semibold text-foreground">{overage}</span> cards —
+            <span className="font-semibold text-foreground"> {plan.cutLands}</span> lands,
+            <span className="font-semibold text-foreground"> {plan.cutSpells}</span> spells
+          </div>
         </div>
+
+        {plan.relaxedGuardrail && (
+          <div className="mx-5 mt-3 px-3 py-2 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs">
+            All low-relevancy cards fill role gaps — guardrail relaxed for the last few cuts.
+          </div>
+        )}
 
         {/* Card list */}
         <div className="px-5 py-3 max-h-[50vh] overflow-y-auto">
