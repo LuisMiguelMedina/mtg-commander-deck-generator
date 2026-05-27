@@ -198,6 +198,20 @@ export async function enrichDeckCards(
           synMap[card.name] = syn ?? 0;
         }
       }
+      // Also seed the maps with EDHREC pool entries so swap candidates
+      // (which aren't in the deck) still get inclusion % rendered in the
+      // preview modal. deckScore was already computed from deck cards only,
+      // so adding extras here doesn't affect it.
+      for (const c of edhrecData.cardlists.allNonLand) {
+        if (!(c.name in inclMap)) inclMap[c.name] = c.inclusion;
+        if (!(c.name in synMap)) synMap[c.name] = c.synergy ?? 0;
+      }
+      for (const c of edhrecData.cardlists.lands) {
+        if (BASIC_LAND_NAMES.has(c.name)) continue;
+        if (!(c.name in inclMap)) inclMap[c.name] = c.inclusion;
+        if (!(c.name in synMap)) synMap[c.name] = c.synergy ?? 0;
+      }
+
       cardInclusionMap = inclMap;
       cardSynergyMap = synMap;
       deckScore = Math.round(score);
