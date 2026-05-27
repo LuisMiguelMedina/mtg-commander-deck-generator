@@ -2,7 +2,8 @@
   {
     "version": "1.2.30",
     "notes": [
-      "Additional suggestions for card replacements fueled by EDHRec",
+      "Minor improvements to replacements, replacements made avaialble in your own decks too - not just the generated ones",
+      "Replacements now include additional suggestions from EDHRec",
       "Minor improvements to the List creation/management experience"
     ]
   },
