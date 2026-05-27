@@ -597,6 +597,7 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
   const hasNav = !!(onNavigate && canNavigate && !cardOverride);
 
   return createPortal(
+    <>
     <div
       data-card-preview-modal
       className="fixed inset-0 z-50 flex bg-black/80 backdrop-blur-sm animate-fade-in overflow-y-auto"
@@ -605,51 +606,6 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
       onTouchMove={onNavigate ? handleTouchMove : undefined}
       onTouchEnd={onNavigate ? handleTouchEnd : undefined}
     >
-      {/* Peek previews + navigation arrows */}
-      {hasNav && canNavigate.prev && (
-        <button
-          onClick={(e) => { e.stopPropagation(); slideDirectionRef.current = 'prev'; onNavigate!('prev'); }}
-          className="fixed left-1 sm:left-4 top-1/2 -translate-y-1/2 z-[55] flex items-center group"
-          title="Previous card"
-        >
-          {prevCardImage ? (
-            <img
-              src={prevCardImage}
-              alt="Previous"
-              className="hidden sm:block w-20 rounded-lg shadow-lg opacity-40 group-hover:opacity-70 transition-opacity -mr-3 pointer-events-none"
-            />
-          ) : null}
-          <span className="bg-black/60 group-hover:bg-black/80 active:bg-black/90 text-white/70 group-hover:text-white rounded-full p-2.5 sm:p-3 transition-all backdrop-blur-sm flex items-center justify-center shadow-lg relative z-10">
-            <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
-          </span>
-        </button>
-      )}
-      {hasNav && canNavigate.next && (
-        <button
-          onClick={(e) => { e.stopPropagation(); slideDirectionRef.current = 'next'; onNavigate!('next'); }}
-          className="fixed right-1 sm:right-4 top-1/2 -translate-y-1/2 z-[55] flex items-center group"
-          title="Next card"
-        >
-          <span className="bg-black/60 group-hover:bg-black/80 active:bg-black/90 text-white/70 group-hover:text-white rounded-full p-2.5 sm:p-3 transition-all backdrop-blur-sm flex items-center justify-center shadow-lg relative z-10">
-            <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
-          </span>
-          {nextCardImage ? (
-            <img
-              src={nextCardImage}
-              alt="Next"
-              className="hidden sm:block w-20 rounded-lg shadow-lg opacity-40 group-hover:opacity-70 transition-opacity -ml-3 pointer-events-none"
-            />
-          ) : null}
-        </button>
-      )}
-      {/* Card position indicator — fixed when swap section is closed */}
-      {hasNav && cardIndex != null && totalCards != null && !(hasSwapSection && showSwaps) && (
-        <div
-          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[55] bg-black/60 backdrop-blur-sm text-white/70 text-xs font-medium px-3 py-1.5 rounded-full shadow-lg pointer-events-none"
-        >
-          {cardIndex + 1} / {totalCards}
-        </div>
-      )}
       <div ref={contentRef} className={`relative w-fit max-w-[90vw] card-preview-content m-auto py-4 ${slideClass || 'animate-scale-in'}`} onClick={(e) => e.stopPropagation()}>
         <button
           onClick={onClose}
@@ -1104,7 +1060,52 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
           {toastMessage}
         </div>
       )}
-    </div>,
+    </div>
+    {/* Navigation arrows + position indicator live OUTSIDE the scrolling backdrop
+        so they stay pinned to the viewport (backdrop-filter on the backdrop creates
+        a containing block that would otherwise trap position: fixed children). */}
+    {hasNav && canNavigate.prev && (
+      <button
+        onClick={(e) => { e.stopPropagation(); slideDirectionRef.current = 'prev'; onNavigate!('prev'); }}
+        className="fixed left-1 sm:left-4 top-1/2 -translate-y-1/2 z-[60] flex items-center group"
+        title="Previous card"
+      >
+        {prevCardImage ? (
+          <img
+            src={prevCardImage}
+            alt="Previous"
+            className="hidden sm:block w-20 rounded-lg shadow-lg opacity-40 group-hover:opacity-70 transition-opacity -mr-3 pointer-events-none"
+          />
+        ) : null}
+        <span className="bg-black/60 group-hover:bg-black/80 active:bg-black/90 text-white/70 group-hover:text-white rounded-full p-2.5 sm:p-3 transition-all backdrop-blur-sm flex items-center justify-center shadow-lg relative z-10">
+          <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+        </span>
+      </button>
+    )}
+    {hasNav && canNavigate.next && (
+      <button
+        onClick={(e) => { e.stopPropagation(); slideDirectionRef.current = 'next'; onNavigate!('next'); }}
+        className="fixed right-1 sm:right-4 top-1/2 -translate-y-1/2 z-[60] flex items-center group"
+        title="Next card"
+      >
+        <span className="bg-black/60 group-hover:bg-black/80 active:bg-black/90 text-white/70 group-hover:text-white rounded-full p-2.5 sm:p-3 transition-all backdrop-blur-sm flex items-center justify-center shadow-lg relative z-10">
+          <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
+        </span>
+        {nextCardImage ? (
+          <img
+            src={nextCardImage}
+            alt="Next"
+            className="hidden sm:block w-20 rounded-lg shadow-lg opacity-40 group-hover:opacity-70 transition-opacity -ml-3 pointer-events-none"
+          />
+        ) : null}
+      </button>
+    )}
+    {hasNav && cardIndex != null && totalCards != null && !(hasSwapSection && showSwaps) && (
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] bg-black/60 backdrop-blur-sm text-white/70 text-xs font-medium px-3 py-1.5 rounded-full shadow-lg pointer-events-none">
+        {cardIndex + 1} / {totalCards}
+      </div>
+    )}
+    </>,
     document.body
   );
 }
