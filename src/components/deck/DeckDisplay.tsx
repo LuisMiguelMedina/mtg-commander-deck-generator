@@ -42,6 +42,7 @@ import {
   BookOpen,
   Rows3,
   LayoutGrid,
+  Replace,
 } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { CardTypeIcon, ManaCost } from '@/components/ui/mtg-icons';
@@ -531,7 +532,8 @@ const CardRow = memo(function CardRow({ card, quantity, onPreview, onHover, dimm
             card.mustIncludeSource === 'deck' ? <span title="From original deck"><Bookmark className="w-3 h-3 text-muted-foreground/50" /></span> :
             card.mustIncludeSource === 'combo' ? <span title="Added by user"><Sparkles className="w-3 h-3 text-violet-500/70" /></span> :
             <span title="Must include" className="animate-pop-in"><Pin className="w-3 h-3 text-emerald-500/70" /></span>
-          ) : isOwned ? <span title="In your collection"><Check className="w-3 h-3 text-emerald-500/50" /></span> : null}
+          ) : card.isReplacement ? <span title="Replacement" className="animate-pop-in"><Replace className="w-3 h-3 text-blue-400/80" /></span>
+          : isOwned ? <span title="In your collection"><Check className="w-3 h-3 text-emerald-500/50" /></span> : null}
         </span>
       )}
       {editingQuantity ? (
@@ -3379,6 +3381,11 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
                   {card.mustIncludeSource === 'deck' ? <Bookmark className="w-2.5 h-2.5" /> :
                    card.mustIncludeSource === 'combo' ? <Sparkles className="w-2.5 h-2.5" /> :
                    <Pin className="w-2.5 h-2.5" />}
+                </span>
+              )}
+              {!isMLive && card.isReplacement && (
+                <span className="bg-blue-500/80 text-white rounded-full w-5 h-5 flex items-center justify-center animate-pop-in" title="Replacement">
+                  <Replace className="w-2.5 h-2.5" />
                 </span>
               )}
               {roleBadges.map((badge) => (

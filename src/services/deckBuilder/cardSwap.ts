@@ -68,6 +68,9 @@ export function swapCard(
   if (idx !== -1) oldArr.splice(idx, 1);
   newCategories[oldCategory] = oldArr;
 
+  // Mark as user-replacement for badge display
+  newCard.isReplacement = true;
+
   // Stamp role and subtype on new card
   const newRole = getCardRole(newCard.name);
   if (newRole) {

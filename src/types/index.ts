@@ -69,6 +69,7 @@ export interface ScryfallCard {
   isThemeSynergyCard?: boolean; // true if from EDHREC highsynergycards/topcards/gamechangers
   isMustInclude?: boolean;
   mustIncludeSource?: 'user' | 'deck' | 'combo'; // Where the must-include came from
+  isReplacement?: boolean; // true if this card was swapped into the deck via the replace feature
   deckRole?: string; // Functional role detected by tagger/oracle text (e.g., 'ramp', 'removal')
   multiRole?: boolean; // True if card matches multiple role categories
   rampSubtype?: 'mana-producer' | 'mana-rock' | 'cost-reducer' | 'ramp';
