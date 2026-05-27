@@ -645,16 +645,6 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
         >
           <X className="w-5 h-5" />
         </button>
-        {swapPreview && (
-          <button
-            onClick={() => setSwapPreview(null)}
-            aria-label="Back to original card"
-            title="Back to original card"
-            className="absolute top-2 left-2 bg-black/60 rounded-full p-1.5 text-white/70 hover:text-white transition-colors z-10"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-        )}
 
         {/* Main layout: card column + optional combo panel side-by-side on desktop */}
         <div className={`${hasSidePanel ? 'md:flex md:items-start md:gap-5' : ''}`}>
@@ -834,7 +824,16 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
               <div className="text-left">
                 {/* Floating Swap button — sits above both sections so it stays visible regardless of which section the preview comes from */}
                 {swapPreview && (
-                  <div className="flex justify-end mb-3">
+                  <div className="flex justify-end gap-2 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => setSwapPreview(null)}
+                      aria-label="Back to original card"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/15 text-white/80 hover:text-white text-xs font-medium transition-colors animate-fade-in"
+                    >
+                      <ArrowLeft className="w-3 h-3" />
+                      Back
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
