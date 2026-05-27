@@ -11,6 +11,11 @@ import { Search, Loader2, X, Plus, ArrowLeft, Trash2, Bold, Italic, Heading2, Li
 
 const CARD_TYPES = ['Creature', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Planeswalker', 'Battle', 'Land'] as const;
 
+export interface CardMeta {
+  type: string;
+  imageUrl: string | null;
+}
+
 function classifyCardType(typeLine: string): string {
   const lower = typeLine.toLowerCase();
   return CARD_TYPES.find(t => lower.includes(t.toLowerCase())) ?? 'Other';
@@ -50,8 +55,8 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importProgress, setImportProgress] = useState('');
 
-  // Card type tracking for live breakdown badges
-  const cardTypeMapRef = useRef<Map<string, string>>(new Map());
+  // Card metadata tracking for live breakdown badges and grid thumbnails
+  const cardDataRef = useRef<Map<string, CardMeta>>(new Map());
   const [typeBreakdown, setTypeBreakdown] = useState<Record<string, number>>(() => existingList?.cachedTypeBreakdown ?? {});
 
   // Commander state
@@ -134,24 +139,32 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
     });
   }, [primer]);
 
-  // Recompute type breakdown from the type map and current card list
+  // Recompute type breakdown from the card data map and current card list
   const recomputeBreakdown = useCallback((currentCards: string[]) => {
     const breakdown: Record<string, number> = {};
     for (const name of currentCards) {
-      const type = cardTypeMapRef.current.get(name);
-      if (type) breakdown[type] = (breakdown[type] ?? 0) + 1;
+      const meta = cardDataRef.current.get(name);
+      if (meta) breakdown[meta.type] = (breakdown[meta.type] ?? 0) + 1;
     }
     setTypeBreakdown(breakdown);
   }, []);
 
-  // Fetch types for cards not yet in the type map (after import or initial load)
-  const fetchMissingTypes = useCallback(async (currentCards: string[]) => {
-    const missing = currentCards.filter(n => !cardTypeMapRef.current.has(n));
+  // Fetch card data (type + image URL) for cards not yet in the map
+  const fetchMissingCardData = useCallback(async (currentCards: string[]) => {
+    const missing = currentCards.filter(n => !cardDataRef.current.has(n));
     if (missing.length === 0) { recomputeBreakdown(currentCards); return; }
     try {
       const cardMap = await getCardsByNames(missing);
-      for (const [name, card] of cardMap) {
-        cardTypeMapRef.current.set(name, classifyCardType(card.type_line ?? ''));
+      for (const name of missing) {
+        const card = cardMap.get(name);
+        if (card) {
+          cardDataRef.current.set(name, {
+            type: classifyCardType(card.type_line ?? ''),
+            imageUrl: getCardImageUrl(card, 'small'),
+          });
+        } else {
+          cardDataRef.current.set(name, { type: 'Other', imageUrl: null });
+        }
       }
     } catch { /* ignore */ }
     recomputeBreakdown(currentCards);
@@ -159,7 +172,7 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
 
   // On initial mount, populate type map for existing cards
   useEffect(() => {
-    if (cards.length > 0) fetchMissingTypes(cards);
+    if (cards.length > 0) fetchMissingCardData(cards);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -258,7 +271,10 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
 
   const handleAddCard = (card: ScryfallCard) => {
     if (!cards.includes(card.name)) {
-      cardTypeMapRef.current.set(card.name, classifyCardType(card.type_line ?? ''));
+      cardDataRef.current.set(card.name, {
+        type: classifyCardType(card.type_line ?? ''),
+        imageUrl: getCardImageUrl(card, 'small'),
+      });
       const newCards = [...cards, card.name];
       setCards(newCards);
       recomputeBreakdown(newCards);
@@ -328,17 +344,17 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
       setCards(prev => {
         const updated = [...prev, ...newCards];
         // Fetch types for newly imported cards (async)
-        fetchMissingTypes(updated);
+        fetchMissingCardData(updated);
         return updated;
       });
     }
 
     return { added: newCards.length, updated: dupeCount };
-  }, [fetchMissingTypes]);
+  }, [fetchMissingCardData]);
 
   const handleClearAll = () => {
     setCards([]);
-    cardTypeMapRef.current.clear();
+    cardDataRef.current.clear();
     setTypeBreakdown({});
   };
 
