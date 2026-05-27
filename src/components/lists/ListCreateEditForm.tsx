@@ -698,13 +698,6 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
         <div className="space-y-3 bg-accent/20 rounded-xl p-4 border border-border/20">
           <div className="flex items-center gap-2">
             <label className="text-sm font-medium">Cards ({cards.length})</label>
-            <button
-              onClick={handleClearAll}
-              className="p-1 rounded-md text-red-400/70 hover:text-destructive hover:bg-destructive/10 transition-colors"
-              title="Clear all cards"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -743,6 +736,15 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
                   ))}
               </div>
             )}
+            <button
+              onClick={handleClearAll}
+              className={`p-1 rounded-md text-red-400/70 hover:text-destructive hover:bg-destructive/10 transition-colors ${
+                Object.keys(typeBreakdown).length > 0 ? '' : 'ml-auto'
+              }`}
+              title="Clear all cards"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           {/* Search input */}
