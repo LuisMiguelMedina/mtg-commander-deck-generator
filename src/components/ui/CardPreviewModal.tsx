@@ -70,6 +70,12 @@ interface CardPreviewModalProps {
   prevCardImage?: string | null;
   /** Image URL for the next card in the list (for peek preview) */
   nextCardImage?: string | null;
+  /** Override for the "in deck/list" name set used to filter similar-card suggestions.
+   *  Falls back to the Zustand-store generatedDeck when not provided. */
+  inDeckNames?: string[];
+  /** Override for the commander color identity used to filter similar-card suggestions.
+   *  Falls back to the Zustand-store commander when not provided. */
+  commanderColorIdentity?: string[];
 }
 
 function ComboEntry({
@@ -223,7 +229,7 @@ function ComboEntry({
   );
 }
 
-export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, cardTypeMap, cardComboMap, deckOnly, hideMustInclude, swapCandidates, onSwapCard, initialSideTab, onRegenerate, onNavigate, canNavigate, cardIndex, totalCards, cardInclusionMap, cardRelevancyMap, showPrice, prevCardImage, nextCardImage }: CardPreviewModalProps) {
+export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, cardTypeMap, cardComboMap, deckOnly, hideMustInclude, swapCandidates, onSwapCard, initialSideTab, onRegenerate, onNavigate, canNavigate, cardIndex, totalCards, cardInclusionMap, cardRelevancyMap, showPrice, prevCardImage, nextCardImage, inDeckNames, commanderColorIdentity }: CardPreviewModalProps) {
   const commander = useStore((s) => s.commander);
   const generatedDeck = useStore((s) => s.generatedDeck);
   const currency = useStore((s) => s.customization.currency);
@@ -506,20 +512,21 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
   const filteredSimilarCards = useMemo<ScryfallCard[]>(() => {
     if (!card || !similarHydrated?.length) return [];
 
-    const inDeckNames = new Set<string>();
-    if (generatedDeck) {
+    const inDeckNameSet = new Set<string>();
+    if (inDeckNames) {
+      for (const n of inDeckNames) inDeckNameSet.add(n);
+    } else if (generatedDeck) {
       for (const cards of Object.values(generatedDeck.categories)) {
-        for (const c of cards) inDeckNames.add(c.name);
+        for (const c of cards) inDeckNameSet.add(c.name);
       }
     }
 
-    const cmdrIdentity = new Set(
-      (commander?.color_identity ?? []).map((c) => c.toUpperCase())
-    );
+    const identitySource = commanderColorIdentity ?? commander?.color_identity ?? [];
+    const cmdrIdentity = new Set(identitySource.map((c) => c.toUpperCase()));
 
     const filtered = similarHydrated.filter((c) => {
       if (c.name === card.name) return false;
-      if (inDeckNames.has(c.name)) return false;
+      if (inDeckNameSet.has(c.name)) return false;
       if (cmdrIdentity.size > 0 && c.color_identity?.length) {
         if (!c.color_identity.every((col) => cmdrIdentity.has(col.toUpperCase()))) {
           return false;
@@ -539,7 +546,7 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
     withoutIncl.sort((a, b) => a.idx - b.idx);
 
     return [...withIncl.map((x) => x.card), ...withoutIncl.map((x) => x.card)].slice(0, 15);
-  }, [similarHydrated, card, generatedDeck, commander, cardInclusionMap]);
+  }, [similarHydrated, card, generatedDeck, commander, cardInclusionMap, inDeckNames, commanderColorIdentity]);
 
   if (!card) return null;
 

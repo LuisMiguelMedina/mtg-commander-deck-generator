@@ -130,6 +130,7 @@ interface ListDetailViewProps {
   onExport?: () => void;
   onDelete?: () => void;
   onRemoveCard?: (cardName: string) => void;
+  onSwapCard?: (oldCardName: string, newCardName: string) => void;
   readOnly?: boolean;
   onViewAsDeck?: () => void;
   onConvertToDeck?: () => void;
@@ -138,7 +139,7 @@ interface ListDetailViewProps {
 
 // --- Component ---
 
-export function ListDetailView({ list, onBack, onEdit, onDuplicate, onExport, onDelete, onRemoveCard, readOnly, onViewAsDeck, onConvertToDeck, onConvertToList }: ListDetailViewProps) {
+export function ListDetailView({ list, onBack, onEdit, onDuplicate, onExport, onDelete, onRemoveCard, onSwapCard, readOnly, onViewAsDeck, onConvertToDeck, onConvertToList }: ListDetailViewProps) {
   const navigate = useNavigate();
 
   // Card data enrichment
@@ -700,7 +701,22 @@ export function ListDetailView({ list, onBack, onEdit, onDuplicate, onExport, on
         </div>
       )}
 
-      <CardPreviewModal card={previewCard} onClose={() => setPreviewCard(null)} onBuildDeck={handleBuildDeck} />
+      <CardPreviewModal
+        card={previewCard}
+        onClose={() => setPreviewCard(null)}
+        onBuildDeck={handleBuildDeck}
+        hideMustInclude
+        inDeckNames={list.cards}
+        commanderColorIdentity={
+          list.commanderName
+            ? scryfallMap.get(list.commanderName)?.color_identity ?? undefined
+            : undefined
+        }
+        onSwapCard={onSwapCard && previewCard ? (oldCard, newCard) => {
+          onSwapCard(oldCard.name, newCard.name);
+          setPreviewCard(null);
+        } : undefined}
+      />
     </div>
   );
 }

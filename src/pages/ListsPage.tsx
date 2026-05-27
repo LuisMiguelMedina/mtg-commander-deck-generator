@@ -181,6 +181,15 @@ export function ListsPage() {
           onExport={() => handleExport(list.id)}
           onDelete={() => handleDelete(list.id)}
           onRemoveCard={(name) => handleRemoveCard(list.id, name)}
+          onSwapCard={(oldName, newName) => {
+            const current = lists.find(l => l.id === list.id);
+            if (!current) return;
+            if (current.cards.includes(newName)) {
+              updateList(list.id, { cards: current.cards.filter(c => c !== oldName) });
+            } else {
+              updateList(list.id, { cards: current.cards.map(c => c === oldName ? newName : c) });
+            }
+          }}
           onViewAsDeck={() => navigate(`/lists/${list.id}/deck-view`)}
           onConvertToDeck={() => {
             navigate(`/lists/${list.id}/edit?mode=deck`);
