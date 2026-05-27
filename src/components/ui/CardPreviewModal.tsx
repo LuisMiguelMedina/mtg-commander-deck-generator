@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Star, Pin, ArrowLeftRight, Plus, ChevronLeft, ChevronRight, ChevronDown, ListChecks, Footprints, Infinity, Loader2 } from 'lucide-react';
-import { getCardImageUrl, isDoubleFacedCard, getCardBackFaceUrl, getCardPrice, getCardByName, getFrontFaceTypeLine, getCachedCard } from '@/services/scryfall/client';
-import { fetchComboDetails, type ComboDetails } from '@/services/edhrec/client';
+import { getCardImageUrl, isDoubleFacedCard, getCardBackFaceUrl, getCardPrice, getCardByName, getCardsByNames, getFrontFaceTypeLine, getCachedCard } from '@/services/scryfall/client';
+import { fetchComboDetails, fetchSimilarCards, type ComboDetails } from '@/services/edhrec/client';
 import type { ScryfallCard, DetectedCombo } from '@/types';
 import { useStore } from '@/store';
 import { trackEvent } from '@/services/analytics';
@@ -225,6 +225,7 @@ function ComboEntry({
 
 export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, cardTypeMap, cardComboMap, deckOnly, hideMustInclude, swapCandidates, onSwapCard, initialSideTab, onRegenerate, onNavigate, canNavigate, cardIndex, totalCards, cardInclusionMap, cardRelevancyMap, showPrice, prevCardImage, nextCardImage }: CardPreviewModalProps) {
   const commander = useStore((s) => s.commander);
+  const generatedDeck = useStore((s) => s.generatedDeck);
   const currency = useStore((s) => s.customization.currency);
   const mustIncludeCards = useStore((s) => s.customization.mustIncludeCards);
   const tempMustIncludeCards = useStore((s) => s.customization.tempMustIncludeCards ?? []);
@@ -235,6 +236,8 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
   const [hoverPreview, setHoverPreview] = useState<{ name: string; top: number; left: number; below: boolean } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [swapPreview, setSwapPreview] = useState<ScryfallCard | null>(null);
+  const [similarHydrated, setSimilarHydrated] = useState<ScryfallCard[] | null>(null);
+  const [similarLoading, setSimilarLoading] = useState(false);
   const [showSwaps, setShowSwaps] = useState(() => {
     if (initialSideTab === 'swaps') return true;
     const stored = localStorage.getItem('showSwapCandidates');
@@ -435,6 +438,44 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
+  // Lazy-fetch EDHREC similar cards when the user opens the Replacements section
+  // on a real card. One HTTP request per card per 5 min (cache lives in client.ts).
+  useEffect(() => {
+    if (!card) return;
+    if (!showSwaps) return;
+    if (cardOverride) return; // viewing combo pill card, not a real focus
+    if (!onSwapCard) return; // no swap callback, no point fetching
+
+    let cancelled = false;
+    setSimilarHydrated(null);
+    setSimilarLoading(true);
+
+    (async () => {
+      try {
+        const names = await fetchSimilarCards(card.name);
+        if (cancelled || names.length === 0) {
+          if (!cancelled) setSimilarHydrated([]);
+          return;
+        }
+        const cardMap = await getCardsByNames(names);
+        if (cancelled) return;
+        // Preserve EDHREC's native order in the hydrated array
+        const hydrated = names
+          .map((n) => cardMap.get(n))
+          .filter((c): c is ScryfallCard => !!c);
+        setSimilarHydrated(hydrated);
+      } catch {
+        if (!cancelled) setSimilarHydrated([]);
+      } finally {
+        if (!cancelled) setSimilarLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [card?.name, showSwaps, cardOverride, onSwapCard]);
+
   // Sort swap candidates: card type match first, then matching subtype tag, then rest
   // Must be above the early return to satisfy Rules of Hooks
   const sortedSwapCandidates = useMemo(() => {
@@ -458,6 +499,48 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
     });
   }, [swapCandidates, card]);
 
+  // Filter and rerank EDHREC similar cards.
+  // Filters: drop self, drop already-in-deck, drop out-of-color-identity.
+  // Rerank: inclusion % in this commander's umbrella, descending. Cards without
+  // inclusion data sink to the end and keep EDHREC's native order among themselves.
+  const filteredSimilarCards = useMemo<ScryfallCard[]>(() => {
+    if (!card || !similarHydrated?.length) return [];
+
+    const inDeckNames = new Set<string>();
+    if (generatedDeck) {
+      for (const cards of Object.values(generatedDeck.categories)) {
+        for (const c of cards) inDeckNames.add(c.name);
+      }
+    }
+
+    const cmdrIdentity = new Set(
+      (commander?.color_identity ?? []).map((c) => c.toUpperCase())
+    );
+
+    const filtered = similarHydrated.filter((c) => {
+      if (c.name === card.name) return false;
+      if (inDeckNames.has(c.name)) return false;
+      if (cmdrIdentity.size > 0 && c.color_identity?.length) {
+        if (!c.color_identity.every((col) => cmdrIdentity.has(col.toUpperCase()))) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    const withIncl: Array<{ card: ScryfallCard; incl: number; idx: number }> = [];
+    const withoutIncl: Array<{ card: ScryfallCard; idx: number }> = [];
+    filtered.forEach((c, idx) => {
+      const v = cardInclusionMap?.[c.name];
+      if (typeof v === 'number') withIncl.push({ card: c, incl: v, idx });
+      else withoutIncl.push({ card: c, idx });
+    });
+    withIncl.sort((a, b) => b.incl - a.incl);
+    withoutIncl.sort((a, b) => a.idx - b.idx);
+
+    return [...withIncl.map((x) => x.card), ...withoutIncl.map((x) => x.card)].slice(0, 15);
+  }, [similarHydrated, card, generatedDeck, commander, cardInclusionMap]);
+
   if (!card) return null;
 
   const displayCard = cardOverride ?? swapPreview ?? card;
@@ -480,7 +563,14 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
   // Check if this card is missing from the deck (appears in its own combos' missingCards)
   const isMissingComboCard = allCombosForCard?.some(c => c.missingCards.includes(currentCardName)) ?? false;
   const isInMustInclude = mustIncludeCards.includes(currentCardName) || tempMustIncludeCards.includes(currentCardName);
-  const hasSwapSection = !!(swapCandidates && swapCandidates.length > 0 && onSwapCard && !cardOverride && !card.isMustInclude);
+  const hasRoleBucket = !!(swapCandidates && swapCandidates.length > 0);
+  const hasSimilarBucket = filteredSimilarCards.length > 0 || similarLoading;
+  const hasSwapSection = !!(
+    (hasRoleBucket || hasSimilarBucket) &&
+    onSwapCard &&
+    !cardOverride &&
+    !card.isMustInclude
+  );
   const hasSidePanel = hasCombos;
   const canMustInclude = isMissingComboCard && !isInMustInclude;
   const alreadyMustIncluded = isInMustInclude;
