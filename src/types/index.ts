@@ -370,6 +370,8 @@ export interface GeneratedDeck {
   /** Per-card EDHREC synergy for cards in the deck (analogous to cardInclusionMap). */
   cardSynergyMap?: Record<string, number>;
   cardRelevancyMap?: Record<string, number>; // cardName → composite relevancy score (raw, 0-200+)
+  edhrecCurve?: Record<number, number>; // EDHREC average curve, keyed by CMC bucket (0-7)
+  edhrecTypes?: Record<string, number>; // EDHREC average type counts, keyed by type ('creature', 'instant', ...)
   detectedArchetype?: Archetype; // Archetype inferred from themes for dynamic role targeting
   detectedPacing?: Pacing; // Pacing estimated from EDHREC stats at generation time
   bracketEstimation?: import('@/services/deckBuilder/bracketEstimator').BracketEstimation;
@@ -564,6 +566,7 @@ export interface AppState {
   updateCustomization: (updates: Partial<Customization>) => void;
   setGeneratedDeck: (deck: GeneratedDeck | null) => void;
   swapDeckCard: (oldCard: ScryfallCard, newCard: ScryfallCard) => void;
+  addDeckCard: (newCard: ScryfallCard) => void;
   pushDeckHistory: (entry: Omit<DeckHistoryEntry, 'id' | 'timestamp'>) => void;
   clearDeckHistory: () => void;
   setLoading: (loading: boolean, message?: string) => void;

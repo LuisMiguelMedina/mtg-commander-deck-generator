@@ -666,10 +666,13 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
           bracketEstimation: enrichResult.bracketEstimation,
           gameChangerNames: enrichResult.gameChangerNames,
           cardInclusionMap: enrichResult.cardInclusionMap,
+          cardSynergyMap: enrichResult.cardSynergyMap,
           cardRelevancyMap: enrichResult.cardRelevancyMap,
           deckScore: enrichResult.deckScore,
           swapCandidates: enrichResult.swapCandidates,
           gapAnalysis: enrichResult.gapAnalysis,
+          edhrecCurve: enrichResult.edhrecCurve,
+          edhrecTypes: enrichResult.edhrecTypes,
         };
 
         const allColors = new Set<string>();
@@ -812,10 +815,13 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
           bracketEstimation: enrichResult.bracketEstimation,
           gameChangerNames: enrichResult.gameChangerNames,
           cardInclusionMap: enrichResult.cardInclusionMap,
+          cardSynergyMap: enrichResult.cardSynergyMap,
           cardRelevancyMap: enrichResult.cardRelevancyMap,
           deckScore: enrichResult.deckScore,
           swapCandidates: enrichResult.swapCandidates,
           gapAnalysis: enrichResult.gapAnalysis,
+          edhrecCurve: enrichResult.edhrecCurve,
+          edhrecTypes: enrichResult.edhrecTypes,
         },
       });
     };

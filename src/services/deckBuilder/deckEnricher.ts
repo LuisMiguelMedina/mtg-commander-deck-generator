@@ -31,6 +31,8 @@ export interface EnrichResult {
   deckScore?: number;
   gapAnalysis?: GapAnalysisCard[];
   swapCandidates?: Record<string, ScryfallCard[]>;
+  edhrecCurve?: Record<number, number>;
+  edhrecTypes?: Record<string, number>;
 }
 
 /**
@@ -151,6 +153,8 @@ export async function enrichDeckCards(
   let deckScore: number | undefined;
   let gapAnalysis: GapAnalysisCard[] | undefined;
   let swapCandidates: Record<string, ScryfallCard[]> | undefined;
+  let outerEdhrecCurve: Record<number, number> | undefined;
+  let outerEdhrecTypes: Record<string, number> | undefined;
   if (commanderName) {
     try {
       const edhrecData: EDHRECCommanderData = partnerCommanderName
@@ -242,6 +246,7 @@ export async function enrichDeckCards(
       }
       // Target curve from EDHREC's stats (normalize to deckSize-ish scale)
       const edhrecCurve = edhrecData.stats?.manaCurve || {};
+      outerEdhrecCurve = edhrecCurve;
       const curveAnalysis = Object.keys(edhrecCurve).map(Number).map(cmc => ({
         cmc,
         current: actualCurve[cmc] || 0,
@@ -259,6 +264,7 @@ export async function enrichDeckCards(
       }
       // Target types from EDHREC's stats
       const edhrecTypes = edhrecData.stats?.typeDistribution || {};
+      outerEdhrecTypes = edhrecTypes;
       const typeAnalysis = TYPE_KEYS.map(type => ({
         type,
         current: actualTypes[type] || 0,
@@ -399,5 +405,7 @@ export async function enrichDeckCards(
     deckScore,
     gapAnalysis,
     swapCandidates,
+    edhrecCurve: outerEdhrecCurve,
+    edhrecTypes: outerEdhrecTypes,
   };
 }
