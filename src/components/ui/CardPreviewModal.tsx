@@ -292,6 +292,19 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
     return () => { document.body.style.overflow = ''; };
   }, [card]);
 
+  // Pre-cache the adjacent cards' large images so navigating prev/next on
+  // mobile doesn't flash an empty container after the slide animation.
+  // Scryfall image URLs follow a /<size>/ path segment we can swap.
+  useEffect(() => {
+    if (!card) return;
+    for (const url of [prevCardImage, nextCardImage]) {
+      if (!url) continue;
+      const large = url.replace('/small/', '/large/');
+      const img = new Image();
+      img.src = large;
+    }
+  }, [card, prevCardImage, nextCardImage]);
+
   // Keyboard navigation (ArrowLeft/ArrowRight)
   useEffect(() => {
     if (!card || !onNavigate) return;
