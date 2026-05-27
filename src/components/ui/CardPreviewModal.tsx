@@ -774,7 +774,7 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
                 <ArrowLeftRight className="w-3.5 h-3.5" />
                 Replacements
                 <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-white/5 text-white/40">
-                  {swapCandidates?.length ?? 0}
+                  {(swapCandidates?.length ?? 0) + filteredSimilarCards.length}
                 </span>
               </button>
             )}
