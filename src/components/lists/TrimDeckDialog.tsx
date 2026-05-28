@@ -52,11 +52,15 @@ export function TrimDeckDialog(props: TrimDeckDialogProps) {
   }), [cards, commanderName, partnerCommanderName, targetSize, landTarget, props.relevancyMap, props.inclusionMap, props.synergyMap, props.roleCounts, props.roleTargets, props.edhrecCurve, props.edhrecTypes]);
 
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  // Cards the user explicitly unchecked. The auto-fill substitution must never
+  // pull these back in — they're protected for the session.
+  const [kept, setKept] = useState<Set<string>>(new Set());
   const [listRef] = useAutoAnimate<HTMLUListElement>({ duration: 280, easing: 'ease-in-out' });
 
   const defaultsKey = useMemo(() => plan.cuts.map(c => c.card.name).join('|'), [plan.cuts]);
   useEffect(() => {
     setChecked(new Set(plan.cuts.map(c => c.card.name)));
+    setKept(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultsKey]);
 
@@ -147,24 +151,32 @@ export function TrimDeckDialog(props: TrimDeckDialogProps) {
             {plan.allCandidates.map((cand) => {
               const isChecked = checked.has(cand.card.name);
               const toggle = () => {
-                setChecked((prev) => {
-                  const next = new Set(prev);
-                  const partition = cand.partition;
-                  if (next.has(cand.card.name)) {
-                    next.delete(cand.card.name);
-                    if (next.size < overage) {
-                      const replacement = plan.allCandidates.find(c =>
-                        c.partition === partition &&
-                        !next.has(c.card.name) &&
-                        c.card.name !== cand.card.name
-                      );
-                      if (replacement) next.add(replacement.card.name);
-                    }
-                  } else {
-                    next.add(cand.card.name);
+                if (checked.has(cand.card.name)) {
+                  // Uncheck: mark as kept (protected from auto-fill), and try
+                  // to substitute the next-best candidate in the same partition.
+                  const nextKept = new Set(kept);
+                  nextKept.add(cand.card.name);
+                  const nextChecked = new Set(checked);
+                  nextChecked.delete(cand.card.name);
+                  if (nextChecked.size < overage) {
+                    const replacement = plan.allCandidates.find(c =>
+                      c.partition === cand.partition &&
+                      !nextChecked.has(c.card.name) &&
+                      !nextKept.has(c.card.name)
+                    );
+                    if (replacement) nextChecked.add(replacement.card.name);
                   }
-                  return next;
-                });
+                  setChecked(nextChecked);
+                  setKept(nextKept);
+                } else {
+                  // Re-check: lift the keep protection and add back to the cut.
+                  const nextKept = new Set(kept);
+                  nextKept.delete(cand.card.name);
+                  const nextChecked = new Set(checked);
+                  nextChecked.add(cand.card.name);
+                  setChecked(nextChecked);
+                  setKept(nextKept);
+                }
               };
               const imageUrl = getCardImageUrl(cand.card, 'small');
               return (
