@@ -177,7 +177,7 @@ export function planTrim(input: TrimInput): TrimResult {
   const currentSize = cards.filter(c => !protectedNames.has(c.name)).length;
   const overage = Math.max(0, currentSize - targetSize);
 
-  const effectiveLandTarget = clamp(targetLandCount, 30, totalLandsIncludingBasics);
+  const effectiveLandTarget = clamp(targetLandCount, 0, totalLandsIncludingBasics);
   // Cap at the non-basic land pool size — we can't cut more lands than exist as non-basics.
   const cutLands = Math.min(lands.length, Math.max(0, totalLandsIncludingBasics - effectiveLandTarget));
   const cutSpells = Math.max(0, overage - cutLands);

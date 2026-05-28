@@ -34,7 +34,7 @@ export function TrimDeckDialog(props: TrimDeckDialogProps) {
     [cards],
   );
 
-  const [landTarget, setLandTarget] = useState<number>(Math.max(30, currentLandCount));
+  const [landTarget, setLandTarget] = useState<number>(currentLandCount);
 
   const plan: TrimResult = useMemo(() => planTrim({
     cards,
@@ -65,7 +65,7 @@ export function TrimDeckDialog(props: TrimDeckDialogProps) {
   }, [defaultsKey]);
 
   useEffect(() => {
-    if (open) setLandTarget(Math.max(30, currentLandCount));
+    if (open) setLandTarget(currentLandCount);
   }, [open, currentLandCount]);
 
   const overage = cards.length - targetSize;
@@ -108,8 +108,8 @@ export function TrimDeckDialog(props: TrimDeckDialogProps) {
           <div className="inline-flex items-center rounded-md border border-border bg-background overflow-hidden">
             <button
               type="button"
-              onClick={() => setLandTarget(v => Math.max(30, v - 1))}
-              disabled={landTarget <= 30}
+              onClick={() => setLandTarget(v => Math.max(0, v - 1))}
+              disabled={landTarget <= 0}
               className="px-2 py-1 hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               aria-label="Decrease land target"
             >
