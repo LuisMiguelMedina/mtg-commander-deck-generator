@@ -96,12 +96,15 @@ export function TrimDeckDialog(props: TrimDeckDialogProps) {
         {/* Header */}
         <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-border">
           <div>
-            <h2 className="text-lg font-bold flex items-center gap-2">
+            <h2 className="text-lg font-bold flex items-center gap-2 flex-wrap">
               <Scissors className="w-4 h-4 text-violet-400" />
-              Trim deck to {targetSize} cards
+              Trim deck
+              <span className="text-muted-foreground font-normal text-base">
+                {cards.length + commanderCount} → {targetSize} cards
+              </span>
             </h2>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {overage} cards over target — pick which ones to cut
+              {overage} over target — pick which one{overage === 1 ? '' : 's'} to cut
             </p>
           </div>
           <button
