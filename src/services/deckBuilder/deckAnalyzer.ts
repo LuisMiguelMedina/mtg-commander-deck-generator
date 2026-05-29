@@ -1491,6 +1491,13 @@ export interface ScoringContext {
   curveAnalysis: CurveSlot[];
   typeAnalysis: TypeSlot[];
   currentSubtypeCounts: Record<string, number>;
+  /** Combos detected in the current deck. Cards that appear in any combo
+   *  get a relevancy boost — complete combos boost more than near-misses. */
+  detectedCombos?: DetectedCombo[];
+  /** Current count of cards filling each role in the deck. Used by the
+   *  scarcity boost so a single critical card (e.g. only boardwipe) is
+   *  protected from being cut. */
+  roleCounts?: Record<string, number>;
 }
 
 /**
@@ -1580,7 +1587,46 @@ export function scoreRecommendation(
     }
   }
 
-  return basePriority + roleBoost + curveBonus + typeBonus;
+  // ── Component 5: Combo Membership Boost ──
+  // A card in a complete combo (every piece in deck) is near-uncuttable.
+  // A card in a near-miss (exactly one missing piece) is sticky but cuttable
+  // as a last resort. Cards in multiple combos take the highest tier (no stacking).
+  // Combo card names can use the DFC front-face form OR the full "A // B" form,
+  // so match against both variants.
+  let comboBoost = 0;
+  if (context.detectedCombos && context.detectedCombos.length > 0) {
+    const nameVariants = card.name.includes(' // ')
+      ? [card.name, card.name.split(' // ')[0]]
+      : [card.name];
+    let bestTier = 0;
+    for (const combo of context.detectedCombos) {
+      const isInCombo = combo.cards.some(cn => nameVariants.includes(cn));
+      if (!isInCombo) continue;
+      if (combo.isComplete) {
+        bestTier = Math.max(bestTier, 80);
+      } else if (combo.missingCards.length === 1) {
+        bestTier = Math.max(bestTier, 30);
+      }
+    }
+    comboBoost = bestTier;
+  }
+
+  // ── Component 6: Role Scarcity Boost ──
+  // Inverse-count formulation. The only card filling a role with target=3
+  // gets (2/1)*25 = +50. With two cards: (1/2)*25 = +12.5. With three: 0.
+  // Overstuffed roles (count >= target) get 0 — existing role-overflow signals
+  // already provide the cut direction.
+  let scarcityBoost = 0;
+  if (cardRole && context.roleCounts) {
+    const target = context.roleDeficits.find(r => r.role === cardRole)?.target ?? 0;
+    const count = context.roleCounts[cardRole] ?? 0;
+    if (target > 0 && count > 0 && count < target) {
+      const deficit = target - count;
+      scarcityBoost = (deficit / count) * 25;
+    }
+  }
+
+  return basePriority + roleBoost + curveBonus + typeBonus + comboBoost + scarcityBoost;
 }
 
 /**
@@ -1609,6 +1655,9 @@ export interface AnalyzeDeckOptions {
   gapCandidates?: GapAnalysisCard[];
   /** Commander name (+ partner if any) — used to guard replacement suggestions. */
   commanderNames?: string[];
+  /** Combos detected in the deck. Passed through to ScoringContext so
+   *  recommendation scoring boosts combo pieces. */
+  detectedCombos?: DetectedCombo[];
 }
 
 export function analyzeDeck(opts: AnalyzeDeckOptions): DeckAnalysis {
@@ -1828,6 +1877,8 @@ export function analyzeDeck(opts: AnalyzeDeckOptions): DeckAnalysis {
     curveAnalysis,
     typeAnalysis,
     currentSubtypeCounts,
+    detectedCombos: opts.detectedCombos,
+    roleCounts,
   };
 
   // --- Recommendations ---
