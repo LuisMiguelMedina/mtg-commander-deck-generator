@@ -1612,17 +1612,28 @@ export function scoreRecommendation(
   }
 
   // ── Component 6: Role Scarcity Boost ──
-  // Inverse-count formulation. The only card filling a role with target=3
-  // gets (2/1)*25 = +50. With two cards: (1/2)*25 = +12.5. With three: 0.
-  // Overstuffed roles (count >= target) get 0 — existing role-overflow signals
-  // already provide the cut direction.
+  // Boost scales with how short of target cutting this card would leave you,
+  // not just current deficit. Cards at-target still get protected when cutting
+  // would drop the role below its EDHREC average. The last copy of any role
+  // (count === 1) gets a floor boost regardless — even when EDHREC says
+  // "1 is enough," cutting your sole boardwipe leaves you with zero.
+  //
+  // Worked examples (K=25):
+  //   count=1, target=1 → cutDeficit=1, base=25, floor=40 → +40
+  //   count=1, target=3 → cutDeficit=3, base=75            → +75
+  //   count=2, target=3 → cutDeficit=2, base=25            → +25
+  //   count=3, target=3 → cutDeficit=1, base=8.3           → +8
+  //   count=4, target=3 → cutDeficit=0                     → 0
   let scarcityBoost = 0;
   if (cardRole && context.roleCounts) {
     const target = context.roleDeficits.find(r => r.role === cardRole)?.target ?? 0;
     const count = context.roleCounts[cardRole] ?? 0;
-    if (target > 0 && count > 0 && count < target) {
-      const deficit = target - count;
-      scarcityBoost = (deficit / count) * 25;
+    if (target > 0 && count > 0) {
+      const cutDeficit = Math.max(0, target - (count - 1));
+      if (cutDeficit > 0) {
+        scarcityBoost = (cutDeficit / count) * 25;
+        if (count === 1) scarcityBoost = Math.max(scarcityBoost, 40);
+      }
     }
   }
 
