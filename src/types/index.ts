@@ -370,6 +370,15 @@ export interface GeneratedDeck {
   /** Per-card EDHREC synergy for cards in the deck (analogous to cardInclusionMap). */
   cardSynergyMap?: Record<string, number>;
   cardRelevancyMap?: Record<string, number>; // cardName → composite relevancy score (raw, 0-200+)
+  /** Snapshot of static EDHREC metadata per card (theme/new-card flags + primary type + cmc).
+   *  Populated at deck generation/enrichment time. Used by rebuildRelevancyMap when the deck
+   *  mutates (swap/trim/add) so we can reconstruct an EDHRECCard shape without re-fetching. */
+  cardEdhrecMetaMap?: Record<string, {
+    isThemeSynergyCard?: boolean;
+    isNewCard?: boolean;
+    primary_type?: string;
+    cmc?: number;
+  }>;
   edhrecCurve?: Record<number, number>; // EDHREC average curve, keyed by CMC bucket (0-7)
   edhrecTypes?: Record<string, number>; // EDHREC average type counts, keyed by type ('creature', 'instant', ...)
   detectedArchetype?: Archetype; // Archetype inferred from themes for dynamic role targeting

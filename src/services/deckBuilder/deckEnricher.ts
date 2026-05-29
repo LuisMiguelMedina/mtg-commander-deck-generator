@@ -28,6 +28,7 @@ export interface EnrichResult {
   cardInclusionMap?: Record<string, number>;
   cardSynergyMap?: Record<string, number>;
   cardRelevancyMap?: Record<string, number>;
+  cardEdhrecMetaMap?: Record<string, { isThemeSynergyCard?: boolean; isNewCard?: boolean; primary_type?: string; cmc?: number }>;
   deckScore?: number;
   gapAnalysis?: GapAnalysisCard[];
   swapCandidates?: Record<string, ScryfallCard[]>;
@@ -150,6 +151,7 @@ export async function enrichDeckCards(
   let cardInclusionMap: Record<string, number> | undefined;
   let cardSynergyMap: Record<string, number> | undefined;
   let cardRelevancyMap: Record<string, number> | undefined;
+  let cardEdhrecMetaMap: Record<string, { isThemeSynergyCard?: boolean; isNewCard?: boolean; primary_type?: string; cmc?: number }> | undefined;
   let deckScore: number | undefined;
   let gapAnalysis: GapAnalysisCard[] | undefined;
   let swapCandidates: Record<string, ScryfallCard[]> | undefined;
@@ -289,12 +291,19 @@ export async function enrichDeckCards(
       };
 
       const relMap: Record<string, number> = {};
+      const metaMap: Record<string, { isThemeSynergyCard?: boolean; isNewCard?: boolean; primary_type?: string; cmc?: number }> = {};
       for (const cards of Object.values(categories)) {
         for (const card of cards) {
           if (BASIC_LAND_NAMES.has(card.name)) continue;
           const ec = edhrecCardIndex.get(card.name)
             ?? (card.name.includes(' // ') ? edhrecCardIndex.get(card.name.split(' // ')[0]) : undefined);
           if (!ec) { relMap[card.name] = 0; continue; }
+          metaMap[card.name] = {
+            isThemeSynergyCard: ec.isThemeSynergyCard,
+            isNewCard: ec.isNewCard,
+            primary_type: ec.primary_type,
+            cmc: ec.cmc,
+          };
           const role = (card.deckRole as RoleKey) || null;
           const sub = card.rampSubtype || card.removalSubtype || card.boardwipeSubtype || card.cardDrawSubtype || null;
           let score = scoreRecommendation(ec, role, sub, scoringCtx);
@@ -304,6 +313,7 @@ export async function enrichDeckCards(
         }
       }
       cardRelevancyMap = relMap;
+      cardEdhrecMetaMap = metaMap;
 
       // Gap analysis: top EDHREC cards not in the deck.
       // No collection filter here — collection mode is a builder-time concern.
@@ -404,6 +414,7 @@ export async function enrichDeckCards(
     cardInclusionMap,
     cardSynergyMap,
     cardRelevancyMap,
+    cardEdhrecMetaMap,
     deckScore,
     gapAnalysis,
     swapCandidates,

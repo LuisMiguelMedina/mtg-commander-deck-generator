@@ -4119,6 +4119,7 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
 
   // Build per-card relevancy scores (composite: synergy + inclusion + role deficit + curve fit + type balance)
   let cardRelevancyMap: Record<string, number> | undefined;
+  let cardEdhrecMetaMap: Record<string, { isThemeSynergyCard?: boolean; isNewCard?: boolean; primary_type?: string; cmc?: number }> | undefined;
   if (edhrecData) {
     // Index full EDHREC card objects for synergy/theme lookup
     const edhrecCardIndex = new Map<string, EDHRECCard>();
@@ -4175,12 +4176,19 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
     };
 
     const relMap: Record<string, number> = {};
+    const metaMap: Record<string, { isThemeSynergyCard?: boolean; isNewCard?: boolean; primary_type?: string; cmc?: number }> = {};
     for (const cards of Object.values(categories)) {
       for (const card of cards) {
         if (BASIC_LAND_NAMES.has(card.name)) continue;
         const ec = edhrecCardIndex.get(card.name)
           ?? (card.name.includes(' // ') ? edhrecCardIndex.get(card.name.split(' // ')[0]) : undefined);
         if (!ec) { relMap[card.name] = 0; continue; }
+        metaMap[card.name] = {
+          isThemeSynergyCard: ec.isThemeSynergyCard,
+          isNewCard: ec.isNewCard,
+          primary_type: ec.primary_type,
+          cmc: ec.cmc,
+        };
         const role = (card.deckRole as RoleKey) || null;
         const sub = card.rampSubtype || card.removalSubtype || card.boardwipeSubtype || card.cardDrawSubtype || null;
         let score = scoreRecommendation(ec, role, sub, scoringCtx);
@@ -4226,6 +4234,7 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
       }
     }
     cardRelevancyMap = relMap;
+    cardEdhrecMetaMap = metaMap;
     console.log(`[DeckGen] Relevancy map: ${Object.keys(relMap).length} cards scored`);
   }
 
@@ -4283,6 +4292,7 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
     cardInclusionMap,
     cardSynergyMap,
     cardRelevancyMap,
+    cardEdhrecMetaMap,
     detectedArchetype,
     detectedPacing,
     bracketEstimation,
