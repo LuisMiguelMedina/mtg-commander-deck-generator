@@ -1,6 +1,7 @@
 import type { GeneratedDeck, ScryfallCard, EDHRECCard } from '@/types';
 import { scoreRecommendation, type ScoringContext } from './deckAnalyzer';
 import { getFrontFaceTypeLine, isMdfcLand, isChannelLand } from '@/services/scryfall/client';
+import { CHANNEL_LAND_BOOST, MDFC_LAND_BOOST } from './deckGenerator';
 
 const BASIC_LAND_NAMES = new Set([
   'Plains', 'Island', 'Swamp', 'Mountain', 'Forest',
@@ -10,9 +11,6 @@ const BASIC_LAND_NAMES = new Set([
 ]);
 
 const TYPE_KEYS = ['creature', 'instant', 'sorcery', 'artifact', 'enchantment', 'planeswalker'] as const;
-
-const CHANNEL_LAND_BOOST = 40;
-const MDFC_LAND_BOOST = 30;
 
 /**
  * Rebuild the relevancy map from a deck's current state. Call this after any
