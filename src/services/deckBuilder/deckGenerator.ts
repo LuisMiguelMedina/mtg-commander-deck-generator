@@ -20,7 +20,7 @@ import type {
   CollectionStrategy,
 } from '@/types';
 import { searchCards, getCardByName, getCardsByNames, prefetchBasicLands, getCachedCard, getGameChangerNames, getCardPrice, getFrontFaceTypeLine, fetchMultiCopyCardNames, parseSetFromQuery, upgradeCardPrintings, isMdfcLand, isChannelLand, CHANNEL_LANDS } from '@/services/scryfall/client';
-import { fetchCommanderData, fetchCommanderThemeData, fetchPartnerCommanderData, fetchPartnerThemeData, fetchAverageDeckMultiCopies, fetchCommanderCombos } from '@/services/edhrec/client';
+import { fetchCommanderData, fetchCommanderThemeData, fetchPartnerCommanderData, fetchPartnerThemeData, fetchAverageDeckMultiCopies, fetchCommanderCombos, fetchColorIdentityCombos } from '@/services/edhrec/client';
 import {
   calculateTypeTargets,
   calculateCurveTargets,
@@ -1493,7 +1493,8 @@ interface GenerationCache {
   baseData: EDHRECCommanderData | null;
   cardMap: Map<string, ScryfallCard>;
   themeOverlapCounts: Map<string, number>;
-  combos: EDHRECCombo[];
+  combos: EDHRECCombo[];              // Commander-source — feeds combo-boost scoring
+  colorIdentityCombos: EDHRECCombo[]; // Color-identity source — feeds detection only
   gameChangerNames: Set<string>;
   dataSource: DeckDataSource;
   representativeStats: EDHRECCommanderStats;
@@ -1632,7 +1633,8 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
   // --- Phase A: Data Acquisition (skippable via generation cache) ---
   const usingCache = isCacheValid(context);
   let gameChangerNames: Set<string> = new Set();
-  let combos: EDHRECCombo[] = [];
+  let combos: EDHRECCombo[] = [];                 // Commander-source — feeds boost scoring
+  let colorIdentityCombos: EDHRECCombo[] = [];    // Color-identity-source — feeds detection only
   let edhrecData: EDHRECCommanderData | null = null;
   let dataSource: DeckDataSource = 'scryfall';
   let baseData: EDHRECCommanderData | null = null;
@@ -1646,6 +1648,7 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
     onProgress?.('Reshuffling with cached data...', 5);
     gameChangerNames = generationCache!.gameChangerNames;
     combos = generationCache!.combos;
+    colorIdentityCombos = generationCache!.colorIdentityCombos;
     edhrecData = generationCache!.edhrecData;
     dataSource = generationCache!.dataSource;
     baseData = generationCache!.baseData;
@@ -1653,18 +1656,21 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
     await loadTaggerData();
     onProgress?.('Card pools loaded from cache...', 12);
   } else {
-    // FULL PATH: Pre-fetch basic lands, game changer list, combo data, and tagger data in parallel
+    // FULL PATH: Pre-fetch basic lands, game changer list, commander+color-identity combo data, and tagger data in parallel
     onProgress?.('Shuffling the library...', 5);
-    const [, fetchedGCNames, fetchedCombos] = await Promise.all([
+    const [, fetchedGCNames, fetchedCombos, fetchedColorCombos] = await Promise.all([
       prefetchBasicLands(),
       getGameChangerNames(),
       fetchCommanderCombos(commander.name).catch(() => [] as EDHRECCombo[]),
+      fetchColorIdentityCombos(colorIdentity).catch(() => [] as EDHRECCombo[]),
       loadTaggerData(),
     ]);
     gameChangerNames = fetchedGCNames;
-    combos = fetchedCombos;
+    // Stamp source on both arrays so downstream code can discriminate.
+    combos = fetchedCombos.map(c => ({ ...c, source: 'commander' as const }));
+    colorIdentityCombos = fetchedColorCombos.map(c => ({ ...c, source: 'color-identity' as const }));
     onProgress?.('Divining card roles from the aether...', 7);
-    console.log(`[DeckGen] Fetched ${combos.length} combos from EDHREC`);
+    console.log(`[DeckGen] Fetched ${combos.length} commander combos + ${colorIdentityCombos.length} color-identity combos from EDHREC`);
     console.log(`[DeckGen] Tagger data: ${hasTaggerData() ? 'loaded' : 'unavailable (role detection disabled)'}`);
   }
 
@@ -2124,6 +2130,7 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
       cardMap: new Map(), // Will be populated after Scryfall batch fetch
       themeOverlapCounts,
       combos,
+      colorIdentityCombos,
       gameChangerNames,
       dataSource,
       representativeStats: edhrecData.stats,
@@ -3576,9 +3583,20 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
     }
   }
 
-  // Detect combos present in the generated deck
+  // Detect combos present in the generated deck.
+  // Merge commander-source and color-identity-source combos; on collision (same comboId),
+  // commander source wins — it has higher provenance and uses the looser ≤2 threshold.
   let detectedCombos: DetectedCombo[] | undefined;
-  if (combos.length > 0) {
+  const allCombosForDetection: EDHRECCombo[] = (() => {
+    const byId = new Map<string, EDHRECCombo>();
+    for (const c of combos) byId.set(c.comboId, c);
+    for (const c of colorIdentityCombos) {
+      if (!byId.has(c.comboId)) byId.set(c.comboId, c);
+    }
+    return [...byId.values()];
+  })();
+
+  if (allCombosForDetection.length > 0) {
     const allDeckNames = new Set<string>();
     // Include commander(s) — they're part of the deck but not in categories
     if (commander) {
@@ -3594,11 +3612,12 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
       if (c.name.includes(' // ')) allDeckNames.add(c.name.split(' // ')[0]);
     }
 
-    detectedCombos = combos
+    detectedCombos = allCombosForDetection
       .filter(combo => !combo.cards.some(c => bannedCards.has(c.name)))
       .map(combo => {
         const comboCardNames = combo.cards.map(c => c.name);
         const missingCards = comboCardNames.filter(name => !allDeckNames.has(name));
+        const source = combo.source ?? 'commander';
 
         return {
           comboId: combo.comboId,
@@ -3608,9 +3627,16 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
           missingCards,
           deckCount: combo.deckCount,
           bracket: combo.bracket,
+          source,
         };
       })
-      .filter(dc => dc.isComplete || dc.missingCards.length <= 2);
+      // Per-source completeness threshold:
+      //  - commander combos:        complete OR ≤2 missing (existing behavior)
+      //  - color-identity combos:   complete OR ≤1 missing (off-commander tighter threshold)
+      .filter(dc => {
+        if (dc.source === 'commander') return dc.isComplete || dc.missingCards.length <= 2;
+        return dc.isComplete || dc.missingCards.length <= 1;
+      });
 
     // Deduplicate combos with identical card sets (keep higher deck count)
     {
