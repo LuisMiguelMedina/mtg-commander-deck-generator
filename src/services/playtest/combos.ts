@@ -1,20 +1,13 @@
-import type { DetectedCombo } from '@/types';
-import { fetchCommanderCombos } from '@/services/edhrec/client';
+import type { DetectedCombo, EDHRECCombo } from '@/types';
+import { fetchCommanderCombos, fetchColorIdentityCombos } from '@/services/edhrec/client';
 import type { SourceInput } from '@/components/playtest/types';
-
-interface RawCombo {
-  comboId: string;
-  cards: { name: string; id: string }[];
-  results: string[];
-  deckCount: number;
-  bracket: string;
-}
 
 /**
  * Resolves the combos in this deck. For generated decks we already have a
- * `detectedCombos` array on the deck object. For saved lists we re-run the
- * same EDHREC commander-combo lookup + deck-membership detection that
- * ListDeckView uses, against the union of every card name in the list.
+ * `detectedCombos` array on the deck object (now includes off-commander combos).
+ * For saved lists we re-run the same EDHREC commander-combo lookup + color-identity
+ * combo lookup + deck-membership detection that ListDeckView uses, against the
+ * union of every card name in the list.
  */
 export async function resolveCombos(input: SourceInput): Promise<DetectedCombo[]> {
   if (input.kind === 'generated') {
@@ -28,15 +21,26 @@ export async function resolveCombos(input: SourceInput): Promise<DetectedCombo[]
     ...(list.partnerCommanderName ? [list.partnerCommanderName] : []),
   ]);
   try {
-    const raw = (await fetchCommanderCombos(list.commanderName)) as RawCombo[];
-    return detectCombosInDeck(raw, allNames, list.commanderName, list.partnerCommanderName);
+    const [commanderRaw, colorRaw] = await Promise.all([
+      fetchCommanderCombos(list.commanderName).catch(() => [] as EDHRECCombo[]),
+      fetchColorIdentityCombos(list.cachedColorIdentity ?? []).catch(() => [] as EDHRECCombo[]),
+    ]);
+    const commanderCombos: EDHRECCombo[] = commanderRaw.map(c => ({ ...c, source: 'commander' as const }));
+    const colorCombos: EDHRECCombo[] = colorRaw.map(c => ({ ...c, source: 'color-identity' as const }));
+
+    // Merge, dedupe by comboId — commander source wins on collision.
+    const byId = new Map<string, EDHRECCombo>();
+    for (const c of commanderCombos) byId.set(c.comboId, c);
+    for (const c of colorCombos) if (!byId.has(c.comboId)) byId.set(c.comboId, c);
+
+    return detectCombosInDeck([...byId.values()], allNames, list.commanderName, list.partnerCommanderName);
   } catch {
     return [];
   }
 }
 
 function detectCombosInDeck(
-  combos: RawCombo[],
+  combos: EDHRECCombo[],
   allCardNames: Set<string>,
   commanderName?: string,
   partnerName?: string,
@@ -45,6 +49,7 @@ function detectCombosInDeck(
     .map(combo => {
       const comboCardNames = combo.cards.map(c => c.name);
       const missingCards = comboCardNames.filter(name => !allCardNames.has(name));
+      const source = combo.source ?? 'commander';
       return {
         comboId: combo.comboId,
         cards: comboCardNames,
@@ -53,9 +58,13 @@ function detectCombosInDeck(
         missingCards,
         deckCount: combo.deckCount,
         bracket: combo.bracket,
-      };
+        source,
+      } as DetectedCombo;
     })
-    .filter(dc => dc.isComplete || dc.missingCards.length <= 2);
+    .filter(dc => {
+      if (dc.source === 'commander') return dc.isComplete || dc.missingCards.length <= 2;
+      return dc.isComplete || dc.missingCards.length <= 1;
+    });
 
   const commanderSet = new Set<string>();
   if (commanderName) {
