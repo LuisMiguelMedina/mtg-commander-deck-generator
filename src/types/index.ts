@@ -246,6 +246,9 @@ export interface EDHRECCombo {
   rank: number;
   bracket: string;
   prereqCount: number;
+  // Stamped by callers after fetching. 'commander' = from commander's combo page;
+  // 'color-identity' = from color-identity combo page (off-commander detection).
+  source?: 'commander' | 'color-identity';
 }
 
 export interface DetectedCombo {
@@ -256,6 +259,9 @@ export interface DetectedCombo {
   missingCards: string[];
   deckCount: number;
   bracket: string;
+  // Where this combo was sourced from. 'commander' combos use the existing ≤2 missing
+  // threshold; 'color-identity' combos use a tighter ≤1 missing threshold.
+  source: 'commander' | 'color-identity';
 }
 
 export interface GapAnalysisCard {
