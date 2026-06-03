@@ -49,6 +49,8 @@ const TRIVIAL_WORDS = new Set([
   'tapped', 'untapped', 'haste', 'has', 'be', 'can', 'cant',
   // Attachment / enchant relationships are visible from card types — don't restate.
   'attached', 'attach', 'equipped', 'equip', 'enchanted', 'enchant', 'as',
+  // Other zone-location verbs (the noun forms are already trivial).
+  'exiled', 'sacrificed', 'destroyed', 'cast', 'by', 'from', 'ability', 'abilities',
 ]);
 function extractMeaningfulPrereqs(prereqs: string[], cardNames: string[]): string[] {
   // Build the list of strings to strip from each prereq: full card names AND
@@ -602,7 +604,7 @@ export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDec
                 <Plus className="w-3 h-3 text-muted-foreground shrink-0" />
                 <div
                   className="rounded-md border border-zinc-500/30 bg-zinc-500/10 px-2 py-2.5 flex items-center justify-center overflow-y-auto overflow-x-hidden"
-                  style={{ width: 72, height: 100 }}
+                  style={{ width: 110, height: 100 }}
                   title={prereq}
                 >
                   <span className="text-[10px] text-zinc-200/90 leading-tight text-center break-words">
