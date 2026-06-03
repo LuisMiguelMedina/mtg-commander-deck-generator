@@ -206,7 +206,12 @@ export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDec
     return () => { cancelled = true; };
   }, [expanded, combos]);
 
-  const handleCardClick = useCallback(async (name: string) => {
+  // Track the combo card list for the current preview so the modal's existing
+  // deck-nav machinery (slide animations, peek images, position indicator) can
+  // cycle through the combo's cards.
+  const [previewComboCards, setPreviewComboCards] = useState<string[] | null>(null);
+
+  const openPreviewForCard = useCallback(async (name: string, comboCards: string[] | null) => {
     try {
       let card = cardDataCache.get(name);
       if (!card) {
@@ -216,11 +221,13 @@ export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDec
       if (card) {
         setPreviewCardName(name.includes(' // ') ? name.split(' // ')[0] : name);
         setPreviewCard(card);
+        setPreviewComboCards(comboCards);
       }
     } catch {
       // silently fail
     }
   }, []);
+
 
   const tempBannedCards = useStore(s => s.customization.tempBannedCards ?? []);
 
@@ -482,7 +489,7 @@ export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDec
                   }}
                 >
                 <div
-                  onClick={() => handleCardClick(name)}
+                  onClick={() => openPreviewForCard(name, combo.cards)}
                   onMouseEnter={(e) => {
                     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                     const viewportW = window.innerWidth;
@@ -894,7 +901,33 @@ export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDec
 
       <CardPreviewModal
         card={previewCard}
-        onClose={() => { setPreviewCard(null); setPreviewCardName(null); }}
+        onClose={() => { setPreviewCard(null); setPreviewCardName(null); setPreviewComboCards(null); }}
+        {...(previewComboCards && previewComboCards.length > 1 && previewCard ? (() => {
+          // Cycle through the combo's cards via the modal's regular deck-nav machinery.
+          const cards = previewComboCards;
+          const currentName = previewCard.name;
+          const front = currentName.includes(' // ') ? currentName.split(' // ')[0] : currentName;
+          let currentIdx = cards.indexOf(currentName);
+          if (currentIdx === -1) currentIdx = cards.indexOf(front);
+          if (currentIdx === -1) currentIdx = 0;
+          const len = cards.length;
+          const prevIdx = (currentIdx - 1 + len) % len;
+          const nextIdx = (currentIdx + 1) % len;
+          const prevCard = cardDataCache.get(cards[prevIdx]);
+          const nextCard = cardDataCache.get(cards[nextIdx]);
+          return {
+            onNavigate: (direction: 'prev' | 'next') => {
+              const targetIdx = direction === 'next' ? nextIdx : prevIdx;
+              const targetName = cards[targetIdx];
+              openPreviewForCard(targetName, cards);
+            },
+            canNavigate: { prev: true, next: true },
+            cardIndex: currentIdx,
+            totalCards: len,
+            prevCardImage: prevCard ? getCardImageUrl(prevCard, 'small') : null,
+            nextCardImage: nextCard ? getCardImageUrl(nextCard, 'small') : null,
+          };
+        })() : {})}
         combos={previewCardName ? cardComboMap.get(previewCardName) : undefined}
         cardComboMap={cardComboMap}
         hideMustInclude={hideMustInclude}
