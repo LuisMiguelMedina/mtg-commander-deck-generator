@@ -38,7 +38,11 @@ const cardDataCache = new Map<string, ScryfallCard>();
 const TRIVIAL_WORDS = new Set([
   'on', 'the', 'battlefield', 'and', 'or', 'in', 'your', 'graveyard', 'library',
   'hand', 'exile', 'command', 'zone', 'have', 'a', 'an', 'is', 'are', 'this',
-  'that', 'these', 'those', 'with', 'control',
+  'that', 'these', 'those', 'with', 'control', 'controlled', 'controls',
+  // Generic "everything" words — "all permanents on the battlefield" is a
+  // no-op prereq (permanents are by definition on the battlefield).
+  'all', 'any', 'each', 'every', 'some', 'permanent', 'permanents',
+  'card', 'cards', 'you', 'to',
 ]);
 function extractMeaningfulPrereqs(prereqs: string[], cardNames: string[]): string[] {
   return prereqs.filter(p => {
