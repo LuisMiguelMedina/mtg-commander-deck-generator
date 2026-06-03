@@ -311,28 +311,49 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
     }
   }, [card, prevCardImage, nextCardImage]);
 
-  // Cycle through the active combo's cards while viewing one via cardOverride.
+  // The effective combo card list: explicit pill click wins, else fall back to
+  // the first combo the displayed card is part of. This lets navigation work
+  // both when entering via a side-panel pill click AND when entering by clicking
+  // a card thumbnail in the combo row (no cardOverride set yet).
+  const currentDisplayName = (cardOverride ?? card)?.name;
+  const effectiveComboCards = (() => {
+    if (activeComboCards) return activeComboCards;
+    if (!currentDisplayName || !combos) return null;
+    const front = currentDisplayName.includes(' // ') ? currentDisplayName.split(' // ')[0] : currentDisplayName;
+    const match = combos.find(c => c.cards.includes(currentDisplayName) || c.cards.includes(front));
+    return match?.cards ?? null;
+  })();
+
+  // Cycle through the active combo's cards. Works whether or not cardOverride
+  // is currently set — we use the currently-displayed card name as the cursor.
   const navigateCombo = useCallback(async (direction: 'prev' | 'next') => {
-    if (!cardOverride || !activeComboCards || activeComboCards.length < 2) return;
-    const currentIdx = activeComboCards.indexOf(cardOverride.name);
+    const cards = activeComboCards
+      ?? (currentDisplayName && combos
+        ? (combos.find(c => c.cards.includes(currentDisplayName) || c.cards.includes(currentDisplayName.split(' // ')[0]))?.cards ?? null)
+        : null);
+    if (!cards || cards.length < 2 || !currentDisplayName) return;
+    const front = currentDisplayName.includes(' // ') ? currentDisplayName.split(' // ')[0] : currentDisplayName;
+    let currentIdx = cards.indexOf(currentDisplayName);
+    if (currentIdx === -1) currentIdx = cards.indexOf(front);
     if (currentIdx === -1) return;
-    const len = activeComboCards.length;
+    const len = cards.length;
     const nextIdx = direction === 'next'
       ? (currentIdx + 1) % len
       : (currentIdx - 1 + len) % len;
-    const nextName = activeComboCards[nextIdx];
+    const nextName = cards[nextIdx];
     try {
       const fetched = await getCardByName(nextName);
       if (fetched) {
         slideDirectionRef.current = direction;
         setCardOverride(fetched);
+        setActiveComboCards(cards);
         setShowBack(false);
         setSlideClass(direction === 'next' ? 'animate-card-slide-from-right' : 'animate-card-slide-from-left');
       }
     } catch {
       // ignore fetch errors
     }
-  }, [cardOverride, activeComboCards]);
+  }, [activeComboCards, currentDisplayName, combos]);
 
   // Keyboard navigation (ArrowLeft/ArrowRight). In cardOverride mode with an
   // active combo, arrows cycle the combo's cards. Otherwise they navigate the deck.
@@ -366,7 +387,13 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
   const isDraggingRef = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
+  // Two states:
+  //  - inComboNav: keyboard/swipe operate on combo (only when user explicitly
+  //    entered combo mode via pill click). Preserves deck nav by default.
+  //  - showComboChevrons: visible chevrons appear whenever the displayed card
+  //    has a combo, so users discover combo nav via the buttons.
   const inComboNav = !!(cardOverride && activeComboCards && activeComboCards.length > 1);
+  const showComboChevrons = !!(effectiveComboCards && effectiveComboCards.length > 1);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (!onNavigate && !inComboNav) return;
@@ -1179,22 +1206,24 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
     {/* Navigation arrows + position indicator live OUTSIDE the scrolling backdrop
         so they stay pinned to the viewport (backdrop-filter on the backdrop creates
         a containing block that would otherwise trap position: fixed children). */}
-    {inComboNav && (
+    {showComboChevrons && (
       <>
         <button
           onClick={(e) => { e.stopPropagation(); navigateCombo('prev'); }}
-          className="fixed left-1 sm:left-4 top-1/2 -translate-y-1/2 z-[60] flex items-center group"
+          className={`fixed top-1/2 -translate-y-1/2 z-[60] flex items-center group ${hasNav ? 'left-16 sm:left-24' : 'left-1 sm:left-4'}`}
           title="Previous combo card"
         >
           <span className="bg-violet-500/40 group-hover:bg-violet-500/60 active:bg-violet-500/80 text-white rounded-full p-2.5 sm:p-3 transition-all backdrop-blur-sm flex items-center justify-center shadow-lg relative z-10">
             <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
           </span>
+          <span className="hidden sm:block ml-1 text-[10px] text-violet-300/80 font-medium uppercase tracking-wide">Combo</span>
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); navigateCombo('next'); }}
-          className="fixed right-1 sm:right-4 top-1/2 -translate-y-1/2 z-[60] flex items-center group"
+          className={`fixed top-1/2 -translate-y-1/2 z-[60] flex items-center group ${hasNav ? 'right-16 sm:right-24' : 'right-1 sm:right-4'}`}
           title="Next combo card"
         >
+          <span className="hidden sm:block mr-1 text-[10px] text-violet-300/80 font-medium uppercase tracking-wide">Combo</span>
           <span className="bg-violet-500/40 group-hover:bg-violet-500/60 active:bg-violet-500/80 text-white rounded-full p-2.5 sm:p-3 transition-all backdrop-blur-sm flex items-center justify-center shadow-lg relative z-10">
             <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
           </span>
