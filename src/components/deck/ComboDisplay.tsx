@@ -565,7 +565,7 @@ export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDec
                   title={prereq}
                 >
                   <span className="text-[10px] text-amber-200/90 leading-tight text-center break-words">
-                    {prereq.replace(/\.$/, '')}
+                    <ManaText text={prereq.replace(/\.$/, '')} />
                   </span>
                 </div>
               </Fragment>
