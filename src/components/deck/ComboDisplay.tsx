@@ -47,6 +47,8 @@ const TRIVIAL_WORDS = new Set([
   // are assumed operational conditions of a combo with cards already in play.
   'does', 'not', 'no', 'doesnt', 'summoning', 'sickness',
   'tapped', 'untapped', 'haste', 'has', 'be', 'can', 'cant',
+  // Attachment / enchant relationships are visible from card types — don't restate.
+  'attached', 'attach', 'equipped', 'equip', 'enchanted', 'enchant', 'as',
 ]);
 function extractMeaningfulPrereqs(prereqs: string[], cardNames: string[]): string[] {
   // Build the list of strings to strip from each prereq: full card names AND
