@@ -30,6 +30,29 @@ interface ComboDisplayProps {
 // Cache fetched card data across renders
 const cardDataCache = new Map<string, ScryfallCard>();
 
+// EDHREC prereqs often include trivial card-location statements like
+// "X and Y on the battlefield." that just restate where the combo cards belong.
+// Strip the combo card names + obvious filler from each prereq; if nothing
+// substantive is left, treat it as trivial and drop it. What survives is the
+// stuff worth showing up front — e.g. "You control at least three Foods."
+const TRIVIAL_WORDS = new Set([
+  'on', 'the', 'battlefield', 'and', 'or', 'in', 'your', 'graveyard', 'library',
+  'hand', 'exile', 'command', 'zone', 'have', 'a', 'an', 'is', 'are', 'this',
+  'that', 'these', 'those', 'with', 'control',
+]);
+function extractMeaningfulPrereqs(prereqs: string[], cardNames: string[]): string[] {
+  return prereqs.filter(p => {
+    let stripped = p;
+    for (const name of cardNames) {
+      const front = name.includes(' // ') ? name.split(' // ')[0] : name;
+      stripped = stripped.replace(new RegExp(front.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '');
+    }
+    const normalized = stripped.toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+    const words = normalized.split(/\s+/).filter(w => w && !TRIVIAL_WORDS.has(w));
+    return words.length > 0;
+  });
+}
+
 export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDeck, onRemoveFromDeck, onMoveToSideboard, onMoveToMaybeboard, forceExpanded }: ComboDisplayProps) {
   const commander = useStore(s => s.commander);
   const bannedCards = useStore(s => s.customization.bannedCards);
@@ -81,6 +104,26 @@ export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDec
     });
     return () => { cancelled = true; };
   }, [expanded]);
+
+  // Background-prefetch combo details for visible combos so we can show
+  // non-trivial prerequisites (e.g. "three Foods") as chips alongside cards
+  // without making the user click "Show details".
+  useEffect(() => {
+    if (!expanded) return;
+    for (const combo of combos) {
+      if (comboDetails.has(combo.comboId)) continue;
+      setComboDetails(prev => {
+        if (prev.has(combo.comboId)) return prev;
+        return new Map(prev).set(combo.comboId, 'loading');
+      });
+      fetchComboDetails(combo.comboId)
+        .then(details => setComboDetails(prev => new Map(prev).set(combo.comboId, details)))
+        .catch(() => setComboDetails(prev => new Map(prev).set(combo.comboId, 'error')));
+    }
+    // We intentionally don't include comboDetails in the deps — it's read
+    // through state-setter callbacks to avoid re-running on every update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded, combos]);
 
   // Fetch card images when expanded (bulk batch via /cards/collection)
   useEffect(() => {
@@ -506,6 +549,28 @@ export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDec
               </Fragment>
             );
           })}
+          {(() => {
+            // Render non-trivial prerequisites as chips after the card images so the
+            // user can see at a glance what else the combo needs (e.g. "three Foods").
+            const details = comboDetails.get(combo.comboId);
+            if (!details || details === 'loading' || details === 'error') return null;
+            const meaningful = extractMeaningfulPrereqs(details.prerequisites, combo.cards);
+            if (meaningful.length === 0) return null;
+            return meaningful.map((prereq, idx) => (
+              <Fragment key={`prereq-${idx}`}>
+                <Plus className="w-3 h-3 text-muted-foreground shrink-0" />
+                <div
+                  className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1 flex items-center justify-center"
+                  style={{ width: 72, minHeight: 100 }}
+                  title={prereq}
+                >
+                  <span className="text-[10px] text-amber-200/90 leading-tight text-center break-words">
+                    {prereq.replace(/\.$/, '')}
+                  </span>
+                </div>
+              </Fragment>
+            ));
+          })()}
         </div>
 
         {/* Expandable details */}
@@ -525,7 +590,8 @@ export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDec
           <ChevronDown className={`w-3 h-3 transition-transform ${isComboExpanded ? 'rotate-180' : ''}`} />
           {isComboExpanded ? 'Hide details' : 'Show details'}
         </button>
-        {isComboExpanded && (() => {
+        <div className={`overflow-hidden transition-all duration-300 ease-out ${isComboExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+        {(() => {
           const details = comboDetails.get(combo.comboId);
           if (details === 'loading') {
             return (
@@ -599,6 +665,7 @@ export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDec
             </p>
           ) : null;
         })()}
+        </div>
       </div>
     );
   };
