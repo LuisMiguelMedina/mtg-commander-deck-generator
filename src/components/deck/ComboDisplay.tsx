@@ -274,7 +274,7 @@ export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDec
     return (
       <div
         key={combo.comboId}
-        className={`p-3 rounded-lg border overflow-hidden ${
+        className={`relative p-3 rounded-lg border overflow-hidden ${
           isExcluded
             ? 'border-red-500/20 bg-red-500/5'
             : combo.isComplete
@@ -282,8 +282,27 @@ export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDec
               : 'border-amber-500/30 bg-amber-500/5'
         }`}
       >
+        {/* Source badge — top right */}
+        {combo.source === 'commander' ? (
+          <span
+            className="absolute top-2 right-2 inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-medium text-amber-300/90 bg-amber-500/10 border border-amber-500/20"
+            title="Listed on this commander's EDHREC combo page."
+          >
+            <Crown className="w-2.5 h-2.5" />
+            Commander
+          </span>
+        ) : (
+          <span
+            className="absolute top-2 right-2 inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-medium text-violet-300/80 bg-violet-500/10 border border-violet-500/20"
+            title="Not from this commander's typical builds — emerged from your deck's color identity."
+          >
+            <Sparkles className="w-2.5 h-2.5" />
+            Synergy
+          </span>
+        )}
+
         {/* Title + metadata */}
-        <div className="mb-2 min-w-0">
+        <div className="mb-2 min-w-0 pr-24">
           {(() => {
             const tone = isExcluded ? 'text-red-400' : combo.isComplete ? 'text-green-500' : 'text-amber-500';
             const Icon = isExcluded ? Ban : combo.isComplete ? Check : AlertTriangle;
@@ -320,23 +339,6 @@ export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDec
           })()}
           <span className="text-[10px] text-muted-foreground mt-0.5 block">
             {combo.deckCount.toLocaleString()} decks · Bracket {combo.bracket}
-            {combo.source === 'commander' ? (
-              <span
-                className="ml-1.5 inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-medium text-amber-300/90 bg-amber-500/10 border border-amber-500/20"
-                title="Listed on this commander's EDHREC combo page."
-              >
-                <Crown className="w-2.5 h-2.5" />
-                Commander
-              </span>
-            ) : (
-              <span
-                className="ml-1.5 inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-medium text-violet-300/80 bg-violet-500/10 border border-violet-500/20"
-                title="Not from this commander's typical builds — emerged from your deck's color identity."
-              >
-                <Sparkles className="w-2.5 h-2.5" />
-                Synergy
-              </span>
-            )}
           </span>
         </div>
 
