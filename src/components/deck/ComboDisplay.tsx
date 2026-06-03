@@ -47,6 +47,13 @@ export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDec
   const [showAllNearMisses, setShowAllNearMisses] = useState(false);
   const [showExcluded, setShowExcluded] = useState(false);
   const [comboSort, setComboSort] = useState<'popularity' | 'relevance' | 'source'>('relevance');
+  const [showSynergy, setShowSynergy] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('combos.showSynergy') !== 'false';
+  });
+  useEffect(() => {
+    if (typeof window !== 'undefined') localStorage.setItem('combos.showSynergy', String(showSynergy));
+  }, [showSynergy]);
   const [cardFilter, setCardFilter] = useState<string | null>(null);
   const [cardImages, setCardImages] = useState<Map<string, string>>(new Map());
   const [collectionNames, setCollectionNames] = useState<Set<string> | null>(null);
@@ -226,6 +233,10 @@ export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDec
 
   if (combos.length === 0) return null;
 
+  // Apply the user's "show synergy combos" toggle before any other filtering.
+  const visibleCombos = showSynergy ? combos : combos.filter(c => c.source !== 'color-identity');
+  const hiddenSynergyCount = combos.length - visibleCombos.length;
+
   const bannedSet = new Set(bannedCards.map(n => n.toLowerCase()));
   const hasExcludedCard = (combo: DetectedCombo) => combo.cards.some(n => bannedSet.has(n.toLowerCase()));
 
@@ -252,16 +263,16 @@ export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDec
   const matchesCardFilter = (combo: DetectedCombo) =>
     !cardFilter || combo.cards.some(n => (n.includes(' // ') ? n.split(' // ')[0] : n) === cardFilter);
 
-  const completeCombos = sortCombos(combos.filter(c => c.isComplete && !hasExcludedCard(c) && matchesCardFilter(c)));
-  const nearMisses = sortCombos(combos.filter(c => !c.isComplete && !hasExcludedCard(c) && matchesCardFilter(c)));
-  const excludedCombos = combos.filter(c => hasExcludedCard(c) && matchesCardFilter(c));
+  const completeCombos = sortCombos(visibleCombos.filter(c => c.isComplete && !hasExcludedCard(c) && matchesCardFilter(c)));
+  const nearMisses = sortCombos(visibleCombos.filter(c => !c.isComplete && !hasExcludedCard(c) && matchesCardFilter(c)));
+  const excludedCombos = visibleCombos.filter(c => hasExcludedCard(c) && matchesCardFilter(c));
 
   // For source-sort view: split everything visible by source, each pre-sorted by completeness.
   const commanderSourceCombos = sortByCompletenessThenPopularity(
-    combos.filter(c => c.source === 'commander' && !hasExcludedCard(c) && matchesCardFilter(c)),
+    visibleCombos.filter(c => c.source === 'commander' && !hasExcludedCard(c) && matchesCardFilter(c)),
   );
   const synergySourceCombos = sortByCompletenessThenPopularity(
-    combos.filter(c => c.source === 'color-identity' && !hasExcludedCard(c) && matchesCardFilter(c)),
+    visibleCombos.filter(c => c.source === 'color-identity' && !hasExcludedCard(c) && matchesCardFilter(c)),
   );
 
   const toggleCardFilter = (name: string) => {
@@ -628,6 +639,20 @@ export function ComboDisplay({ combos, hideMustInclude, onRegenerate, onAddToDec
           >
             <span className="truncate max-w-[140px]">Filter: {cardFilter}</span>
             <X className="w-3 h-3 shrink-0" />
+          </button>
+        )}
+        {expanded && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowSynergy(s => !s); }}
+            className={`flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border transition-colors shrink-0 ${
+              showSynergy
+                ? 'border-violet-500/40 bg-violet-500/15 text-violet-200 hover:bg-violet-500/25'
+                : 'border-border bg-transparent text-muted-foreground hover:text-foreground hover:bg-accent'
+            }`}
+            title={showSynergy ? `Hide ${hiddenSynergyCount || ''} synergy combos`.trim() : 'Show synergy combos'}
+          >
+            <Sparkles className="w-3 h-3" />
+            <span>Synergy: {showSynergy ? 'On' : 'Off'}</span>
           </button>
         )}
         {expanded && (
