@@ -16,7 +16,7 @@ import { getCardByName, getCardImageUrl, getCachedCard, getCardPrice } from '@/s
 import { removeCards, addCard } from '@/services/deckBuilder/cardSwap';
 import { fetchCommanderData, fetchPartnerCommanderData, formatCommanderNameForUrl } from '@/services/edhrec';
 import { applyCommanderTheme, resetTheme } from '@/lib/commanderTheme';
-import type { BracketLevel, BudgetOption, ThemeResult } from '@/types';
+import type { BracketLevel, BudgetOption, GeneratedDeck, ThemeResult } from '@/types';
 import { Loader2, Wand2, ArrowLeft, ExternalLink, SlidersHorizontal, Bookmark, Check, Copy, X, Microscope, Swords } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { trackEvent } from '@/services/analytics';
@@ -86,6 +86,36 @@ export function BuilderPage() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
+  // Hydrate generated deck from sessionStorage on refresh — the ?g=<timestamp>
+  // URL is the persistence key, so a hard refresh restores the same deck view.
+  // Wait until the URL commanders are loaded into the store, because setCommander
+  // and setPartnerCommander wipe generatedDeck when their identity changes
+  // (null → loaded counts as a change). Hydrating before they settle would race.
+  useEffect(() => {
+    if (!genParam || generatedDeck || !commander) return;
+    const urlPartnerName = partnerName ? decodeURIComponent(partnerName) : null;
+    const storePartnerName = partnerCommander?.name ?? null;
+    if (urlPartnerName !== storePartnerName) return;
+    try {
+      const stored = sessionStorage.getItem(`deck:${genParam}`);
+      if (stored) setGeneratedDeck(JSON.parse(stored) as GeneratedDeck);
+    } catch (e) {
+      console.warn('Failed to restore deck from sessionStorage:', e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [genParam, commander?.name, partnerCommander?.name, partnerName]);
+
+  // Persist generated deck to sessionStorage. Regeneration reuses the same ?g=,
+  // so this overwrites the previous snapshot.
+  useEffect(() => {
+    if (!generatedDeck || !genParam) return;
+    try {
+      sessionStorage.setItem(`deck:${genParam}`, JSON.stringify(generatedDeck));
+    } catch (e) {
+      console.warn('Failed to persist deck to sessionStorage:', e);
+    }
+  }, [generatedDeck, genParam]);
 
   // Load collection names for header price display
   useEffect(() => {
@@ -530,7 +560,7 @@ export function BuilderPage() {
     // Read fresh from store to avoid stale closures (e.g. tempBannedCards just updated)
     const { commander: cmd, partnerCommander: partner, colorIdentity: colors, customization: cust, selectedThemes: themes, generatedDeck: currentDeck } = useStore.getState();
     if (!cmd) return;
-    const isRegeneration = currentDeck !== null;
+    const isRegeneration = currentDeck !== null && !!genParam;
 
     setLoading(true, 'Starting deck generation...');
     setProgress('Initializing...');

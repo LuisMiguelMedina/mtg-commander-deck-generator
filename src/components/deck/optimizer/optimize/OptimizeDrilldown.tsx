@@ -5,7 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ManaText } from '@/components/ui/mtg-icons';
 
 function edhrecSlug(name: string): string {
-  return name.split(' // ')[0].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  return name.split(' // ')[0].toLowerCase().replace(/'/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }
 import { getCachedCard, getCardImageUrl } from '@/services/scryfall/client';
 import { scryfallImg } from '../constants';

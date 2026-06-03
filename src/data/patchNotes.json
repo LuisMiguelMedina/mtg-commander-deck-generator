@@ -1,22 +1,12 @@
 [
   {
-    "version": "1.2.33",
-    "notes": [
-      "Synergy combos — combos your deck happens to assemble even if they aren't listed on your commander's combo page now show up too, with a small Synergy tag",
-      "Toggle synergy combos on/off in the combo panel toolbar",
-      "Combos now show the extra requirements (like 'three Foods') as chips next to the card images so you can see the full setup at a glance",
-      "Mana symbols render inside combo requirement chips",
-      "Click a card in a combo to preview it, then arrow / swipe / chevron through every other card in that combo",
-      "Hover a card thumbnail in the combo panel to peek at the full card",
-      "Combo card thumbnails scale to fit — bigger thumbs for 2-card combos, smaller for 5+"
-    ]
-  },
-  {
     "version": "1.2.32",
     "notes": [
+      "Synergy combos — combos your deck happens to assemble even if they aren't listed on your commander's combo page now show up too, with a small Synergy tag",
+      "Combos now show the extra requirements (like 'three Foods') as chips next to the card images so you can see the full setup at a glance",
+      "Hover a card thumbnail in the combo panel to peek at the full card",
       "Relevancy score now reflects how load-bearing a card is in your current deck — combo pieces and the only card filling a role get a boost",
-      "Trim suggestions are more honest: the only boardwipe in your deck won't get cut, and combo pieces are protected without needing a separate rule",
-      "Drawer panels (trim, etc.) sit on a brighter surface with a thicker edge and ambient shadow so they read as a proper layer over the deck"
+
     ]
   },
   {

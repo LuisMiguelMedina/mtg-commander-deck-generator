@@ -239,11 +239,15 @@ export const useStore = create<AppState>((set, get) => ({
     const partnerIdentity = state.partnerCommander?.color_identity || [];
     const commanderIdentity = card?.color_identity || [];
     const combined = [...new Set([...commanderIdentity, ...partnerIdentity])];
+    // Only wipe the deck/theme state when the commander actually changes.
+    // Re-setting the same commander (e.g. on a page refresh that re-fetches it)
+    // would otherwise clobber a deck restored from sessionStorage.
+    const sameCommander = state.commander?.name === card?.name;
 
     return {
       commander: card,
       colorIdentity: combined,
-      generatedDeck: null, // Reset deck when commander changes
+      ...(sameCommander ? {} : { generatedDeck: null }), // Reset deck when commander changes
       // Reset theme state when commander changes
       edhrecThemes: [],
       selectedThemes: [],
@@ -262,11 +266,13 @@ export const useStore = create<AppState>((set, get) => ({
     const commanderIdentity = state.commander?.color_identity || [];
     const partnerIdentity = card?.color_identity || [];
     const combined = [...new Set([...commanderIdentity, ...partnerIdentity])];
+    // Avoid wiping a deck restored from sessionStorage on refresh (see setCommander).
+    const samePartner = (state.partnerCommander?.name ?? null) === (card?.name ?? null);
 
     return {
       partnerCommander: card,
       colorIdentity: combined,
-      generatedDeck: null,
+      ...(samePartner ? {} : { generatedDeck: null }),
       // Reset theme state when partner changes
       edhrecThemes: [],
       selectedThemes: [],

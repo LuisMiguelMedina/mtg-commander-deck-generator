@@ -4427,29 +4427,31 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
               <TooltipContent side="right">{showTextEditor ? 'Hide text editor' : 'Show text editor'}</TooltipContent>
             </Tooltip>
 
-            {/* View mode toggle */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
-                >
-                  <Grid3X3 className="w-4 h-4" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right">Grid view</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
-                >
-                  <List className="w-4 h-4" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right">List view</TooltipContent>
-            </Tooltip>
+            {/* View mode toggle — grouped */}
+            <div className="flex flex-col gap-0.5 p-0.5 rounded-lg bg-muted/40">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={`p-2 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
+                  >
+                    <Grid3X3 className="w-4 h-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Grid view</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
+                  >
+                    <List className="w-4 h-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">List view</TooltipContent>
+              </Tooltip>
+            </div>
           </TooltipProvider>
         </div>,
         document.body
