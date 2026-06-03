@@ -43,6 +43,10 @@ const TRIVIAL_WORDS = new Set([
   // no-op prereq (permanents are by definition on the battlefield).
   'all', 'any', 'each', 'every', 'some', 'permanent', 'permanents',
   'card', 'cards', 'you', 'to',
+  // Card-state words — "X doesn't have summoning sickness" / "X is untapped"
+  // are assumed operational conditions of a combo with cards already in play.
+  'does', 'not', 'no', 'doesnt', 'summoning', 'sickness',
+  'tapped', 'untapped', 'haste', 'has', 'be', 'can', 'cant',
 ]);
 function extractMeaningfulPrereqs(prereqs: string[], cardNames: string[]): string[] {
   // Build the list of strings to strip from each prereq: full card names AND
