@@ -1,7 +1,7 @@
 import type { UserCardList } from '@/types';
 import { CardTypeIcon, CommanderIcon } from '@/components/ui/mtg-icons';
 import { stripMarkdown, formatRelativeTime } from '@/lib/utils';
-import { MoreHorizontal, CopyPlus, Download, Trash2, Pencil, List, Search } from 'lucide-react';
+import { MoreHorizontal, CopyPlus, Download, Trash2, Pencil, List, Search, Pin, PinOff } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -19,9 +19,10 @@ interface ListCardProps {
   onDuplicate: () => void;
   onExport: () => void;
   onDelete: () => void;
+  onTogglePin?: () => void;
 }
 
-export function ListCard({ list, viewMode, typeBreakdown, colorIdentity, commanderArtUrl, matchingCards, onClick, onEdit, onDuplicate, onExport, onDelete }: ListCardProps) {
+export function ListCard({ list, viewMode, typeBreakdown, colorIdentity, commanderArtUrl, matchingCards, onClick, onEdit, onDuplicate, onExport, onDelete, onTogglePin }: ListCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -57,6 +58,7 @@ export function ListCard({ list, viewMode, typeBreakdown, colorIdentity, command
   const previewCards = list.cards.slice(0, 4);
   const remainingCount = list.cards.length - previewCards.length;
 
+  const isPinned = !!list.pinnedAt;
   const dropdownPortal = menuOpen && menuPos && createPortal(
     <DropdownMenu
       ref={menuRef}
@@ -65,6 +67,8 @@ export function ListCard({ list, viewMode, typeBreakdown, colorIdentity, command
       onDuplicate={onDuplicate}
       onExport={onExport}
       onDelete={onDelete}
+      onTogglePin={onTogglePin}
+      isPinned={isPinned}
       onClose={() => setMenuOpen(false)}
     />,
     document.body
@@ -93,6 +97,7 @@ export function ListCard({ list, viewMode, typeBreakdown, colorIdentity, command
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
+            {isPinned && <Pin className="w-3 h-3 text-violet-300 shrink-0" aria-label="Pinned" />}
             <span className="text-sm font-medium group-hover:text-primary transition-colors truncate">{list.name}</span>
             {colorIdentity && (
               <span className="inline-flex items-center gap-0.5 shrink-0">
@@ -181,7 +186,10 @@ export function ListCard({ list, viewMode, typeBreakdown, colorIdentity, command
       )}
       <div className="relative flex flex-col flex-1">
       <div className="flex items-start justify-between mb-1">
-        <h3 className="text-sm font-medium group-hover:text-primary transition-colors truncate pr-2">{list.name}</h3>
+        <h3 className="text-sm font-medium group-hover:text-primary transition-colors truncate pr-2 flex items-center gap-1.5 min-w-0">
+          {isPinned && <Pin className="w-3 h-3 text-violet-300 shrink-0" aria-label="Pinned" />}
+          <span className="truncate">{list.name}</span>
+        </h3>
         <div className="relative">
           <button
             ref={buttonRef}
@@ -291,8 +299,10 @@ const DropdownMenu = forwardRef<HTMLDivElement, {
   onDuplicate: () => void;
   onExport: () => void;
   onDelete: () => void;
+  onTogglePin?: () => void;
+  isPinned?: boolean;
   onClose: () => void;
-}>(function DropdownMenu({ position, onEdit, onDuplicate, onExport, onDelete, onClose }, ref) {
+}>(function DropdownMenu({ position, onEdit, onDuplicate, onExport, onDelete, onTogglePin, isPinned, onClose }, ref) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const handleAction = (action: () => void) => (e: React.MouseEvent) => {
@@ -318,6 +328,11 @@ const DropdownMenu = forwardRef<HTMLDivElement, {
       className="fixed z-[999] w-40 rounded-lg border border-border bg-card shadow-xl py-1 animate-fade-in"
       style={{ top: position.top, left: position.left - 160 }}
     >
+      {onTogglePin && (
+        <button onClick={handleAction(onTogglePin)} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent transition-colors text-left">
+          {isPinned ? <><PinOff className="w-3.5 h-3.5" /> Unpin</> : <><Pin className="w-3.5 h-3.5" /> Pin to top</>}
+        </button>
+      )}
       <button onClick={handleAction(onEdit)} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent transition-colors text-left">
         <Pencil className="w-3.5 h-3.5" /> Edit
       </button>

@@ -41,7 +41,7 @@ export function ListsPage() {
   const { '*': splat } = useParams();
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  const { lists, createList, updateList, deleteList, duplicateList, convertToList, exportList, getListById } = useUserLists();
+  const { lists, createList, updateList, deleteList, duplicateList, togglePin, convertToList, exportList, getListById } = useUserLists();
 
   // Derive `kind` from URL prefix and `view` from remaining segments
   const currentView = useMemo(() => {
@@ -114,6 +114,10 @@ export function ListsPage() {
       );
     }
     return [...filtered].sort((a, b) => {
+      // Pinned items always come first, ordered by most-recently-pinned
+      if (a.pinnedAt && !b.pinnedAt) return -1;
+      if (!a.pinnedAt && b.pinnedAt) return 1;
+      if (a.pinnedAt && b.pinnedAt) return b.pinnedAt - a.pinnedAt;
       let cmp = 0;
       if (sortKey === 'name') cmp = a.name.localeCompare(b.name);
       else if (sortKey === 'size') cmp = a.cards.length - b.cards.length;
@@ -744,6 +748,7 @@ export function ListsPage() {
                 onDuplicate={() => duplicateList(list.id)}
                 onExport={() => handleExport(list.id)}
                 onDelete={() => handleDelete(list.id)}
+                onTogglePin={() => togglePin(list.id)}
               />
             ))}
           </div>
@@ -763,6 +768,7 @@ export function ListsPage() {
                 onDuplicate={() => duplicateList(list.id)}
                 onExport={() => handleExport(list.id)}
                 onDelete={() => handleDelete(list.id)}
+                onTogglePin={() => togglePin(list.id)}
               />
             ))}
           </div>

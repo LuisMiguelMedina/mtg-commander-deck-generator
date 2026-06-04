@@ -465,6 +465,7 @@ export interface UserCardList {
   generationSummary?: string; // "Built with: X · Bracket 3 · Budget" — cleared on first edit
   createdAt: number;
   updatedAt: number;
+  pinnedAt?: number; // Timestamp when user pinned this list to the top; undefined = not pinned
   // Cached display data (computed on save to avoid Scryfall fetches on browse)
   cachedTypeBreakdown?: Record<string, number>;
   cachedColorIdentity?: string[];

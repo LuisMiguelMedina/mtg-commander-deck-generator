@@ -202,6 +202,12 @@ export function useUserLists() {
     });
   }, []);
 
+  const togglePin = useCallback((id: string) => {
+    updateShared(prev => prev.map(l =>
+      l.id === id ? { ...l, pinnedAt: l.pinnedAt ? undefined : Date.now() } : l
+    ));
+  }, []);
+
   const convertToDeck = useCallback((id: string) => {
     updateShared(prev => prev.map(l =>
       l.id === id ? { ...l, type: 'deck' as const, updatedAt: Date.now() } : l
@@ -233,5 +239,5 @@ export function useUserLists() {
     return sharedLists.find(l => l.id === id) ?? null;
   }, []);
 
-  return { lists, createList, updateList, deleteList, duplicateList, convertToDeck, convertToList, exportList, getListById };
+  return { lists, createList, updateList, deleteList, duplicateList, togglePin, convertToDeck, convertToList, exportList, getListById };
 }
