@@ -236,6 +236,33 @@ export function ListsPage() {
     }
   }, [currentView, lists, banLists, navigate, searchParams]);
 
+  // Pseudo-list edit view (Must Include / Excluded — backed by Zustand customization)
+  if (currentView.view === 'edit' && currentView.listId && PSEUDO_IDS.has(currentView.listId)) {
+    const pseudoId = currentView.listId;
+    const sourceCards = pseudoId === PSEUDO_MUST_INCLUDE_ID
+      ? (customization.mustIncludeCards || [])
+      : (customization.bannedCards || []);
+    const list = buildPseudoList(pseudoId, sourceCards);
+    return (
+      <main className="flex-1 container mx-auto px-4 py-8 max-w-3xl lg:max-w-5xl">
+        <div className="aurora-bg" />
+        <ListCreateEditForm
+          existingList={list}
+          onSave={(_name, cards) => {
+            // Only the card list is persisted — name/description are fixed for pseudo-lists.
+            if (pseudoId === PSEUDO_MUST_INCLUDE_ID) {
+              updateCustomization({ mustIncludeCards: cards });
+            } else {
+              updateCustomization({ bannedCards: cards });
+            }
+            navigate(`/lists/${pseudoId}`, { replace: true });
+          }}
+          onCancel={() => navigate(`/lists/${pseudoId}`)}
+        />
+      </main>
+    );
+  }
+
   // Pseudo-list detail view (Must Include / Excluded — backed by Zustand customization)
   if (currentView.view === 'detail' && currentView.listId && PSEUDO_IDS.has(currentView.listId)) {
     const pseudoId = currentView.listId;
@@ -257,6 +284,7 @@ export function ListsPage() {
         <ListDetailView
           list={list}
           onBack={() => navigate('/lists')}
+          onEdit={() => navigate(`/lists/${pseudoId}/edit`)}
           onExport={() => {
             const text = sourceCards.map(c => `1 ${c}`).join('\n');
             navigator.clipboard.writeText(text).then(() => {
