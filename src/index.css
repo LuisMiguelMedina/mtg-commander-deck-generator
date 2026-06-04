@@ -512,6 +512,10 @@
      --aurora-color-b → second blob's HSL triplet
    Falls back to C-neutral if vars are unset, so a missing identity is
    visually quiet rather than broken. */
+.aurora-themed .aurora-bg::before,
+.aurora-themed .aurora-bg::after {
+  opacity: 0.16;
+}
 .aurora-themed .aurora-bg::before {
   background: radial-gradient(
     ellipse,
