@@ -565,6 +565,20 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
     [generatedDeck],
   );
   const colorIdentity = useStore(s => s.colorIdentity) || [];
+  // Color-identity violations — derive the commander's identity from the
+  // loaded ScryfallCards so we don't show false positives during store rehydration.
+  const colorIdentityViolations = useMemo(() => {
+    if (!list.commanderName) return [];
+    const commanderCard = generatedDeck?.commander;
+    const partnerCard = generatedDeck?.partnerCommander;
+    if (!commanderCard) return [];
+    const allowed = new Set<string>([
+      ...(commanderCard.color_identity || []),
+      ...((list.partnerCommanderName && partnerCard?.color_identity) || []),
+    ]);
+    const cards: ScryfallCard[] = generatedDeck ? Object.values(generatedDeck.categories).flat() : [];
+    return cards.filter(c => (c.color_identity || []).some(color => !allowed.has(color)));
+  }, [generatedDeck, list.commanderName, list.partnerCommanderName]);
   const customization = useStore(s => s.customization);
   const updateCustomization = useStore(s => s.updateCustomization);
   const { lists: userLists, updateList } = useUserLists();
@@ -1761,6 +1775,40 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
                 Set commander
               </button>
             )}
+          </div>
+        ) : list.type === 'deck' && colorIdentityViolations.length > 0 ? (
+          <div className="flex items-center gap-2 px-3 py-2 mb-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300 text-sm flex-wrap">
+            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <span>
+              {colorIdentityViolations.length} card{colorIdentityViolations.length === 1 ? '' : 's'} break{colorIdentityViolations.length === 1 ? 's' : ''} color identity
+            </span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 border border-rose-500/40 transition-colors whitespace-nowrap"
+                >
+                  Show offenders
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 p-0 max-h-96 overflow-y-auto">
+                <div className="px-3 py-2 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Outside commander identity
+                </div>
+                <ul className="py-1">
+                  {colorIdentityViolations.map(c => (
+                    <li key={c.name} className="px-3 py-1.5 text-sm flex items-center justify-between gap-3 hover:bg-accent/40">
+                      <span className="truncate">{c.name.includes(' // ') ? c.name.split(' // ')[0] : c.name}</span>
+                      <span className="text-xs text-rose-300/80 font-mono shrink-0">
+                        {(c.color_identity || []).join('') || '∅'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </PopoverContent>
+            </Popover>
           </div>
         ) : list.deckSize && list.cards.length !== list.deckSize && deckSizeNoticeDismissedAt !== list.cards.length && (
           <div className="flex items-center gap-2 px-3 py-2 mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm flex-wrap">
