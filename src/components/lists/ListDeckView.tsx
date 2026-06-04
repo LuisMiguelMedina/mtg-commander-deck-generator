@@ -2417,7 +2417,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
             <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-border">
               <div>
                 <h2 className="text-lg font-bold">Must-include list</h2>
-                <p className="text-sm text-muted-foreground mt-0.5">
+                <p className="text-sm text-foreground/75 mt-0.5">
                   Cards you want in every deck.
                 </p>
               </div>

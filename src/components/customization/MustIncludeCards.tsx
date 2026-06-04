@@ -365,7 +365,7 @@ export function MustIncludeCards() {
       )}
 
       {mustIncludeCards.length === 0 && !appliedIncludeLists.some(r => r.enabled) && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-foreground/70">
           Search cards to include, import a List, or <Link to="/lists/create" className="text-primary hover:text-primary/80 transition-colors">create one</Link>
         </p>
       )}
