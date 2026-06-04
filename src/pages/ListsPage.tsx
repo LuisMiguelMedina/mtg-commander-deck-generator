@@ -293,6 +293,9 @@ export function ListsPage() {
             });
           }}
           onRemoveCard={(name) => updateCards(sourceCards.filter(c => c !== name))}
+          onAddCard={(name) => {
+            if (!sourceCards.includes(name)) updateCards([...sourceCards, name]);
+          }}
           onSwapCard={(oldName, newName) => {
             if (sourceCards.includes(newName)) {
               updateCards(sourceCards.filter(c => c !== oldName));
@@ -589,7 +592,19 @@ export function ListsPage() {
   // Browse view
   return (
     <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl">
-      <div className="aurora-bg" />
+      {/* Aurora wrapper — transform creates a new containing block for the
+          fixed-position aurora-bg child, so the parallax shift takes effect.
+          Decks: centered. Lists: slid left. The transition reinforces the
+          virtual adjacency of the two views. */}
+      <div
+        className="fixed inset-0 z-0 pointer-events-none"
+        style={{
+          transform: `translateX(${currentView.kind === 'list' ? '-12vw' : '0'})`,
+          transition: 'transform 800ms cubic-bezier(0.4, 0, 0.2, 1)',
+        }}
+      >
+        <div className="aurora-bg" />
+      </div>
       <div className="flex items-center justify-between mb-6">
         <button
           onClick={() => navigate('/')}
