@@ -10,7 +10,7 @@ import { ListCreateEditForm } from '@/components/lists/ListCreateEditForm';
 import { PRESET_BAN_LISTS } from '@/components/lists/UserListChips';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { ArrowLeft, ChevronRight, Plus, Search, X, Grid3X3, List, BookOpen, Shield, Loader2, Info } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Search, X, Grid3X3, List, BookOpen, Shield, Loader2, Info } from 'lucide-react';
 import { trackEvent } from '@/services/analytics';
 import type { BanList, UserCardList } from '@/types';
 
@@ -519,7 +519,7 @@ export function ListsPage() {
                 onClick={() => navigate('/decks')}
                 className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
-                <ArrowLeft className="w-3.5 h-3.5" />
+                <ChevronLeft className="w-3.5 h-3.5" />
                 My Decks
               </button>
               <button
