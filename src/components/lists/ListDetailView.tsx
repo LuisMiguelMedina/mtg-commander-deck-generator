@@ -8,7 +8,7 @@ import { ManaCost, CardTypeIcon, CommanderIcon } from '@/components/ui/mtg-icons
 import { CardPreviewModal } from '@/components/ui/CardPreviewModal';
 import {
   ArrowLeft, Search, X, Grid3X3, List, Copy, CopyPlus, Pencil, Trash2,
-  ChevronDown, ChevronLeft, ChevronRight, Loader2, LayoutGrid, Plus,
+  ChevronDown, ChevronLeft, ChevronRight, Loader2, LayoutGrid, Plus, MoreHorizontal,
 } from 'lucide-react';
 
 // --- Constants (mirroring CollectionManager) ---
@@ -391,24 +391,6 @@ export function ListDetailView({ list, onBack, onEdit, onDuplicate, onExport, on
                 onAddCard={onAddCard}
               />
             )}
-            {list.type !== 'deck' && onConvertToDeck && list.cards.length > 0 && (
-              <button
-                onClick={onConvertToDeck}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <CommanderIcon size={14} />
-                Convert to Deck
-              </button>
-            )}
-            {list.type === 'deck' && onConvertToList && (
-              <button
-                onClick={onConvertToList}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="w-3.5 h-3.5" />
-                Remove Commander
-              </button>
-            )}
             {!readOnly && onEdit && (
               <button
                 onClick={onEdit}
@@ -436,18 +418,53 @@ export function ListDetailView({ list, onBack, onEdit, onDuplicate, onExport, on
                 Export
               </button>
             )}
-            {!readOnly && onDelete && (
-              <button
-                onClick={handleDeleteClick}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-                  confirmingDelete
-                    ? 'border-destructive/50 bg-destructive/20 text-destructive'
-                    : 'border-border hover:bg-destructive/10 text-muted-foreground hover:text-destructive'
-                }`}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                {confirmingDelete ? 'Confirm?' : 'Delete'}
-              </button>
+            {((!readOnly && (onConvertToDeck || onConvertToList || onDelete))) && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    className="ml-auto flex items-center justify-center w-8 h-8 rounded-lg border border-border hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                    title="More actions"
+                  >
+                    <MoreHorizontal className="w-4 h-4" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-48 p-1">
+                  {list.type !== 'deck' && onConvertToDeck && list.cards.length > 0 && (
+                    <button
+                      onClick={onConvertToDeck}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent rounded transition-colors text-left"
+                    >
+                      <CommanderIcon size={14} />
+                      Convert to Deck
+                    </button>
+                  )}
+                  {list.type === 'deck' && onConvertToList && (
+                    <button
+                      onClick={onConvertToList}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent rounded transition-colors text-left"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      Remove Commander
+                    </button>
+                  )}
+                  {onDelete && (
+                    <>
+                      <div className="border-t border-border/50 my-1" />
+                      <button
+                        onClick={handleDeleteClick}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded transition-colors text-left ${
+                          confirmingDelete
+                            ? 'bg-destructive/20 text-destructive font-medium'
+                            : 'hover:bg-destructive/10 text-destructive'
+                        }`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        {confirmingDelete ? 'Confirm Delete?' : 'Delete'}
+                      </button>
+                    </>
+                  )}
+                </PopoverContent>
+              </Popover>
             )}
           </div>
         </div>
