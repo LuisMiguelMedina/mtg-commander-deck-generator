@@ -9,11 +9,28 @@ import { fetchCommanderCombos, fetchColorIdentityCombos } from '@/services/edhre
 import { applyCommanderTheme, resetTheme } from '@/lib/commanderTheme';
 import { DeckDisplay, CardContextMenu, type CardAction } from '@/components/deck/DeckDisplay';
 import { ComboDisplay } from '@/components/deck/ComboDisplay';
-import { enrichDeckCards } from '@/services/deckBuilder/deckEnricher';
+import {
+  enrichDeckCards,
+  stampTaggerAndGameChangers,
+  buildEdhrecMaps,
+  buildSwapCandidates,
+  type TaggerStampResult,
+  type EdhrecMapsResult,
+  type SwapCandidatesResult,
+} from '@/services/deckBuilder/deckEnricher';
+import { getBaseRoleTargets } from '@/services/deckBuilder/roleTargets';
+import {
+  readEnrichmentCache,
+  writeEnrichmentCache,
+  touchEnrichmentCache,
+  computeContentHash,
+  isCacheFresh,
+  cacheMatchesCommander,
+} from '@/services/deckBuilder/deckEnrichmentCache';
 import { CollectionImporter } from '@/components/collection/CollectionImporter';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { trackEvent } from '@/services/analytics';
-import type { UserCardList, ScryfallCard, GeneratedDeck, DeckStats, DetectedCombo, EDHRECCombo } from '@/types';
+import type { UserCardList, ScryfallCard, GeneratedDeck, DeckStats, DetectedCombo, EDHRECCombo, LoadPhase, SerializedEnrichment } from '@/types';
 import { useUserLists } from '@/hooks/useUserLists';
 import { TrimDeckDialog } from './TrimDeckDialog';
 
@@ -549,7 +566,16 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
   const updateCustomization = useStore(s => s.updateCustomization);
   const { lists: userLists, updateList } = useUserLists();
 
-  const [loading, setLoading] = useState(true);
+  const [phasesDone, setPhasesDone] = useState<Set<LoadPhase>>(new Set());
+  const markPhaseDone = useCallback((p: LoadPhase) => {
+    setPhasesDone(prev => {
+      if (prev.has(p)) return prev;
+      const next = new Set(prev);
+      next.add(p);
+      return next;
+    });
+  }, []);
+  const [refreshCounter] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [artUrl, setArtUrl] = useState<string | null>(null);
   const [artLoaded, setArtLoaded] = useState(false);
@@ -693,23 +719,335 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
   // Cache raw combos so incremental updates can re-evaluate completeness
   const rawCombosRef = useRef<EDHRECCombo[]>([]);
 
-  // Full build — only on initial mount / list.id change
+  // Full build — only on initial mount / list.id change / manual refresh
   useEffect(() => {
     let cancelled = false;
     isInitialLoadDone.current = false;
 
-    async function buildAndSetDeck() {
-      setLoading(true);
-      setError(null);
-      setArtUrl(null);
-      setArtLoaded(false);
+    // Persist enrichment result + boards to the cache.
+    async function persistCache(args: {
+      commanderCard: ScryfallCard | null;
+      partnerCard: ScryfallCard | null;
+      deckCards: ScryfallCard[];
+      sbCards: ScryfallCard[];
+      mbCards: ScryfallCard[];
+      stats: DeckStats;
+      taggerResult: TaggerStampResult;
+      edhrecResult: EdhrecMapsResult;
+      swapsResult: SwapCandidatesResult;
+      detectedCombos: DetectedCombo[] | undefined;
+    }) {
+      const mergedRelevancy = args.edhrecResult.cardRelevancyMap
+        ? { ...args.edhrecResult.cardRelevancyMap, ...(args.swapsResult.candidateRelevancyMap ?? {}) }
+        : args.swapsResult.candidateRelevancyMap;
+      const payload: SerializedEnrichment = {
+        commanderCard: args.commanderCard,
+        partnerCard: args.partnerCard,
+        deckCards: args.deckCards,
+        sideboardCards: args.sbCards,
+        maybeboardCards: args.mbCards,
+        stats: args.stats,
+        categories: args.taggerResult.categories,
+        roleCounts: args.taggerResult.roleCounts,
+        roleTargets: args.edhrecResult.roleTargets,
+        rampSubtypeCounts: args.taggerResult.rampSubtypeCounts,
+        removalSubtypeCounts: args.taggerResult.removalSubtypeCounts,
+        boardwipeSubtypeCounts: args.taggerResult.boardwipeSubtypeCounts,
+        cardDrawSubtypeCounts: args.taggerResult.cardDrawSubtypeCounts,
+        bracketEstimation: args.taggerResult.bracketEstimation,
+        gameChangerNames: args.taggerResult.gameChangerNames,
+        cardInclusionMap: args.edhrecResult.cardInclusionMap,
+        cardSynergyMap: args.edhrecResult.cardSynergyMap,
+        cardRelevancyMap: mergedRelevancy,
+        cardEdhrecMetaMap: args.edhrecResult.cardEdhrecMetaMap,
+        deckScore: args.edhrecResult.deckScore,
+        gapAnalysis: args.edhrecResult.gapAnalysis,
+        swapCandidates: args.swapsResult.swapCandidates,
+        edhrecCurve: args.edhrecResult.edhrecCurve,
+        edhrecTypes: args.edhrecResult.edhrecTypes,
+        detectedCombos: args.detectedCombos,
+      };
+      await writeEnrichmentCache({
+        listId: list.id,
+        commanderName: list.commanderName ?? null,
+        partnerName: list.partnerCommanderName ?? null,
+        contentHash: computeContentHash(list.cards),
+        cachedAt: Date.now(),
+        lastAccessed: Date.now(),
+        payload,
+      });
+    }
 
+    function hydrateFromCache(payload: SerializedEnrichment) {
+      setSideboardCards(payload.sideboardCards);
+      setMaybeboardCards(payload.maybeboardCards);
+      setArtUrl(getArtCropUrl(payload.commanderCard));
+      rawCombosRef.current = [];
+      const syntheticDeck: GeneratedDeck = {
+        commander: payload.commanderCard,
+        partnerCommander: payload.partnerCard,
+        categories: payload.categories,
+        stats: payload.stats,
+        detectedCombos: payload.detectedCombos,
+        roleCounts: payload.roleCounts,
+        roleTargets: payload.roleTargets,
+        rampSubtypeCounts: payload.rampSubtypeCounts,
+        removalSubtypeCounts: payload.removalSubtypeCounts,
+        boardwipeSubtypeCounts: payload.boardwipeSubtypeCounts,
+        cardDrawSubtypeCounts: payload.cardDrawSubtypeCounts,
+        bracketEstimation: payload.bracketEstimation,
+        gameChangerNames: payload.gameChangerNames,
+        cardInclusionMap: payload.cardInclusionMap,
+        cardSynergyMap: payload.cardSynergyMap,
+        cardRelevancyMap: payload.cardRelevancyMap,
+        cardEdhrecMetaMap: payload.cardEdhrecMetaMap,
+        deckScore: payload.deckScore,
+        gapAnalysis: payload.gapAnalysis,
+        swapCandidates: payload.swapCandidates,
+        edhrecCurve: payload.edhrecCurve,
+        edhrecTypes: payload.edhrecTypes,
+      };
+      const allColors = new Set<string>();
+      const allCardsForColor: ScryfallCard[] = [...payload.deckCards];
+      if (payload.commanderCard) allCardsForColor.push(payload.commanderCard);
+      if (payload.partnerCard) allCardsForColor.push(payload.partnerCard);
+      for (const card of allCardsForColor) {
+        for (const c of card.color_identity || []) allColors.add(c);
+      }
+      const colorArray = [...allColors];
+      useStore.setState({
+        commander: payload.commanderCard,
+        colorIdentity: colorArray,
+        generatedDeck: syntheticDeck,
+        deckHistory: [],
+      });
+      if (colorArray.length > 0) applyCommanderTheme(colorArray);
+      prevCardsRef.current = list.cards;
+      isInitialLoadDone.current = true;
+    }
+
+    async function coldLoad() {
+      // --- Phase A: Scryfall card fetch ---
+      const allNames = [
+        ...list.cards,
+        ...(list.sideboard || []),
+        ...(list.maybeboard || []),
+      ];
+      const cardMap = await getCardsByNames(allNames);
+      if (cancelled) return;
+
+      const cards: ScryfallCard[] = [];
+      for (const name of list.cards) {
+        const card = cardMap.get(name);
+        if (card) cards.push(card);
+      }
+      const sbCards: ScryfallCard[] = [];
+      for (const name of (list.sideboard || [])) {
+        const card = cardMap.get(name);
+        if (card) sbCards.push(card);
+      }
+      setSideboardCards(sbCards);
+      const mbCards: ScryfallCard[] = [];
+      for (const name of (list.maybeboard || [])) {
+        const card = cardMap.get(name);
+        if (card) mbCards.push(card);
+      }
+      setMaybeboardCards(mbCards);
+
+      if (cards.length === 0) {
+        setError('Could not fetch card data for this list.');
+        return;
+      }
+
+      let commanderCard: ScryfallCard | null = null;
+      let partnerCard: ScryfallCard | null = null;
+      if (list.commanderName) commanderCard = cardMap.get(list.commanderName) ?? null;
+      if (list.partnerCommanderName) partnerCard = cardMap.get(list.partnerCommanderName) ?? null;
+      setArtUrl(getArtCropUrl(commanderCard));
+
+      const commanderNames = new Set<string>();
+      if (commanderCard) commanderNames.add(commanderCard.name);
+      if (partnerCard) commanderNames.add(partnerCard.name);
+
+      const deckCards = commanderNames.size > 0
+        ? cards.filter(c => !commanderNames.has(c.name))
+        : cards;
+
+      const stats = computeStatsFromCards(deckCards);
+
+      const allColors = new Set<string>();
+      for (const card of cards) {
+        for (const c of card.color_identity || []) allColors.add(c);
+      }
+      const colorArray = [...allColors];
+
+      // Phase A paint: deck list + stats + curve, all non-commander cards
+      // temporarily piled in `creatures` so list rendering can start.
+      // Phase B (tagger) re-bins them properly.
+      useStore.setState({
+        commander: commanderCard,
+        colorIdentity: colorArray,
+        generatedDeck: {
+          commander: commanderCard,
+          partnerCommander: partnerCard,
+          categories: {
+            lands: [], ramp: [], cardDraw: [], singleRemoval: [],
+            boardWipes: [], creatures: deckCards, synergy: [], utility: [],
+          },
+          stats,
+        } as GeneratedDeck,
+        deckHistory: [],
+      });
+      if (colorArray.length > 0) applyCommanderTheme(colorArray);
+      markPhaseDone('cards');
+
+      // --- Phase B: tagger + game changers ---
+      const taggerResult = await stampTaggerAndGameChangers(deckCards);
+      if (cancelled) return;
+      useStore.setState(state => ({
+        generatedDeck: state.generatedDeck ? {
+          ...state.generatedDeck,
+          categories: taggerResult.categories,
+          roleCounts: taggerResult.roleCounts,
+          rampSubtypeCounts: taggerResult.rampSubtypeCounts,
+          removalSubtypeCounts: taggerResult.removalSubtypeCounts,
+          boardwipeSubtypeCounts: taggerResult.boardwipeSubtypeCounts,
+          cardDrawSubtypeCounts: taggerResult.cardDrawSubtypeCounts,
+          bracketEstimation: taggerResult.bracketEstimation,
+          gameChangerNames: taggerResult.gameChangerNames,
+        } : null,
+      }));
+      markPhaseDone('tagger');
+
+      const allDeckNames = new Set<string>();
+      if (commanderCard) {
+        allDeckNames.add(commanderCard.name);
+        if (commanderCard.name.includes(' // ')) allDeckNames.add(commanderCard.name.split(' // ')[0]);
+      }
+      if (partnerCard) {
+        allDeckNames.add(partnerCard.name);
+        if (partnerCard.name.includes(' // ')) allDeckNames.add(partnerCard.name.split(' // ')[0]);
+      }
+      for (const c of deckCards) {
+        allDeckNames.add(c.name);
+        if (c.name.includes(' // ')) allDeckNames.add(c.name.split(' // ')[0]);
+      }
+      const listColors = new Set<string>();
+      for (const c of cards) for (const ci of c.color_identity || []) listColors.add(ci.toUpperCase());
+      const listColorArray = ['W', 'U', 'B', 'R', 'G'].filter(c => listColors.has(c));
+
+      // --- Phase D₁: combos (starts in parallel with C below) ---
+      const combosPromise: Promise<DetectedCombo[] | undefined> = (async () => {
+        try {
+          const [a, b] = await Promise.all([
+            commanderCard ? fetchCommanderCombos(commanderCard.name).catch(() => [] as EDHRECCombo[]) : Promise.resolve([] as EDHRECCombo[]),
+            fetchColorIdentityCombos(listColorArray).catch(() => [] as EDHRECCombo[]),
+          ]);
+          const cmdCombos: EDHRECCombo[] = a.map(c => ({ ...c, source: 'commander' as const }));
+          const colCombos: EDHRECCombo[] = b.map(c => ({ ...c, source: 'color-identity' as const }));
+          const byId = new Map<string, EDHRECCombo>();
+          for (const c of cmdCombos) byId.set(c.comboId, c);
+          for (const c of colCombos) if (!byId.has(c.comboId)) byId.set(c.comboId, c);
+          const merged = [...byId.values()];
+          rawCombosRef.current = merged;
+          const detected = detectCombosInDeck(merged, allDeckNames, commanderCard, partnerCard);
+          if (!cancelled) {
+            useStore.setState(state => ({
+              generatedDeck: state.generatedDeck ? { ...state.generatedDeck, detectedCombos: detected } : null,
+            }));
+          }
+          return detected;
+        } catch {
+          return undefined;
+        } finally {
+          if (!cancelled) markPhaseDone('combos');
+        }
+      })();
+
+      // --- No-commander branch: skip phases C and D₂ ---
+      if (!commanderCard) {
+        markPhaseDone('edhrec');
+        markPhaseDone('swaps');
+        const detectedNoCmdr = await combosPromise;
+        if (cancelled) return;
+        const fallbackEdhrec: EdhrecMapsResult = {
+          roleTargets: getBaseRoleTargets(list.deckSize || list.cards.length),
+        };
+        await persistCache({
+          commanderCard, partnerCard, deckCards, sbCards, mbCards, stats,
+          taggerResult, edhrecResult: fallbackEdhrec, swapsResult: {},
+          detectedCombos: detectedNoCmdr,
+        });
+        prevCardsRef.current = list.cards;
+        isInitialLoadDone.current = true;
+        return;
+      }
+
+      // Wait for combos so EDHREC scoring sees combo context.
+      const detectedFromCombos = await combosPromise;
+      if (cancelled) return;
+
+      // --- Phase C: EDHREC maps ---
+      const edhrecResult = await buildEdhrecMaps(
+        taggerResult,
+        list.deckSize || list.cards.length,
+        detectedFromCombos,
+        commanderCard.name,
+        partnerCard?.name,
+      );
+      if (cancelled) return;
+      useStore.setState(state => ({
+        generatedDeck: state.generatedDeck ? {
+          ...state.generatedDeck,
+          roleTargets: edhrecResult.roleTargets,
+          cardInclusionMap: edhrecResult.cardInclusionMap,
+          cardSynergyMap: edhrecResult.cardSynergyMap,
+          cardRelevancyMap: edhrecResult.cardRelevancyMap,
+          cardEdhrecMetaMap: edhrecResult.cardEdhrecMetaMap,
+          deckScore: edhrecResult.deckScore,
+          gapAnalysis: edhrecResult.gapAnalysis,
+          edhrecCurve: edhrecResult.edhrecCurve,
+          edhrecTypes: edhrecResult.edhrecTypes,
+        } : null,
+      }));
+      markPhaseDone('edhrec');
+
+      // --- Phase D₂: swap candidates ---
+      const swapsResult = await buildSwapCandidates(
+        deckCards,
+        taggerResult,
+        edhrecResult,
+        commanderCard.name,
+        partnerCard?.name,
+      );
+      if (cancelled) return;
+      useStore.setState(state => {
+        if (!state.generatedDeck) return state;
+        const mergedRelevancy = state.generatedDeck.cardRelevancyMap
+          ? { ...state.generatedDeck.cardRelevancyMap, ...(swapsResult.candidateRelevancyMap ?? {}) }
+          : swapsResult.candidateRelevancyMap;
+        return {
+          generatedDeck: {
+            ...state.generatedDeck,
+            swapCandidates: swapsResult.swapCandidates,
+            cardRelevancyMap: mergedRelevancy,
+          },
+        };
+      });
+      markPhaseDone('swaps');
+
+      await persistCache({
+        commanderCard, partnerCard, deckCards, sbCards, mbCards, stats,
+        taggerResult, edhrecResult, swapsResult,
+        detectedCombos: detectedFromCombos,
+      });
+      prevCardsRef.current = list.cards;
+      isInitialLoadDone.current = true;
+    }
+
+    async function backgroundRefresh() {
       try {
-        const allNames = [
-          ...list.cards,
-          ...(list.sideboard || []),
-          ...(list.maybeboard || []),
-        ];
+        const allNames = [...list.cards, ...(list.sideboard || []), ...(list.maybeboard || [])];
         const cardMap = await getCardsByNames(allNames);
         if (cancelled) return;
 
@@ -718,159 +1056,111 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
           const card = cardMap.get(name);
           if (card) cards.push(card);
         }
-
-        // Resolve board cards
         const sbCards: ScryfallCard[] = [];
         for (const name of (list.sideboard || [])) {
           const card = cardMap.get(name);
           if (card) sbCards.push(card);
         }
-        setSideboardCards(sbCards);
-
         const mbCards: ScryfallCard[] = [];
         for (const name of (list.maybeboard || [])) {
           const card = cardMap.get(name);
           if (card) mbCards.push(card);
         }
-        setMaybeboardCards(mbCards);
-
-        if (cards.length === 0) {
-          setError('Could not fetch card data for this list.');
-          setLoading(false);
-          return;
-        }
+        if (cards.length === 0) return;
 
         let commanderCard: ScryfallCard | null = null;
         let partnerCard: ScryfallCard | null = null;
-
-        if (list.commanderName) {
-          commanderCard = cardMap.get(list.commanderName) ?? null;
-        }
-        if (list.partnerCommanderName) {
-          partnerCard = cardMap.get(list.partnerCommanderName) ?? null;
-        }
-
-        setArtUrl(getArtCropUrl(commanderCard));
+        if (list.commanderName) commanderCard = cardMap.get(list.commanderName) ?? null;
+        if (list.partnerCommanderName) partnerCard = cardMap.get(list.partnerCommanderName) ?? null;
 
         const commanderNames = new Set<string>();
         if (commanderCard) commanderNames.add(commanderCard.name);
         if (partnerCard) commanderNames.add(partnerCard.name);
-
-        const deckCards = commanderNames.size > 0
-          ? cards.filter(c => !commanderNames.has(c.name))
-          : cards;
-
+        const deckCards = commanderNames.size > 0 ? cards.filter(c => !commanderNames.has(c.name)) : cards;
         const stats = computeStatsFromCards(deckCards);
 
-        const allDeckNames = new Set<string>();
-        if (commanderCard) {
-          allDeckNames.add(commanderCard.name);
-          if (commanderCard.name.includes(' // ')) allDeckNames.add(commanderCard.name.split(' // ')[0]);
-        }
-        if (partnerCard) {
-          allDeckNames.add(partnerCard.name);
-          if (partnerCard.name.includes(' // ')) allDeckNames.add(partnerCard.name.split(' // ')[0]);
-        }
-        for (const c of deckCards) {
-          allDeckNames.add(c.name);
-          if (c.name.includes(' // ')) allDeckNames.add(c.name.split(' // ')[0]);
-        }
-
-        // Compute the list's color identity from the mainboard cards so we can fetch
-        // off-commander combos in parallel with commander combos. Lists may have no
-        // commander, so we always derive color identity from contents.
-        const listColors = new Set<string>();
-        for (const c of cards) {
-          for (const ci of c.color_identity || []) listColors.add(ci.toUpperCase());
-        }
-        const listColorArray = ['W', 'U', 'B', 'R', 'G'].filter(c => listColors.has(c));
-
-        let detectedCombos: DetectedCombo[] | undefined;
-        try {
-          const [commanderCombosRaw, colorCombosRaw] = await Promise.all([
-            commanderCard ? fetchCommanderCombos(commanderCard.name).catch(() => [] as EDHRECCombo[]) : Promise.resolve([] as EDHRECCombo[]),
-            fetchColorIdentityCombos(listColorArray).catch(() => [] as EDHRECCombo[]),
-          ]);
-          if (!cancelled) {
-            const commanderCombos: EDHRECCombo[] = commanderCombosRaw.map(c => ({ ...c, source: 'commander' as const }));
-            const colorCombos: EDHRECCombo[] = colorCombosRaw.map(c => ({ ...c, source: 'color-identity' as const }));
-
-            // Merge, dedupe by comboId — commander source wins on collision.
-            const byId = new Map<string, EDHRECCombo>();
-            for (const c of commanderCombos) byId.set(c.comboId, c);
-            for (const c of colorCombos) if (!byId.has(c.comboId)) byId.set(c.comboId, c);
-            const mergedCombos = [...byId.values()];
-
-            rawCombosRef.current = mergedCombos;
-            detectedCombos = detectCombosInDeck(mergedCombos, allDeckNames, commanderCard, partnerCard);
-            console.log(`[ListDeckView] Fetched ${commanderCombos.length} commander + ${colorCombos.length} color-identity combos (${mergedCombos.length} unique)`);
-          }
-        } catch {
-          // Combo fetch failed — not critical
-        }
-
+        const taggerResult = await stampTaggerAndGameChangers(deckCards);
         if (cancelled) return;
 
-        const enrichResult = await enrichDeckCards(
-          deckCards,
-          list.deckSize || list.cards.length,
-          detectedCombos,
-          commanderCard?.name,
-          partnerCard?.name,
-        );
-
-        const syntheticDeck: GeneratedDeck = {
-          commander: commanderCard,
-          partnerCommander: partnerCard,
-          categories: enrichResult.categories,
-          stats,
-          detectedCombos,
-          roleCounts: enrichResult.roleCounts,
-          roleTargets: enrichResult.roleTargets,
-          rampSubtypeCounts: enrichResult.rampSubtypeCounts,
-          removalSubtypeCounts: enrichResult.removalSubtypeCounts,
-          boardwipeSubtypeCounts: enrichResult.boardwipeSubtypeCounts,
-          cardDrawSubtypeCounts: enrichResult.cardDrawSubtypeCounts,
-          bracketEstimation: enrichResult.bracketEstimation,
-          gameChangerNames: enrichResult.gameChangerNames,
-          cardInclusionMap: enrichResult.cardInclusionMap,
-          cardSynergyMap: enrichResult.cardSynergyMap,
-          cardRelevancyMap: enrichResult.cardRelevancyMap,
-          cardEdhrecMetaMap: enrichResult.cardEdhrecMetaMap,
-          deckScore: enrichResult.deckScore,
-          swapCandidates: enrichResult.swapCandidates,
-          gapAnalysis: enrichResult.gapAnalysis,
-          edhrecCurve: enrichResult.edhrecCurve,
-          edhrecTypes: enrichResult.edhrecTypes,
+        let edhrecResult: EdhrecMapsResult = {
+          roleTargets: getBaseRoleTargets(list.deckSize || list.cards.length),
         };
+        let swapsResult: SwapCandidatesResult = {};
+        let detectedCombos: DetectedCombo[] | undefined;
 
-        const allColors = new Set<string>();
-        for (const card of cards) {
-          for (const c of card.color_identity || []) {
-            allColors.add(c);
-          }
+        if (commanderCard) {
+          const allDeckNames = new Set<string>();
+          allDeckNames.add(commanderCard.name);
+          if (partnerCard) allDeckNames.add(partnerCard.name);
+          for (const c of deckCards) allDeckNames.add(c.name);
+          const listColors = new Set<string>();
+          for (const c of cards) for (const ci of c.color_identity || []) listColors.add(ci.toUpperCase());
+          const listColorArray = ['W', 'U', 'B', 'R', 'G'].filter(c => listColors.has(c));
+          try {
+            const [a, b] = await Promise.all([
+              fetchCommanderCombos(commanderCard.name).catch(() => [] as EDHRECCombo[]),
+              fetchColorIdentityCombos(listColorArray).catch(() => [] as EDHRECCombo[]),
+            ]);
+            const merged: EDHRECCombo[] = [
+              ...a.map(c => ({ ...c, source: 'commander' as const })),
+              ...b.map(c => ({ ...c, source: 'color-identity' as const })),
+            ];
+            detectedCombos = detectCombosInDeck(merged, allDeckNames, commanderCard, partnerCard);
+          } catch { /* non-critical */ }
+
+          if (cancelled) return;
+          edhrecResult = await buildEdhrecMaps(
+            taggerResult,
+            list.deckSize || list.cards.length,
+            detectedCombos,
+            commanderCard.name,
+            partnerCard?.name,
+          );
+          if (cancelled) return;
+          swapsResult = await buildSwapCandidates(
+            deckCards,
+            taggerResult,
+            edhrecResult,
+            commanderCard.name,
+            partnerCard?.name,
+          );
+          if (cancelled) return;
         }
 
-        const colorArray = [...allColors];
-        useStore.setState({
-          commander: commanderCard,
-          colorIdentity: colorArray,
-          generatedDeck: syntheticDeck,
-          deckHistory: [],
+        await persistCache({
+          commanderCard, partnerCard, deckCards, sbCards, mbCards, stats,
+          taggerResult, edhrecResult, swapsResult, detectedCombos,
         });
+      } catch (e) {
+        console.warn('[ListDeckView] background refresh failed:', e);
+      }
+    }
 
-        if (colorArray.length > 0) {
-          applyCommanderTheme(colorArray);
+    async function buildAndSetDeck() {
+      setPhasesDone(new Set());
+      setError(null);
+      setArtUrl(null);
+      setArtLoaded(false);
+
+      try {
+        const cached = await readEnrichmentCache(list.id);
+        if (cancelled) return;
+
+        if (
+          cached
+          && cacheMatchesCommander(cached, list.commanderName, list.partnerCommanderName)
+          && isCacheFresh(cached)
+        ) {
+          hydrateFromCache(cached.payload);
+          setPhasesDone(new Set(['cards', 'tagger', 'edhrec', 'combos', 'swaps']));
+          void touchEnrichmentCache(list.id);
+          void backgroundRefresh();
+          return;
         }
 
-        prevCardsRef.current = list.cards;
-        isInitialLoadDone.current = true;
+        await coldLoad();
       } catch {
-        if (!cancelled) {
-          setError('Failed to load card data. Please try again.');
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setError('Failed to load card data. Please try again.');
       }
     }
 
@@ -881,7 +1171,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
       useStore.setState({ generatedDeck: null, deckHistory: [] });
       resetTheme();
     };
-  }, [list.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [list.id, refreshCounter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Incremental update — patch deck in-place when cards change (no full reload)
   useEffect(() => {
@@ -1195,24 +1485,6 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
     bannedNames: new Set(customization.bannedCards),
   }), [userLists, customization.mustIncludeCards, customization.bannedCards]);
 
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back
-        </button>
-        <div className="flex items-center justify-center gap-3 py-20">
-          <Loader2 className="w-5 h-5 animate-spin text-primary" />
-          <span className="text-sm text-muted-foreground">Loading deck view...</span>
-        </div>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="space-y-4">
@@ -1402,6 +1674,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
         )}
 
         <DeckDisplay
+          phasesDone={phasesDone}
           onRemoveCards={handleRemoveCardsWithToast}
           onAddCards={onAddCards ? (names, _dest) => onAddCards(names, 'deck') : undefined}
           onMoveToSideboard={onMoveToSideboard}

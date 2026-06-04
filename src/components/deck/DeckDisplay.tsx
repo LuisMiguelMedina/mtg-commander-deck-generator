@@ -8,7 +8,7 @@ import { getCardImageUrl, isDoubleFacedCard, getCardBackFaceUrl, getCardPrice, g
 import { getDeckFormatConfig } from '@/lib/constants/archetypes';
 import { getMaxCopies } from '@/lib/utils';
 import { DeckHistory } from '@/components/deck/DeckHistory';
-import type { ScryfallCard, DetectedCombo, UserCardList } from '@/types';
+import type { ScryfallCard, DetectedCombo, UserCardList, LoadPhase } from '@/types';
 import {
   Copy,
   Check,
@@ -2039,10 +2039,16 @@ interface DeckDisplayProps {
   maybeboardNames?: string[];
   onSetSideboard?: (names: string[]) => void;
   onSetMaybeboard?: (names: string[]) => void;
+  /** Set of completed load phases. When omitted, all panels render as fully loaded. */
+  phasesDone?: Set<LoadPhase>;
   children?: React.ReactNode;
 }
 
-export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerateProgress, regenerateMessage, onRemoveCards, onAddCards, onMoveToSideboard, onMoveToMaybeboard, toolbarExtra, boardCounts, deckFooter, renderHeaderActions, onChangeQuantity, onEditModeChange, sidebarHeader, sidebarLeftActions, sideboardNames, maybeboardNames, onSetSideboard, onSetMaybeboard, children }: DeckDisplayProps) {
+export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerateProgress, regenerateMessage, onRemoveCards, onAddCards, onMoveToSideboard, onMoveToMaybeboard, toolbarExtra, boardCounts, deckFooter, renderHeaderActions, onChangeQuantity, onEditModeChange, sidebarHeader, sidebarLeftActions, sideboardNames, maybeboardNames, onSetSideboard, onSetMaybeboard, phasesDone, children }: DeckDisplayProps) {
+  // Phase readiness flags — `undefined` phasesDone means "all done" (BuilderPage path).
+  const taggerReady = !phasesDone || phasesDone.has('tagger');
+  const edhrecReady = !phasesDone || phasesDone.has('edhrec');
+  void taggerReady; void edhrecReady; // wired into render in Task 4
   const navigate = useNavigate();
   const { generatedDeck, commander, customization, swapDeckCard, addDeckCard, setGeneratedDeck, updateCustomization, pushDeckHistory, setModifyMode } = useStore();
   const { lists: userLists, createList, updateList, deleteList } = useUserLists();
