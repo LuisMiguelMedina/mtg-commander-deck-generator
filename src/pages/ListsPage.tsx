@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Search, X, Grid3X3, List, BookOpen, Shield, Loader2, Info, Pin, Ban } from 'lucide-react';
 import { trackEvent } from '@/services/analytics';
+import { getAuroraColors } from '@/lib/commanderTheme';
 import type { BanList, UserCardList } from '@/types';
 
 type SortKey = 'updatedAt' | 'name' | 'size';
@@ -312,9 +313,18 @@ export function ListsPage() {
   if (currentView.view === 'detail') {
     const list = lists.find(l => l.id === currentView.listId);
     if (!list) return null; // useEffect will redirect
+    const aurora = getAuroraColors(list.cachedColorIdentity || []);
     return (
       <>
-        <div className="aurora-bg" />
+        <div
+          className="aurora-themed"
+          style={{
+            '--aurora-color-a': aurora.a,
+            '--aurora-color-b': aurora.b,
+          } as React.CSSProperties}
+        >
+          <div className="aurora-bg" />
+        </div>
         <main className="flex-1 container mx-auto px-6 py-8 max-w-5xl relative border-x border-border/20 bg-card/15 backdrop-blur-sm">
         {toasts}
         <ListDetailView
