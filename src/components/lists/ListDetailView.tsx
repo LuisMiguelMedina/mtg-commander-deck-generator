@@ -916,15 +916,48 @@ function ListViewTable({
 }
 
 // ─── Inline card-add popover ────────────────────────────────────────────
+
+// Parse "1 Sol Ring", "1x Sol Ring", "Sol Ring", "  // sideboard markers ", etc.
+// Returns deduped card names (preserving first-seen order) skipping board headers
+// and empty lines. Quantity is collapsed to a single name (we only track names here).
+function parseBulkLines(raw: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const line of raw.split('\n')) {
+    let s = line.trim();
+    if (!s) continue;
+    // Skip board section headers like "Sideboard" / "Maybeboard" / "Deck"
+    if (/^(sideboard|maybeboard|deck|commander)$/i.test(s)) continue;
+    // Strip optional leading quantity ("1 ", "1x ", "10x ", "2 ")
+    s = s.replace(/^(\d+)(x)?\s+/i, '');
+    // Strip set/collector suffix like " (NEO) 123"
+    s = s.replace(/\s+\([A-Za-z0-9]{2,5}\)\s+\S+$/, '');
+    s = s.trim();
+    if (!s) continue;
+    const key = s.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
 function AddCardPopover({ existingCards, onAddCard }: { existingCards: string[]; onAddCard: (name: string) => void }) {
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<'search' | 'paste'>('search');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ScryfallCard[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [bulkStatus, setBulkStatus] = useState<string | null>(null);
 
   const existing = useMemo(() => new Set(existingCards.map(c => c.toLowerCase())), [existingCards]);
 
+  const parsedBulk = useMemo(() => parseBulkLines(bulkText), [bulkText]);
+  const newBulkNames = useMemo(() => parsedBulk.filter(n => !existing.has(n.toLowerCase())), [parsedBulk, existing]);
+
   useEffect(() => {
+    if (mode !== 'search') return;
     if (!query.trim()) {
       setResults([]);
       return;
@@ -942,12 +975,21 @@ function AddCardPopover({ existingCards, onAddCard }: { existingCards: string[];
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [query, existing]);
+  }, [mode, query, existing]);
 
   const handleAdd = (card: ScryfallCard) => {
     onAddCard(card.name);
     setQuery('');
     setResults([]);
+  };
+
+  const handleBulkAdd = () => {
+    if (newBulkNames.length === 0) return;
+    for (const name of newBulkNames) onAddCard(name);
+    const skipped = parsedBulk.length - newBulkNames.length;
+    setBulkStatus(`Added ${newBulkNames.length} card${newBulkNames.length === 1 ? '' : 's'}${skipped > 0 ? `, skipped ${skipped} already in list` : ''}.`);
+    setBulkText('');
+    setTimeout(() => setBulkStatus(null), 2500);
   };
 
   return (
@@ -961,44 +1003,90 @@ function AddCardPopover({ existingCards, onAddCard }: { existingCards: string[];
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 p-0">
-        <div className="p-2 border-b border-border/60">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <input
-              autoFocus
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search Scryfall by name..."
-              className="w-full pl-8 pr-2 py-1.5 text-xs rounded-md bg-accent/40 border border-border/40 focus:outline-none focus:ring-1 focus:ring-primary/40"
-            />
-          </div>
+        <div className="flex items-center gap-1 p-1 border-b border-border/60">
+          <button
+            onClick={() => setMode('search')}
+            className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${mode === 'search' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            Search
+          </button>
+          <button
+            onClick={() => setMode('paste')}
+            className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${mode === 'paste' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            Paste list
+          </button>
         </div>
-        <div className="max-h-80 overflow-y-auto py-1">
-          {isSearching && (
-            <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              Searching...
+        {mode === 'search' ? (
+          <>
+            <div className="p-2 border-b border-border/60">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <input
+                  autoFocus
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search Scryfall by name..."
+                  className="w-full pl-8 pr-2 py-1.5 text-xs rounded-md bg-accent/40 border border-border/40 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                />
+              </div>
             </div>
-          )}
-          {!isSearching && query.trim() && results.length === 0 && (
-            <div className="px-3 py-2 text-xs text-muted-foreground">No matches.</div>
-          )}
-          {!isSearching && !query.trim() && (
-            <div className="px-3 py-2 text-xs text-muted-foreground">Type a card name to search.</div>
-          )}
-          {results.map(card => (
-            <button
-              key={card.id}
-              onClick={() => handleAdd(card)}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent transition-colors text-left"
-            >
-              <Plus className="w-3 h-3 text-primary shrink-0" />
-              <span className="truncate">{card.name}</span>
-              <span className="ml-auto text-[10px] text-muted-foreground/70 shrink-0 truncate max-w-[120px]">{card.type_line?.split('—')[0].trim()}</span>
-            </button>
-          ))}
-        </div>
+            <div className="max-h-80 overflow-y-auto py-1">
+              {isSearching && (
+                <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Searching...
+                </div>
+              )}
+              {!isSearching && query.trim() && results.length === 0 && (
+                <div className="px-3 py-2 text-xs text-muted-foreground">No matches.</div>
+              )}
+              {!isSearching && !query.trim() && (
+                <div className="px-3 py-2 text-xs text-muted-foreground">Type a card name to search.</div>
+              )}
+              {results.map(card => (
+                <button
+                  key={card.id}
+                  onClick={() => handleAdd(card)}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent transition-colors text-left"
+                >
+                  <Plus className="w-3 h-3 text-primary shrink-0" />
+                  <span className="truncate">{card.name}</span>
+                  <span className="ml-auto text-[10px] text-muted-foreground/70 shrink-0 truncate max-w-[120px]">{card.type_line?.split('—')[0].trim()}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="p-2 space-y-2">
+            <textarea
+              autoFocus
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+              placeholder={"One card per line:\n1 Sol Ring\nLightning Bolt\n1x Counterspell"}
+              rows={10}
+              className="w-full px-2 py-1.5 text-xs rounded-md bg-accent/40 border border-border/40 focus:outline-none focus:ring-1 focus:ring-primary/40 font-mono"
+            />
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] text-muted-foreground">
+                {parsedBulk.length === 0
+                  ? 'Quantity prefixes (1, 1x) and set tags will be stripped.'
+                  : `${newBulkNames.length} new${parsedBulk.length !== newBulkNames.length ? ` · ${parsedBulk.length - newBulkNames.length} dupe${parsedBulk.length - newBulkNames.length === 1 ? '' : 's'}` : ''}`}
+              </p>
+              <button
+                onClick={handleBulkAdd}
+                disabled={newBulkNames.length === 0}
+                className="px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+              >
+                Add {newBulkNames.length || ''}
+              </button>
+            </div>
+            {bulkStatus && (
+              <p className="text-[10px] text-emerald-400/90">{bulkStatus}</p>
+            )}
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );
