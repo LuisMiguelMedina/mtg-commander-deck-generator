@@ -156,19 +156,58 @@ export function ListsPage() {
     </>
   );
 
-  // Redirect invalid list/banlist IDs
+  // Redirect invalid IDs, legacy URLs, and kind mismatches.
   useEffect(() => {
-    if (currentView.view === 'detail' || currentView.view === 'edit' || currentView.view === 'deck-view') {
-      if (!lists.find(l => l.id === currentView.listId)) {
-        navigate('/lists', { replace: true });
+    // Legacy: /lists/:id/deck-view → /decks/:id
+    if (
+      currentView.view === 'deck-view' &&
+      currentView.kind === 'list' &&
+      currentView.listId
+    ) {
+      navigate(`/decks/${currentView.listId}`, { replace: true });
+      return;
+    }
+
+    // Legacy: /lists/create?type=deck → /decks/create
+    if (currentView.view === 'create' && currentView.kind === 'list' && searchParams.get('type') === 'deck') {
+      navigate('/decks/create', { replace: true });
+      return;
+    }
+
+    // Legacy: /lists/create?type=list → /lists/create (strip the query)
+    if (currentView.view === 'create' && currentView.kind === 'list' && searchParams.get('type') === 'list') {
+      navigate('/lists/create', { replace: true });
+      return;
+    }
+
+    // Invalid list ID
+    if (
+      currentView.view === 'detail' ||
+      currentView.view === 'edit' ||
+      currentView.view === 'deck-view'
+    ) {
+      const list = lists.find(l => l.id === currentView.listId);
+      if (!list) {
+        navigate(currentView.kind === 'deck' ? '/decks' : '/lists', { replace: true });
+        return;
+      }
+      // Kind mismatch: /decks/:id where the list isn't a deck → /lists/:id
+      // (We intentionally do NOT redirect the reverse direction — `/lists/:id` for a deck
+      // is the "view as list" feature on ListDeckView.)
+      if (currentView.kind === 'deck' && list.type !== 'deck') {
+        const tail = currentView.view === 'edit' ? '/edit' : '';
+        navigate(`/lists/${list.id}${tail}`, { replace: true });
+        return;
       }
     }
+
+    // Invalid banlist ID
     if (currentView.view === 'banlist-detail') {
       if (!banLists.find(l => l.id === currentView.banListId && l.cards.length > 0)) {
         navigate('/lists/banlists', { replace: true });
       }
     }
-  }, [currentView, lists, banLists, navigate]);
+  }, [currentView, lists, banLists, navigate, searchParams]);
 
   // Detail view
   if (currentView.view === 'detail') {
