@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Scissors, Mountain, Minus, Plus } from 'lucide-react';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import type { ScryfallCard, DetectedCombo } from '@/types';
@@ -91,6 +92,11 @@ export function TrimDeckDialog(props: TrimDeckDialogProps) {
   useEffect(() => {
     if (open && overage <= 0) onClose();
   }, [open, overage, onClose]);
+
+  // Hover preview — anchor to the left of the thumbnail (drawer sits on the
+  // right of the viewport, so there's room over the deck view).
+  const [hoverPreview, setHoverPreview] = useState<{ src: string; name: string; left: number; top: number } | null>(null);
+  const previewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   if (overage <= 0) return null;
 
@@ -212,7 +218,20 @@ export function TrimDeckDialog(props: TrimDeckDialogProps) {
                   onClick={toggle}
                 >
                   {/* Image thumbnail */}
-                  <div className="shrink-0 w-12 h-16 rounded overflow-hidden bg-muted/30 border border-border/40">
+                  <div
+                    className="shrink-0 w-12 h-16 rounded overflow-hidden bg-muted/30 border border-border/40"
+                    onMouseEnter={(e) => {
+                      if (previewTimeoutRef.current) clearTimeout(previewTimeoutRef.current);
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const previewSrc = getCardImageUrl(cand.card, 'normal');
+                      if (!previewSrc) return;
+                      setHoverPreview({ src: previewSrc, name: cand.card.name, left: rect.left, top: rect.top });
+                    }}
+                    onMouseLeave={() => {
+                      if (previewTimeoutRef.current) clearTimeout(previewTimeoutRef.current);
+                      previewTimeoutRef.current = setTimeout(() => setHoverPreview(null), 60);
+                    }}
+                  >
                     {imageUrl && (
                       <img
                         src={imageUrl}
@@ -291,6 +310,22 @@ export function TrimDeckDialog(props: TrimDeckDialogProps) {
           </div>
         </div>
       </div>
+      {hoverPreview && createPortal(
+        <div
+          className="fixed z-[10000] pointer-events-none hidden md:block"
+          style={{
+            left: Math.max(8, hoverPreview.left - 270),
+            top: Math.min(Math.max(8, hoverPreview.top - 100), window.innerHeight - 360),
+          }}
+        >
+          <img
+            src={hoverPreview.src}
+            alt={hoverPreview.name}
+            className="w-[250px] rounded-xl shadow-2xl border border-border/50"
+          />
+        </div>,
+        document.body,
+      )}
     </Drawer>
   );
 }

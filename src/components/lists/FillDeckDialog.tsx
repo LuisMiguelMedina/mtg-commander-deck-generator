@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Sparkles } from 'lucide-react';
 import type { GapAnalysisCard } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -79,6 +80,11 @@ export function FillDeckDialog(props: FillDeckDialogProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultsKey]);
 
+  // Hover preview — anchor the floating image to the left of the row so it
+  // sits over the deck view rather than clipping inside the drawer.
+  const [hoverPreview, setHoverPreview] = useState<{ src: string; name: string; left: number; top: number } | null>(null);
+  const previewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Auto-close when the deck is no longer short (user added cards via another flow,
   // or lowered the expected size while the drawer was open).
   useEffect(() => {
@@ -155,7 +161,24 @@ export function FillDeckDialog(props: FillDeckDialogProps) {
                     onClick={toggle}
                   >
                     {/* Image thumbnail */}
-                    <div className="shrink-0 w-12 h-16 rounded overflow-hidden bg-muted/30 border border-border/40">
+                    <div
+                      className="shrink-0 w-12 h-16 rounded overflow-hidden bg-muted/30 border border-border/40"
+                      onMouseEnter={(e) => {
+                        if (!card.imageUrl) return;
+                        if (previewTimeoutRef.current) clearTimeout(previewTimeoutRef.current);
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        // Scryfall URLs follow a stable `/small/.../...jpg` pattern;
+                        // swap to `/normal/` for a larger preview, fall back if absent.
+                        const previewSrc = card.imageUrl.includes('/small/')
+                          ? card.imageUrl.replace('/small/', '/normal/')
+                          : card.imageUrl;
+                        setHoverPreview({ src: previewSrc, name: card.name, left: rect.left, top: rect.top });
+                      }}
+                      onMouseLeave={() => {
+                        if (previewTimeoutRef.current) clearTimeout(previewTimeoutRef.current);
+                        previewTimeoutRef.current = setTimeout(() => setHoverPreview(null), 60);
+                      }}
+                    >
                       {card.imageUrl && (
                         <img
                           src={card.imageUrl}
@@ -234,6 +257,23 @@ export function FillDeckDialog(props: FillDeckDialogProps) {
           </div>
         </div>
       </div>
+      {hoverPreview && createPortal(
+        <div
+          className="fixed z-[10000] pointer-events-none hidden md:block"
+          style={{
+            // Anchor to the LEFT of the thumbnail; clamp vertically into the viewport.
+            left: Math.max(8, hoverPreview.left - 270),
+            top: Math.min(Math.max(8, hoverPreview.top - 100), window.innerHeight - 360),
+          }}
+        >
+          <img
+            src={hoverPreview.src}
+            alt={hoverPreview.name}
+            className="w-[250px] rounded-xl shadow-2xl border border-border/50"
+          />
+        </div>,
+        document.body,
+      )}
     </Drawer>
   );
 }
