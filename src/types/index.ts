@@ -470,6 +470,12 @@ export interface UserCardList {
   cachedTypeBreakdown?: Record<string, number>;
   cachedColorIdentity?: string[];
   cachedCommanderArtUrl?: string;
+  /** User-selected card name from list.cards to use as the backdrop art on
+   *  the overview card. When unset, falls back to the first card with art. */
+  heroCardName?: string;
+  /** Resolved art_crop URL derived in computeCachedFields. Only populated for
+   *  non-commander lists (commander decks render cachedCommanderArtUrl). */
+  cachedListArtUrl?: string;
 }
 
 // Reference to a user list applied as exclude or include
