@@ -195,7 +195,9 @@ export function PreferencesDropdown() {
 function Layout({ children }: { children: React.ReactNode }) {
   const { commander, generatedDeck, reset } = useStore();
   const { count: collectionCount } = useCollection();
-  const userListCount = loadUserLists().length;
+  const allUserLists = loadUserLists();
+  const deckCount = allUserLists.filter(l => l.type === 'deck').length;
+  const listCount = allUserLists.filter(l => l.type !== 'deck').length;
   const location = useLocation();
   const isCollectionPage = location.pathname === '/collection';
   const isListsPage = location.pathname.startsWith('/lists');
@@ -315,6 +317,20 @@ function Layout({ children }: { children: React.ReactNode }) {
                     </Link>
                   )}
                   <Link
+                    to="/decks"
+                    aria-current={location.pathname.startsWith('/decks') ? 'page' : undefined}
+                    className={`text-xs transition-colors px-2 py-1 rounded-md flex items-center gap-1.5 ${
+                      location.pathname.startsWith('/decks') ? 'text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                    }`}
+                  >
+                    My Decks
+                    {deckCount > 0 && (
+                      <span className="text-[10px] font-medium bg-primary/20 text-violet-200 px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
+                        {deckCount}
+                      </span>
+                    )}
+                  </Link>
+                  <Link
                     to="/lists"
                     aria-current={location.pathname.startsWith('/lists') ? 'page' : undefined}
                     className={`text-xs transition-colors px-2 py-1 rounded-md flex items-center gap-1.5 ${
@@ -322,9 +338,9 @@ function Layout({ children }: { children: React.ReactNode }) {
                     }`}
                   >
                     My Lists
-                    {userListCount > 0 && (
+                    {listCount > 0 && (
                       <span className="text-[10px] font-medium bg-primary/20 text-violet-200 px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
-                        {userListCount}
+                        {listCount}
                       </span>
                     )}
                   </Link>
@@ -482,23 +498,23 @@ function Layout({ children }: { children: React.ReactNode }) {
             </Link>
           )}
           <Link
-            to="/lists"
+            to="/decks"
             onClick={() => window.scrollTo(0, 0)}
-            aria-current={location.pathname.startsWith('/lists') ? 'page' : undefined}
+            aria-current={location.pathname.startsWith('/decks') || location.pathname.startsWith('/lists') ? 'page' : undefined}
             className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors relative ${
-              location.pathname.startsWith('/lists') ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+              location.pathname.startsWith('/decks') || location.pathname.startsWith('/lists') ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
-            aria-label="My Lists"
+            aria-label="My Decks"
           >
             <div className="relative">
-              <ListChecks className={`w-5 h-5 ${location.pathname.startsWith('/lists') ? 'text-primary' : ''}`} />
-              {userListCount > 0 && (
+              <ListChecks className={`w-5 h-5 ${location.pathname.startsWith('/decks') || location.pathname.startsWith('/lists') ? 'text-primary' : ''}`} />
+              {deckCount > 0 && (
                 <span className="absolute -top-1.5 -right-2 text-[9px] font-semibold bg-primary/90 text-primary-foreground px-1 py-px rounded-full min-w-[1rem] text-center leading-tight">
-                  {userListCount}
+                  {deckCount}
                 </span>
               )}
             </div>
-            <span className="text-[10px] font-medium">Lists</span>
+            <span className="text-[10px] font-medium">Decks</span>
           </Link>
           <Link
             to="/collection"
