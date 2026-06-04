@@ -2001,9 +2001,9 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
             </Popover>
             <button
               onClick={openMustIncludeDrawer}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border border-amber-500/40 transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-amber-200/80 hover:text-amber-200 border border-amber-500/25 hover:bg-amber-500/10 transition-colors whitespace-nowrap"
             >
-              Go to list
+              Show list
             </button>
           </div>
         ) : list.deckSize && list.cards.length !== list.deckSize && deckSizeNoticeDismissedAt !== list.cards.length && (
