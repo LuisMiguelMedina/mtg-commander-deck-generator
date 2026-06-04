@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getCardsByNames } from '@/services/scryfall/client';
 import { useStore } from '@/store';
-import type { UserCardList } from '@/types';
+import type { UserCardList, ScryfallCard } from '@/types';
 
 const USER_LISTS_KEY = 'mtg-deck-builder-user-lists';
 const TYPES = ['Battle', 'Creature', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Planeswalker', 'Land'];
@@ -32,7 +32,8 @@ function saveUserLists(lists: UserCardList[]): void {
 async function computeCachedFields(
   cards: string[],
   commanderName?: string,
-): Promise<Pick<UserCardList, 'cachedTypeBreakdown' | 'cachedColorIdentity' | 'cachedCommanderArtUrl'>> {
+  heroCardName?: string,
+): Promise<Pick<UserCardList, 'cachedTypeBreakdown' | 'cachedColorIdentity' | 'cachedCommanderArtUrl' | 'cachedListArtUrl'>> {
   if (cards.length === 0) return {};
   try {
     const cardMap = await getCardsByNames(cards);
@@ -55,14 +56,33 @@ async function computeCachedFields(
     }
     const colorIdentity: string[] = WUBRG.filter(c => colors.has(c));
 
-    // Commander art
+    // Helper: extract art_crop with DFC fallback
+    const artOf = (card: ScryfallCard | undefined): string | undefined => {
+      if (!card) return undefined;
+      return card.image_uris?.art_crop
+        ?? card.card_faces?.[0]?.image_uris?.art_crop
+        ?? undefined;
+    };
+
+    // Commander art (commander decks only)
     let commanderArtUrl: string | undefined;
     if (commanderName) {
-      const cmdCard = cardMap.get(commanderName);
-      if (cmdCard) {
-        commanderArtUrl = cmdCard.image_uris?.art_crop
-          ?? cmdCard.card_faces?.[0]?.image_uris?.art_crop
-          ?? undefined;
+      commanderArtUrl = artOf(cardMap.get(commanderName));
+    }
+
+    // List art (non-commander lists). Resolution priority:
+    //   1. heroCardName (if still present in list.cards)
+    //   2. first card with art_crop
+    let listArtUrl: string | undefined;
+    if (!commanderName) {
+      if (heroCardName && cards.includes(heroCardName)) {
+        listArtUrl = artOf(cardMap.get(heroCardName));
+      }
+      if (!listArtUrl) {
+        for (const name of cards) {
+          const url = artOf(cardMap.get(name));
+          if (url) { listArtUrl = url; break; }
+        }
       }
     }
 
@@ -70,6 +90,7 @@ async function computeCachedFields(
       cachedTypeBreakdown: Object.keys(typeBreakdown).length > 0 ? typeBreakdown : undefined,
       cachedColorIdentity: colorIdentity,
       cachedCommanderArtUrl: commanderArtUrl,
+      cachedListArtUrl: listArtUrl,
     };
   } catch {
     return {};
@@ -83,6 +104,7 @@ interface CreateListOptions {
   deckSize?: number;
   primer?: string;
   generationSummary?: string;
+  heroCardName?: string;
 }
 
 // ─── Shared state: all useUserLists() instances stay in sync ─────────
@@ -120,23 +142,29 @@ export function useUserLists() {
   const refreshCache = useCallback((listId: string) => {
     const list = sharedLists.find(l => l.id === listId);
     if (!list) return;
-    computeCachedFields(list.cards, list.commanderName).then(cached => {
+    computeCachedFields(list.cards, list.commanderName, list.heroCardName).then(cached => {
       updateShared(p => p.map(l =>
         l.id === listId ? { ...l, ...cached } : l
       ));
     });
   }, []);
 
-  // One-shot backfill: existing lists (created before commander-less identity
-  // caching) won't have cachedColorIdentity set. Recompute it lazily so the
-  // overview can show a color badge on every list without forcing a re-save.
+  // One-shot backfill: existing lists may be missing cached fields added in
+  // later versions. Lists are stale if EITHER the color identity OR the hero
+  // art is missing. Commander decks never populate cachedListArtUrl, so we
+  // exclude them from the listArt staleness signal.
   useEffect(() => {
     if (backfillDone) return;
     backfillDone = true;
-    const stale = sharedLists.filter(l => l.cachedColorIdentity === undefined && l.cards.length > 0);
+    const stale = sharedLists.filter(l =>
+      l.cards.length > 0 && (
+        l.cachedColorIdentity === undefined ||
+        (!l.commanderName && l.cachedListArtUrl === undefined)
+      )
+    );
     for (const l of stale) {
       // Fire-and-forget; each call batches its own Scryfall lookups.
-      computeCachedFields(l.cards, l.commanderName).then(cached => {
+      computeCachedFields(l.cards, l.commanderName, l.heroCardName).then(cached => {
         updateShared(prev => prev.map(x => x.id === l.id ? { ...x, ...cached } : x));
       });
     }
@@ -155,12 +183,13 @@ export function useUserLists() {
       deckSize: options?.deckSize,
       primer: options?.primer,
       generationSummary: options?.generationSummary,
+      heroCardName: options?.heroCardName,
       createdAt: now,
       updatedAt: now,
     };
     updateShared(prev => [newList, ...prev]);
     // Compute cached fields async
-    computeCachedFields(cards, options?.commanderName).then(cached => {
+    computeCachedFields(cards, options?.commanderName, options?.heroCardName).then(cached => {
       updateShared(prev => prev.map(l =>
         l.id === newList.id ? { ...l, ...cached } : l
       ));
@@ -168,12 +197,12 @@ export function useUserLists() {
     return newList;
   }, []);
 
-  const updateList = useCallback((id: string, updates: Partial<Pick<UserCardList, 'name' | 'cards' | 'description' | 'type' | 'commanderName' | 'partnerCommanderName' | 'deckSize' | 'sideboard' | 'maybeboard' | 'primer' | 'generationSummary'>>) => {
+  const updateList = useCallback((id: string, updates: Partial<Pick<UserCardList, 'name' | 'cards' | 'description' | 'type' | 'commanderName' | 'partnerCommanderName' | 'deckSize' | 'sideboard' | 'maybeboard' | 'primer' | 'generationSummary' | 'heroCardName'>>) => {
     updateShared(prev => prev.map(l =>
       l.id === id ? { ...l, ...updates, updatedAt: Date.now() } : l
     ));
-    // Re-compute cached fields if cards or commander changed
-    if (updates.cards || updates.commanderName !== undefined) {
+    // Re-compute cached fields if anything that affects them changed.
+    if (updates.cards || updates.commanderName !== undefined || updates.heroCardName !== undefined) {
       setTimeout(() => refreshCache(id), 0);
     }
   }, [refreshCache]);
