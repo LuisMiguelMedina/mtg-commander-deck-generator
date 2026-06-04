@@ -313,8 +313,9 @@ export function ListsPage() {
     const list = lists.find(l => l.id === currentView.listId);
     if (!list) return null; // useEffect will redirect
     return (
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl relative rounded-xl border border-border/40 bg-card/30 backdrop-blur-sm">
+      <>
         <div className="aurora-bg" />
+        <main className="flex-1 container mx-auto my-8 px-6 py-8 max-w-5xl relative rounded-xl border border-border/40 bg-card/30 backdrop-blur-sm">
         {toasts}
         <ListDetailView
           list={list}
@@ -347,7 +348,8 @@ export function ListsPage() {
             convertToList(list.id);
           }}
         />
-      </main>
+        </main>
+      </>
     );
   }
 
