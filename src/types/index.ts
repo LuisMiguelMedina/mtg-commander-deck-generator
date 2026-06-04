@@ -590,3 +590,40 @@ export interface AppState {
   setModifyMode: (on: boolean) => void;
   reset: () => void;
 }
+
+// Deck view progressive load phases
+export type LoadPhase = 'cards' | 'tagger' | 'edhrec' | 'combos' | 'swaps';
+
+// Persisted enrichment payload — everything ListDeckView builds between
+// "user clicks the list" and "the deck appears".
+export interface SerializedEnrichment {
+  commanderCard: ScryfallCard | null;
+  partnerCard: ScryfallCard | null;
+  deckCards: ScryfallCard[];
+  sideboardCards: ScryfallCard[];
+  maybeboardCards: ScryfallCard[];
+
+  stats: DeckStats;
+  categories: Record<DeckCategory, ScryfallCard[]>;
+
+  roleCounts: Record<string, number>;
+  roleTargets: Record<string, number>;
+  rampSubtypeCounts: Record<string, number>;
+  removalSubtypeCounts: Record<string, number>;
+  boardwipeSubtypeCounts: Record<string, number>;
+  cardDrawSubtypeCounts: Record<string, number>;
+
+  cardInclusionMap?: Record<string, number>;
+  cardSynergyMap?: Record<string, number>;
+  cardRelevancyMap?: Record<string, number>;
+  cardEdhrecMetaMap?: Record<string, { isThemeSynergyCard?: boolean; isNewCard?: boolean; primary_type?: string; cmc?: number }>;
+  deckScore?: number;
+  edhrecCurve?: Record<number, number>;
+  edhrecTypes?: Record<string, number>;
+
+  detectedCombos?: DetectedCombo[];
+  gapAnalysis?: GapAnalysisCard[];
+  swapCandidates?: Record<string, ScryfallCard[]>;
+  bracketEstimation?: import('@/services/deckBuilder/bracketEstimator').BracketEstimation;
+  gameChangerNames?: string[];
+}
