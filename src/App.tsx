@@ -200,7 +200,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const listCount = allUserLists.filter(l => l.type !== 'deck').length;
   const location = useLocation();
   const isCollectionPage = location.pathname === '/collection';
-  const isListsPage = location.pathname.startsWith('/lists');
+  const isListsPage = location.pathname.startsWith('/lists') || location.pathname.startsWith('/decks');
   const isAnalyzePage = location.pathname.startsWith('/analyze');
   const isCreatePage = location.pathname === '/' || location.pathname.startsWith('/build/') || location.pathname.startsWith('/build-from-deck/');
 
