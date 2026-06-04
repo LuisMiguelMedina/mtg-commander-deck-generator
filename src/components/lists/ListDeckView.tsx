@@ -1688,6 +1688,26 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
                     <RotateCw className="w-3.5 h-3.5" />
                     Refresh stats
                   </button>
+                  {(() => {
+                    const overSize = !!(list.deckSize && list.cards.length > list.deckSize);
+                    const canTrim = trimReady && overSize;
+                    const trimTitle = !trimReady
+                      ? 'Trim needs commander data — try again once cards load.'
+                      : !overSize
+                      ? `Deck is not over ${list.deckSize ?? 'the expected size'} — nothing to trim.`
+                      : `Trim deck to ${list.deckSize} cards`;
+                    return (
+                      <button
+                        disabled={!canTrim}
+                        onClick={() => { setShowOverflow(false); openTrimDialog(); }}
+                        title={trimTitle}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                      >
+                        <Scissors className="w-3.5 h-3.5" />
+                        Trim deck
+                      </button>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -2088,6 +2108,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
           targetSize={list.deckSize}
           roleCounts={generatedDeck.roleCounts || {}}
           roleTargets={generatedDeck.roleTargets || {}}
+          relevancyMap={generatedDeck.cardRelevancyMap || {}}
         />
       )}
     </>

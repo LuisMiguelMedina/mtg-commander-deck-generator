@@ -319,6 +319,27 @@ export async function buildEdhrecMaps(
       console.warn('[Enricher] Gap analysis build failed:', e);
     }
 
+    // Index gap analysis cards into the relevancy map so consumers (fill drawer,
+    // gap UI) can read a relevancy score, not just raw EDHREC inclusion/synergy.
+    // Mirrors the equivalent block in deckGenerator.ts.
+    if (gapAnalysis) {
+      for (const g of gapAnalysis) {
+        if (relMap[g.name] !== undefined) continue;
+        const pseudoEc: EDHRECCard = {
+          name: g.name,
+          sanitized: g.name,
+          primary_type: g.typeLine.split(' ').find(t =>
+            ['Creature', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Planeswalker', 'Land'].includes(t)) || 'Unknown',
+          inclusion: g.inclusion,
+          num_decks: 0,
+          synergy: g.synergy,
+          cmc: g.cmc,
+        };
+        const role = (g.role as RoleKey) || null;
+        relMap[g.name] = Math.round(scoreRecommendation(pseudoEc, role, null, scoringCtx));
+      }
+    }
+
     return {
       roleTargets,
       cardInclusionMap: inclMap,

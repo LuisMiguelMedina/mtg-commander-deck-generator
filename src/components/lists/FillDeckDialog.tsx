@@ -20,6 +20,8 @@ export interface FillDeckDialogProps {
   targetSize: number;
   roleCounts: Record<string, number>;
   roleTargets: Record<string, number>;
+  /** Per-card relevancy score from generatedDeck.cardRelevancyMap. */
+  relevancyMap: Record<string, number>;
 }
 
 export function FillDeckDialog(props: FillDeckDialogProps) {
@@ -36,6 +38,7 @@ export function FillDeckDialog(props: FillDeckDialogProps) {
     targetSize,
     roleCounts,
     roleTargets,
+    relevancyMap,
   } = props;
 
   const shortfall = Math.max(0, targetSize - currentCount);
@@ -194,7 +197,11 @@ export function FillDeckDialog(props: FillDeckDialogProps) {
 
                     {/* Stats column */}
                     <div className="shrink-0 text-right text-xs">
-                      <div className="text-violet-300/80">rel {Math.round(card.synergy)}</div>
+                      {relevancyMap[card.name] !== undefined && (
+                        <div className="text-violet-300/80" title="Deck relevancy score — how well this card fits the deck">
+                          rel {relevancyMap[card.name]}
+                        </div>
+                      )}
                       <div
                         style={{ color: `hsl(${hue}, 70%, 55%)` }}
                         title={`${pct}% of EDHREC decks include this card`}
