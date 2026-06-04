@@ -858,7 +858,7 @@ export function ListsPage() {
                 viewMode="grid"
                 typeBreakdown={list.cachedTypeBreakdown}
                 colorIdentity={list.cachedColorIdentity}
-                commanderArtUrl={list.cachedCommanderArtUrl}
+                commanderArtUrl={list.cachedCommanderArtUrl ?? list.cachedListArtUrl}
                 matchingCards={matchingCardsMap[list.id]}
                 onClick={() => navigate(list.type === 'deck' ? `/decks/${list.id}` : `/lists/${list.id}`)}
                 onEdit={() => navigate(list.type === 'deck' ? `/decks/${list.id}/edit` : `/lists/${list.id}/edit`)}
@@ -878,7 +878,7 @@ export function ListsPage() {
                 viewMode="list"
                 typeBreakdown={list.cachedTypeBreakdown}
                 colorIdentity={list.cachedColorIdentity}
-                commanderArtUrl={list.cachedCommanderArtUrl}
+                commanderArtUrl={list.cachedCommanderArtUrl ?? list.cachedListArtUrl}
                 matchingCards={matchingCardsMap[list.id]}
                 onClick={() => navigate(list.type === 'deck' ? `/decks/${list.id}` : `/lists/${list.id}`)}
                 onEdit={() => navigate(list.type === 'deck' ? `/decks/${list.id}/edit` : `/lists/${list.id}/edit`)}
