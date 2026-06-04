@@ -625,6 +625,10 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
   const customizationForMustInclude = useStore(s => s.customization);
   const missingMustIncludes = useMemo(() => {
     if (list.type !== 'deck') return [];
+    // Only flag for freshly-generated decks. generationSummary is cleared on
+    // the first edit, so user-saved decks (or generated-then-edited decks)
+    // are exempt — the user has clearly taken authorship of the contents.
+    if (!list.generationSummary) return [];
     const mustInclude = customizationForMustInclude.mustIncludeCards || [];
     if (mustInclude.length === 0) return [];
     const present = new Set<string>(list.cards);
@@ -636,7 +640,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
       if (n.includes(' // ')) presentFrontFaces.add(n.split(' // ')[0]);
     }
     return mustInclude.filter(name => !present.has(name) && !presentFrontFaces.has(name));
-  }, [list.type, list.cards, list.commanderName, list.partnerCommanderName, customizationForMustInclude.mustIncludeCards]);
+  }, [list.type, list.generationSummary, list.cards, list.commanderName, list.partnerCommanderName, customizationForMustInclude.mustIncludeCards]);
 
   // Unloaded cards — names in list.cards that don't appear in the loaded
   // categories (typically Scryfall lookup failures from typos or renamed cards).
