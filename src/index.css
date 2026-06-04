@@ -506,6 +506,29 @@
   right: 5%;
 }
 
+/* Aurora-themed: pseudo-element gradients read from CSS variables instead
+   of the hardcoded violet/teal. The wrapper component sets:
+     --aurora-color-a → first blob's HSL triplet
+     --aurora-color-b → second blob's HSL triplet
+   Falls back to C-neutral if vars are unset, so a missing identity is
+   visually quiet rather than broken. */
+.aurora-themed .aurora-bg::before {
+  background: radial-gradient(
+    ellipse,
+    hsl(var(--aurora-color-a, 220 15% 50%)),
+    hsl(var(--aurora-color-a, 220 15% 50%) / 0.5),
+    transparent 70%
+  );
+}
+.aurora-themed .aurora-bg::after {
+  background: radial-gradient(
+    ellipse,
+    hsl(var(--aurora-color-b, 220 15% 50%)),
+    hsl(var(--aurora-color-b, 220 15% 50%) / 0.5),
+    transparent 70%
+  );
+}
+
 /* Commander theme - outlines only, not button backgrounds */
 .commander-gradient .gradient-accent {
   background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
