@@ -642,11 +642,18 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
   const unloadedCards = useMemo(() => {
     if (!phasesDone.has('cards')) return [];
     const loadedNames = new Set<string>();
+    const addLoaded = (n: string) => {
+      loadedNames.add(n);
+      if (n.includes(' // ')) loadedNames.add(n.split(' // ')[0]);
+    };
     if (generatedDeck) {
       for (const c of Object.values(generatedDeck.categories).flat()) {
-        loadedNames.add(c.name);
-        if (c.name.includes(' // ')) loadedNames.add(c.name.split(' // ')[0]);
+        addLoaded(c.name);
       }
+      // Commander and partner live outside categories — count them as loaded
+      // so their names don't get flagged when present in list.cards.
+      if (generatedDeck.commander) addLoaded(generatedDeck.commander.name);
+      if (generatedDeck.partnerCommander) addLoaded(generatedDeck.partnerCommander.name);
     }
     const seen = new Set<string>();
     const out: string[] = [];
