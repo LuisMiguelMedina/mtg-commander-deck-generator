@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import type { GapAnalysisCard, ScryfallCard, UserCardList } from '@/types';
+import type { GapAnalysisCard, ScryfallCard, UserCardList, LoadPhase } from '@/types';
 import { getCardByName } from '@/services/scryfall/client';
 import { CardPreviewModal } from '@/components/ui/CardPreviewModal';
 import { ShoppingCart, PackageCheck } from 'lucide-react';
@@ -117,9 +117,11 @@ function GapCardItem({ card, rank, badgeColor, onPreview, onAction, isMustInclud
 
 interface GapAnalysisDisplayProps {
   cards: GapAnalysisCard[];
+  phasesDone?: Set<LoadPhase>;
 }
 
-export function GapAnalysisDisplay({ cards }: GapAnalysisDisplayProps) {
+export function GapAnalysisDisplay({ cards, phasesDone }: GapAnalysisDisplayProps) {
+  const edhrecReady = !phasesDone || phasesDone.has('edhrec');
   const [previewCard, setPreviewCard] = useState<ScryfallCard | null>(null);
   const [previewOwned, setPreviewOwned] = useState(false);
   const [hideOwned, setHideOwned] = useState(false);
@@ -182,6 +184,18 @@ export function GapAnalysisDisplay({ cards }: GapAnalysisDisplayProps) {
     }
   }, [customization.mustIncludeCards, customization.bannedCards, updateCustomization, userLists, updateList, createList]);
 
+  if (!edhrecReady) {
+    return (
+      <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-4 space-y-3">
+        <div className="text-sm text-muted-foreground">Analyzing your deck…</div>
+        <div className="space-y-2">
+          {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="h-10 w-full bg-accent/20 rounded animate-pulse" />
+          ))}
+        </div>
+      </div>
+    );
+  }
   if (cards.length === 0) return null;
 
   const totalCost = visibleCards
