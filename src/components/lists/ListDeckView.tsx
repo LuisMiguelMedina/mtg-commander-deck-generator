@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, List, Pencil, CopyPlus, X, Plus, MoreHorizontal, ChevronDown, ChevronRight, ClipboardPaste, Bold, Italic, Heading2, ListOrdered, Minus, Swords, Microscope, Scissors, RotateCw } from 'lucide-react';
+import { ArrowLeft, Loader2, List, Pencil, CopyPlus, X, Plus, MoreHorizontal, ChevronDown, ChevronRight, ClipboardPaste, Bold, Italic, Heading2, ListOrdered, Minus, Swords, Microscope, Scissors, Sparkles, RotateCw } from 'lucide-react';
 import { useStore } from '@/store';
 import { getCardsByNames, getFrontFaceTypeLine, searchCards, getCardImageUrl, getCardPrice, getCardBackFaceUrl, isDoubleFacedCard } from '@/services/scryfall/client';
 import { ManaCost } from '@/components/ui/mtg-icons';
@@ -34,6 +34,7 @@ import { trackEvent } from '@/services/analytics';
 import type { UserCardList, ScryfallCard, GeneratedDeck, DeckStats, DetectedCombo, EDHRECCombo, LoadPhase, SerializedEnrichment } from '@/types';
 import { useUserLists } from '@/hooks/useUserLists';
 import { TrimDeckDialog } from './TrimDeckDialog';
+import { FillDeckDialog } from './FillDeckDialog';
 
 interface ListDeckViewProps {
   list: UserCardList;
@@ -558,6 +559,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
     generatedDeck?.edhrecCurve &&
     generatedDeck?.edhrecTypes
   );
+  const fillReady = !!(generatedDeck?.gapAnalysis && generatedDeck.gapAnalysis.length > 0);
   const allDeckCards = useMemo<ScryfallCard[]>(
     () => generatedDeck ? Object.values(generatedDeck.categories).flat() : [],
     [generatedDeck],
@@ -629,6 +631,16 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
     setTrimDialogOpen(false);
     // Match the Drawer's duration-300 transition before unmounting.
     setTimeout(() => setTrimDialogMounted(false), 320);
+  }, []);
+  const [fillDialogOpen, setFillDialogOpen] = useState(false);
+  const [fillDialogMounted, setFillDialogMounted] = useState(false);
+  const openFillDialog = useCallback(() => {
+    setFillDialogMounted(true);
+    requestAnimationFrame(() => setFillDialogOpen(true));
+  }, []);
+  const closeFillDialog = useCallback(() => {
+    setFillDialogOpen(false);
+    setTimeout(() => setFillDialogMounted(false), 320);
   }, []);
   const actionToastTimer = useRef<ReturnType<typeof setTimeout>>();
   const onRemoveCardsRef = useRef(onRemoveCards);
@@ -1705,10 +1717,21 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
                 Trim to {list.deckSize}
               </button>
             )}
+            {list.deckSize && list.cards.length < list.deckSize && (
+              <button
+                onClick={openFillDialog}
+                disabled={!fillReady}
+                title={fillReady ? `Fill deck to ${list.deckSize} cards` : 'Fill needs commander data — try again once cards load.'}
+                className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-violet-500/20 hover:bg-violet-500/30 text-violet-200 border border-violet-500/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-violet-500/20 whitespace-nowrap"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Fill to {list.deckSize}
+              </button>
+            )}
             {onUpdateDeckSize && (
               <button
                 onClick={() => onUpdateDeckSize(list.cards.length)}
-                className={`${list.deckSize && list.cards.length > list.deckSize ? '' : 'ml-auto'} inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border border-amber-500/40 transition-colors whitespace-nowrap`}
+                className={`${list.deckSize && list.cards.length !== list.deckSize ? '' : 'ml-auto'} inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border border-amber-500/40 transition-colors whitespace-nowrap`}
               >
                 Set expected to {list.cards.length}
               </button>
@@ -2033,6 +2056,38 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
           edhrecTypes={generatedDeck.edhrecTypes || {}}
           detectedCombos={generatedDeck.detectedCombos}
           mustIncludeNames={new Set(customization.mustIncludeCards)}
+        />
+      )}
+
+      {/* Fill deck dialog */}
+      {fillDialogMounted && generatedDeck && list.deckSize && onAddCards && (
+        <FillDeckDialog
+          open={fillDialogOpen}
+          onClose={closeFillDialog}
+          onConfirm={(names) => {
+            closeFillDialog();
+            if (names.length === 0) return;
+            onAddCards(names, 'deck');
+            for (const name of names) {
+              pushDeckHistory({ action: 'add', cardName: name });
+            }
+            const label = names.length === 1
+              ? `Added ${names[0]}`
+              : `Added ${names.length} cards`;
+            showActionToast(label, () => {
+              onRemoveCardsRef.current?.(names);
+              useStore.getState().popLatestHistoryEntries('add', names);
+            });
+          }}
+          gapAnalysis={generatedDeck.gapAnalysis || []}
+          deckNames={new Set(list.cards)}
+          sideboardNames={new Set(list.sideboard || [])}
+          maybeboardNames={new Set(list.maybeboard || [])}
+          bannedNames={new Set(customization.bannedCards || [])}
+          currentCount={list.cards.length}
+          targetSize={list.deckSize}
+          roleCounts={generatedDeck.roleCounts || {}}
+          roleTargets={generatedDeck.roleTargets || {}}
         />
       )}
     </>
