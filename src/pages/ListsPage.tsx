@@ -132,9 +132,13 @@ export function ListsPage() {
   const handleDelete = (listId: string) => {
     const list = lists.find(l => l.id === listId);
     if (list) trackEvent('list_deleted', { listName: list.name, cardCount: list.cards.length });
+    const wasDeck = list?.type === 'deck';
     deleteList(listId);
-    if (currentView.view === 'detail' && currentView.listId === listId) {
-      navigate('/lists', { replace: true });
+    if (
+      (currentView.view === 'detail' || currentView.view === 'deck-view') &&
+      currentView.listId === listId
+    ) {
+      navigate(wasDeck ? '/decks' : '/lists', { replace: true });
     }
   };
 
@@ -221,7 +225,7 @@ export function ListsPage() {
           list={list}
           onBack={() => navigate('/lists')}
           onEdit={() => navigate(`/lists/${list.id}/edit`)}
-          onDuplicate={() => { duplicateList(list.id); navigate('/lists'); }}
+          onDuplicate={() => { duplicateList(list.id); navigate(list.type === 'deck' ? '/decks' : '/lists'); }}
           onExport={() => handleExport(list.id)}
           onDelete={() => handleDelete(list.id)}
           onRemoveCard={(name) => handleRemoveCard(list.id, name)}
@@ -234,7 +238,7 @@ export function ListsPage() {
               updateList(list.id, { cards: current.cards.map(c => c === oldName ? newName : c) });
             }
           }}
-          onViewAsDeck={() => navigate(`/lists/${list.id}/deck-view`)}
+          onViewAsDeck={() => navigate(`/decks/${list.id}`)}
           onConvertToDeck={() => {
             navigate(`/lists/${list.id}/edit?mode=deck`);
           }}
@@ -255,10 +259,10 @@ export function ListsPage() {
         {toasts}
         <ListDeckView
           list={list}
-          onBack={() => navigate(list.type === 'deck' ? '/lists' : `/lists/${list.id}`)}
+          onBack={() => navigate(list.type === 'deck' ? '/decks' : `/lists/${list.id}`)}
           onViewAsList={() => navigate(`/lists/${list.id}`)}
-          onEdit={() => navigate(`/lists/${list.id}/edit`)}
-          onDuplicate={() => { duplicateList(list.id); navigate('/lists'); }}
+          onEdit={() => navigate(list.type === 'deck' ? `/decks/${list.id}/edit` : `/lists/${list.id}/edit`)}
+          onDuplicate={() => { duplicateList(list.id); navigate(list.type === 'deck' ? '/decks' : '/lists'); }}
           onRemoveCards={(names) => {
             const current = getListById(list.id) ?? list;
             const updated = current.cards.filter(c => !names.includes(c));
@@ -432,7 +436,7 @@ export function ListsPage() {
 
   // Create view
   if (currentView.view === 'create') {
-    const createMode = searchParams.get('type') === 'deck' ? 'deck' : 'list';
+    const createMode = currentView.kind === 'deck' ? 'deck' : 'list';
     return (
       <main className="flex-1 container mx-auto px-4 py-8 max-w-3xl lg:max-w-5xl">
         <div className="aurora-bg" />
@@ -448,9 +452,9 @@ export function ListsPage() {
             });
             trackEvent('list_created', { listName: name, cardCount: cards.length });
             const isDeck = createMode === 'deck' || !!commanderOptions?.commanderName;
-            navigate(`/lists/${newList.id}${isDeck ? '/deck-view' : ''}`, { replace: true });
+            navigate(isDeck ? `/decks/${newList.id}` : `/lists/${newList.id}`, { replace: true });
           }}
-          onCancel={() => navigate('/lists')}
+          onCancel={() => navigate(createMode === 'deck' ? '/decks' : '/lists')}
         />
       </main>
     );
@@ -481,9 +485,9 @@ export function ListsPage() {
               type: nextType,
             });
             const isDeck = nextType === 'deck';
-            navigate(`/lists/${list.id}${isDeck ? '/deck-view' : ''}`, { replace: true });
+            navigate(isDeck ? `/decks/${list.id}` : `/lists/${list.id}`, { replace: true });
           }}
-          onCancel={() => navigate(`/lists/${list.id}${list.type === 'deck' ? '/deck-view' : ''}`)}
+          onCancel={() => navigate(list.type === 'deck' ? `/decks/${list.id}` : `/lists/${list.id}`)}
         />
       </main>
     );
@@ -520,14 +524,14 @@ export function ListsPage() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={() => navigate('/lists/create?type=deck')}
+            onClick={() => navigate('/decks/create')}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-lg hover:bg-primary/90 transition-colors"
           >
             <Plus className="w-4 h-4" />
             New Deck
           </button>
           <button
-            onClick={() => navigate('/lists/create?type=list')}
+            onClick={() => navigate('/lists/create')}
             className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-primary text-primary hover:bg-primary/10 transition-colors"
           >
             <Plus className="w-4 h-4" />
@@ -619,8 +623,8 @@ export function ListsPage() {
                 colorIdentity={list.cachedColorIdentity}
                 commanderArtUrl={list.cachedCommanderArtUrl}
                 matchingCards={matchingCardsMap[list.id]}
-                onClick={() => navigate(list.type === 'deck' ? `/lists/${list.id}/deck-view` : `/lists/${list.id}`)}
-                onEdit={() => navigate(`/lists/${list.id}/edit`)}
+                onClick={() => navigate(list.type === 'deck' ? `/decks/${list.id}` : `/lists/${list.id}`)}
+                onEdit={() => navigate(list.type === 'deck' ? `/decks/${list.id}/edit` : `/lists/${list.id}/edit`)}
                 onDuplicate={() => duplicateList(list.id)}
                 onExport={() => handleExport(list.id)}
                 onDelete={() => handleDelete(list.id)}
@@ -638,8 +642,8 @@ export function ListsPage() {
                 colorIdentity={list.cachedColorIdentity}
                 commanderArtUrl={list.cachedCommanderArtUrl}
                 matchingCards={matchingCardsMap[list.id]}
-                onClick={() => navigate(list.type === 'deck' ? `/lists/${list.id}/deck-view` : `/lists/${list.id}`)}
-                onEdit={() => navigate(`/lists/${list.id}/edit`)}
+                onClick={() => navigate(list.type === 'deck' ? `/decks/${list.id}` : `/lists/${list.id}`)}
+                onEdit={() => navigate(list.type === 'deck' ? `/decks/${list.id}/edit` : `/lists/${list.id}/edit`)}
                 onDuplicate={() => duplicateList(list.id)}
                 onExport={() => handleExport(list.id)}
                 onDelete={() => handleDelete(list.id)}
@@ -662,14 +666,14 @@ export function ListsPage() {
           </div>
           <div className="flex items-center justify-center gap-2 flex-wrap">
             <button
-              onClick={() => navigate('/lists/create?type=deck')}
+              onClick={() => navigate('/decks/create')}
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-lg hover:bg-primary/90 transition-colors"
             >
               <Plus className="w-4 h-4" />
               Build your first deck
             </button>
             <button
-              onClick={() => navigate('/lists/create?type=list')}
+              onClick={() => navigate('/lists/create')}
               className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg border border-primary text-primary hover:bg-primary/10 transition-colors"
             >
               <Plus className="w-4 h-4" />
