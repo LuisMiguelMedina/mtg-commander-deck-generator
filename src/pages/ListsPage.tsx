@@ -10,12 +10,31 @@ import { ListCreateEditForm } from '@/components/lists/ListCreateEditForm';
 import { PRESET_BAN_LISTS } from '@/components/lists/UserListChips';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Search, X, Grid3X3, List, BookOpen, Shield, Loader2, Info } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Search, X, Grid3X3, List, BookOpen, Shield, Loader2, Info, Star, Ban } from 'lucide-react';
 import { trackEvent } from '@/services/analytics';
 import type { BanList, UserCardList } from '@/types';
 
 type SortKey = 'updatedAt' | 'name' | 'size';
 type SortDir = 'asc' | 'desc';
+
+// Reserved IDs for pseudo-lists backed by Zustand customization (not useUserLists).
+const PSEUDO_MUST_INCLUDE_ID = '__must-include';
+const PSEUDO_EXCLUDED_ID = '__excluded';
+const PSEUDO_IDS = new Set<string>([PSEUDO_MUST_INCLUDE_ID, PSEUDO_EXCLUDED_ID]);
+
+function buildPseudoList(id: string, cards: string[]): UserCardList {
+  const isInclude = id === PSEUDO_MUST_INCLUDE_ID;
+  return {
+    id,
+    name: isInclude ? 'Must Include' : 'Excluded',
+    description: isInclude
+      ? 'Cards forced into every generated deck.'
+      : 'Cards excluded from every generated deck.',
+    cards,
+    createdAt: 0,
+    updatedAt: Date.now(),
+  };
+}
 
 export function ListsPage() {
   const navigate = useNavigate();
@@ -182,11 +201,13 @@ export function ListsPage() {
       return;
     }
 
-    // Invalid list ID
+    // Invalid list ID (skip pseudo-list IDs; they don't live in `lists`)
     if (
-      currentView.view === 'detail' ||
-      currentView.view === 'edit' ||
-      currentView.view === 'deck-view'
+      (currentView.view === 'detail' ||
+        currentView.view === 'edit' ||
+        currentView.view === 'deck-view') &&
+      currentView.listId &&
+      !PSEUDO_IDS.has(currentView.listId)
     ) {
       const list = lists.find(l => l.id === currentView.listId);
       if (!list) {
@@ -210,6 +231,47 @@ export function ListsPage() {
       }
     }
   }, [currentView, lists, banLists, navigate, searchParams]);
+
+  // Pseudo-list detail view (Must Include / Excluded — backed by Zustand customization)
+  if (currentView.view === 'detail' && currentView.listId && PSEUDO_IDS.has(currentView.listId)) {
+    const pseudoId = currentView.listId;
+    const sourceCards = pseudoId === PSEUDO_MUST_INCLUDE_ID
+      ? (customization.mustIncludeCards || [])
+      : (customization.bannedCards || []);
+    const list = buildPseudoList(pseudoId, sourceCards);
+    const updateCards = (next: string[]) => {
+      if (pseudoId === PSEUDO_MUST_INCLUDE_ID) {
+        updateCustomization({ mustIncludeCards: next });
+      } else {
+        updateCustomization({ bannedCards: next });
+      }
+    };
+    return (
+      <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl">
+        <div className="aurora-bg" />
+        {toasts}
+        <ListDetailView
+          list={list}
+          onBack={() => navigate('/lists')}
+          onExport={() => {
+            const text = sourceCards.map(c => `1 ${c}`).join('\n');
+            navigator.clipboard.writeText(text).then(() => {
+              setCopiedCount(sourceCards.length);
+              setTimeout(() => setCopiedCount(null), 2000);
+            });
+          }}
+          onRemoveCard={(name) => updateCards(sourceCards.filter(c => c !== name))}
+          onSwapCard={(oldName, newName) => {
+            if (sourceCards.includes(newName)) {
+              updateCards(sourceCards.filter(c => c !== oldName));
+            } else {
+              updateCards(sourceCards.map(c => c === oldName ? newName : c));
+            }
+          }}
+        />
+      </main>
+    );
+  }
 
   // Detail view
   if (currentView.view === 'detail') {
@@ -625,6 +687,44 @@ export function ListsPage() {
       )}
 
       {toasts}
+
+      {/* Pinned customization pseudo-lists (lists side only) */}
+      {currentView.kind === 'list' && !searchQuery.trim() && (
+        <div className="grid sm:grid-cols-2 gap-3 mb-4">
+          <button
+            onClick={() => navigate(`/lists/${PSEUDO_MUST_INCLUDE_ID}`)}
+            className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-4 text-left hover:border-emerald-500/40 transition-colors flex items-start gap-3 relative overflow-hidden"
+            style={{ borderLeftWidth: 3, borderLeftColor: 'rgb(16 185 129 / 0.7)' }}
+          >
+            <Star className="w-5 h-5 text-emerald-400/90 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-medium">Must Include</h3>
+                <span className="text-[10px] uppercase tracking-wider text-emerald-400/70 font-medium">Pinned</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {(customization.mustIncludeCards?.length ?? 0)} card{(customization.mustIncludeCards?.length ?? 0) === 1 ? '' : 's'} forced into every generated deck
+              </p>
+            </div>
+          </button>
+          <button
+            onClick={() => navigate(`/lists/${PSEUDO_EXCLUDED_ID}`)}
+            className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-4 text-left hover:border-amber-500/40 transition-colors flex items-start gap-3 relative overflow-hidden"
+            style={{ borderLeftWidth: 3, borderLeftColor: 'rgb(245 158 11 / 0.7)' }}
+          >
+            <Ban className="w-5 h-5 text-amber-400/90 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-medium">Excluded</h3>
+                <span className="text-[10px] uppercase tracking-wider text-amber-400/70 font-medium">Pinned</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {(customization.bannedCards?.length ?? 0)} card{(customization.bannedCards?.length ?? 0) === 1 ? '' : 's'} excluded from every generated deck
+              </p>
+            </div>
+          </button>
+        </div>
+      )}
 
       {/* Lists grid/list */}
       {filteredAndSortedLists.length > 0 ? (
