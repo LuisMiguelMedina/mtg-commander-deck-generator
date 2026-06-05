@@ -56,6 +56,9 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
   // Track whether the importer has un-imported text
   const [hasPendingImport, setHasPendingImport] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  // When a save-time auto-import surfaces "not found" cards, we pause the save so
+  // the user can review the errors. The next Save click proceeds normally.
+  const [saveBlockedByImportErrors, setSaveBlockedByImportErrors] = useState(false);
   const importerRef = useRef<CollectionImporterHandle>(null);
 
   // Import result/progress — rendered in its own row below the columns
@@ -388,8 +391,16 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
     setIsSaving(true);
     try {
       if (importerRef.current?.hasPending()) {
-        await importerRef.current.triggerImport();
+        const result = await importerRef.current.triggerImport();
+        // If the auto-import surfaced not-found cards, pause the save so the user
+        // can review the error display. The textarea was cleared by the import,
+        // so a second Save click (with no pending text) proceeds normally.
+        if (result && result.notFound.length > 0) {
+          setSaveBlockedByImportErrors(true);
+          return;
+        }
       }
+      setSaveBlockedByImportErrors(false);
       const finalCards = cardsRef.current;
       if (isDeck && finalCards.length === 0) return;
       const cmdFirstName = commanderName ? commanderName.split(',')[0] : '';
@@ -783,7 +794,11 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
             onMetaDetected={handleMetaDetected}
             onLegendariesDetected={setImportedLegendaries}
             updatedLabel="duplicates skipped"
-            onPendingChange={setHasPendingImport}
+            onPendingChange={(pending) => {
+              setHasPendingImport(pending);
+              // User is editing the import box → drop the stale "save blocked" hint.
+              if (pending) setSaveBlockedByImportErrors(false);
+            }}
             textareaClassName="lg:h-64"
             externalResult
             onResultChange={setImportResult}
@@ -925,6 +940,10 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
           <p className="text-xs text-amber-400 mr-auto">
             Add at least one card to create a deck
           </p>
+        ) : saveBlockedByImportErrors ? (
+          <p className="text-xs text-amber-400 mr-auto">
+            Some cards couldn't be imported. Review the errors above, then click Save again to continue.
+          </p>
         ) : null}
         <button
           onClick={onCancel}
@@ -940,7 +959,7 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
         >
           {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
           {isEditing
-            ? 'Save Changes'
+            ? (hasPendingImport ? 'Import & Save' : 'Save Changes')
             : hasPendingImport
             ? (isDeck ? 'Import & Create Deck' : 'Import & Create List')
             : (isDeck ? 'Create Deck' : 'Create List')}

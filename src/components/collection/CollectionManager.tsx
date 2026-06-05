@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { useNavigate } from 'react-router-dom';
@@ -103,7 +103,12 @@ function sortCards(cards: CollectionCard[], sortKey: SortKey, sortDir: 'asc' | '
 
 // --- Component ---
 
-export function CollectionManager() {
+interface CollectionManagerProps {
+  /** Notified whenever the color filter set changes (WUBRG/C codes). */
+  onSelectedColorsChange?: (codes: string[]) => void;
+}
+
+export function CollectionManager({ onSelectedColorsChange }: CollectionManagerProps = {}) {
   const navigate = useNavigate();
   const {
     cards, count, removeCard, updateQuantity, clearCollection,
@@ -123,6 +128,10 @@ export function CollectionManager() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
   const [copiedCount, setCopiedCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    onSelectedColorsChange?.([...selectedColors]);
+  }, [selectedColors, onSelectedColorsChange]);
 
   // Filter & sort
   const filteredCards = useMemo(() => {

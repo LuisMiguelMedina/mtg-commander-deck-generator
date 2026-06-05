@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.2.35",
+    "notes": [
+      "Split Lists and Decks into their own tabs in the navbar",
+      "Visual and QoL improvements across list and deck importing, management, and viewing",
+      "Clicking in the darkspace with a card preview open will now clsose the preview properly",
+      "Undersized decks now have a 'Fill to X' option to help get you to the deck size you're looking for",
+      "Better warnings for when deck doesnt pass validation (breaking singleton rules, missing commander, etc)"
+    ]
+  },
+  {
     "version": "1.2.34",
     "notes": [
       "Show a deck-list skeleton while card data is being fetched, so the view isn't blank during the first-ever open"

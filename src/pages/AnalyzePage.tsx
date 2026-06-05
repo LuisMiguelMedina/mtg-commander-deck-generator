@@ -660,8 +660,18 @@ export function AnalyzePage() {
   }
 
   return (
-    <main className="flex-1 px-4 sm:px-8 lg:px-12 py-8">
-      <div className="text-center py-6 max-w-2xl mx-auto animate-fade-in">
+    <main className="relative flex-1 px-4 sm:px-8 lg:px-12 py-8">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage:
+            'repeating-linear-gradient(0deg, transparent 0 23px, rgba(140, 180, 255, 0.045) 23px 24px),' +
+            'repeating-linear-gradient(90deg, transparent 0 23px, rgba(140, 180, 255, 0.045) 23px 24px)',
+          animation: 'fadeIn 1200ms ease-out both',
+        }}
+      />
+      <div className="relative text-center py-6 max-w-2xl mx-auto animate-fade-in">
         <h2 className="text-4xl font-bold mb-3">
           Inspect any{' '}
           <span className="gradient-text">Commander deck</span>
@@ -671,30 +681,32 @@ export function AnalyzePage() {
         </p>
       </div>
 
-      <LaneTabs active={activeLane} onChange={setActiveLane} />
+      <div className="relative">
+        <LaneTabs active={activeLane} onChange={setActiveLane} />
 
-      {error && (
-        <div className="max-w-3xl mx-auto mb-3 px-3 py-2 rounded-lg border border-red-500/30 bg-red-500/5 text-sm text-red-400">
-          {error}
+        {error && (
+          <div className="max-w-3xl mx-auto mb-3 px-3 py-2 rounded-lg border border-red-500/30 bg-red-500/5 text-sm text-red-400">
+            {error}
+          </div>
+        )}
+
+        <div
+          id={`lane-panel-${activeLane}`}
+          role="tabpanel"
+          aria-labelledby={`lane-tab-${activeLane}`}
+          className="max-w-3xl mx-auto rounded-xl border border-border/40 bg-card/30 backdrop-blur-sm p-3 sm:p-6 min-h-[280px] overflow-hidden"
+        >
+          {activeLane === 'paste' && (
+            <PasteLane onAnalyze={handlePasteAnalyze} loading={loading} />
+          )}
+          {activeLane === 'lists' && (
+            <ListsLane onPick={handleListPick} loading={loading} loadingListId={loadingListId} />
+          )}
+          {activeLane === 'generate' && <GenerateLane />}
         </div>
-      )}
 
-      <div
-        id={`lane-panel-${activeLane}`}
-        role="tabpanel"
-        aria-labelledby={`lane-tab-${activeLane}`}
-        className="max-w-3xl mx-auto rounded-xl border border-border/40 bg-card/30 backdrop-blur-sm p-3 sm:p-6 min-h-[280px] overflow-hidden"
-      >
-        {activeLane === 'paste' && (
-          <PasteLane onAnalyze={handlePasteAnalyze} loading={loading} />
-        )}
-        {activeLane === 'lists' && (
-          <ListsLane onPick={handleListPick} loading={loading} loadingListId={loadingListId} />
-        )}
-        {activeLane === 'generate' && <GenerateLane />}
+        <WhatYoullSeeStrip />
       </div>
-
-      <WhatYoullSeeStrip />
     </main>
   );
 }

@@ -1264,7 +1264,7 @@ export function DeckOptimizer({
               <TooltipContent side="right">Check a different deck</TooltipContent>
             </Tooltip>
           )}
-          {TABS.filter(t => t.key !== 'cost').map(tab => {
+          {TABS.filter(t => t.key !== 'cost' && t.key !== 'optimize').map(tab => {
             const isActive = activeTab === tab.key;
             const tabGrade = tabGrades[tab.key];
             const gradeStyle = tabGrade ? (HEALTH_GRADE_STYLES[tabGrade] || HEALTH_GRADE_STYLES.C) : null;

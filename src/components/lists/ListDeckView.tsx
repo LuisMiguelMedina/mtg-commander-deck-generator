@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, List, Pencil, CopyPlus, X, Plus, MoreHorizontal, ChevronDown, ChevronRight, ClipboardPaste, Bold, Italic, Heading2, ListOrdered, Minus, Swords, Microscope, Scissors, Sparkles, RotateCw } from 'lucide-react';
 import { useStore } from '@/store';
-import { getCardsByNames, getFrontFaceTypeLine, searchCards, getCardImageUrl, getCardPrice, getCardBackFaceUrl, isDoubleFacedCard } from '@/services/scryfall/client';
+import { getCardsByNames, getCardByName, getFrontFaceTypeLine, searchCards, getCardImageUrl, getCardPrice, getCardBackFaceUrl, isDoubleFacedCard } from '@/services/scryfall/client';
 import { ManaCost } from '@/components/ui/mtg-icons';
 import { fetchCommanderCombos, fetchColorIdentityCombos } from '@/services/edhrec/client';
 import { applyCommanderTheme, resetTheme } from '@/lib/commanderTheme';
@@ -37,6 +37,7 @@ import { TrimDeckDialog } from './TrimDeckDialog';
 import { FillDeckDialog } from './FillDeckDialog';
 import { Drawer } from '@/components/ui/drawer';
 import { MustIncludeCards } from '@/components/customization/MustIncludeCards';
+import { getMaxCopies } from '@/lib/utils';
 
 interface ListDeckViewProps {
   list: UserCardList;
@@ -582,29 +583,24 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
     return cards.filter(c => (c.color_identity || []).some(color => !allowed.has(color)));
   }, [generatedDeck, list.commanderName, list.partnerCommanderName]);
 
-  // Singleton violations — duplicate non-basic cards. Basics and "any number"
-  // cards (Relentless Rats etc.) are exempt.
+  // Singleton violations — duplicate non-basic cards. Uses getMaxCopies() so
+  // basics and "any number" / capped multi-copy cards are recognized from card
+  // data (oracle text + type line), not a hardcoded allowlist.
   const duplicateNonBasics = useMemo(() => {
-    const BASICS = new Set([
-      'Plains', 'Island', 'Swamp', 'Mountain', 'Forest',
-      'Snow-Covered Plains', 'Snow-Covered Island', 'Snow-Covered Swamp',
-      'Snow-Covered Mountain', 'Snow-Covered Forest',
-      'Wastes',
-    ]);
-    const ANY_NUMBER = new Set([
-      'Relentless Rats', 'Shadowborn Apostle', 'Rat Colony', 'Persistent Petitioners',
-      'Seven Dwarves', "Dragon's Approach", 'Nazgûl', 'Slime Against Humanity',
-      'Hare Apparent', 'Templar Knight', 'Tempest Hawk',
-    ]);
+    if (allDeckCards.length === 0) return [];
+    const cardByName = new Map<string, ScryfallCard>();
+    for (const c of allDeckCards) cardByName.set(c.name, c);
     const counts: Record<string, number> = {};
     for (const name of list.cards) {
-      if (BASICS.has(name) || ANY_NUMBER.has(name)) continue;
+      const card = cardByName.get(name);
+      if (!card) continue;
+      if (getMaxCopies(card) > 1) continue;
       counts[name] = (counts[name] || 0) + 1;
     }
     return Object.entries(counts)
       .filter(([, n]) => n > 1)
       .map(([name, n]) => ({ name, count: n }));
-  }, [list.cards]);
+  }, [list.cards, allDeckCards]);
 
   const customization = useStore(s => s.customization);
   const updateCustomization = useStore(s => s.updateCustomization);
@@ -710,7 +706,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
   const priceSym = customization.currency === 'EUR' ? '€' : '$';
 
   // Action toast with undo (for add/remove cards)
-  const [actionToast, setActionToast] = useState<{ message: string; onUndo: () => void } | null>(null);
+  const [actionToast, setActionToast] = useState<{ message: string; onUndo?: () => void; kind?: 'success' | 'error' } | null>(null);
   const [deckSizeNoticeDismissedAt, setDeckSizeNoticeDismissedAt] = useState<number | null>(null);
   // Split open / mounted so the drawer can play its CSS slide-out before unmounting.
   const [trimDialogOpen, setTrimDialogOpen] = useState(false);
@@ -755,11 +751,16 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
   onRemoveFromBoardRef.current = onRemoveFromBoard;
   const showActionToast = useCallback((message: string, onUndo: () => void) => {
     clearTimeout(actionToastTimer.current);
-    setActionToast({ message, onUndo });
+    setActionToast({ message, onUndo, kind: 'success' });
+    actionToastTimer.current = setTimeout(() => setActionToast(null), 4000);
+  }, []);
+  const showErrorToast = useCallback((message: string) => {
+    clearTimeout(actionToastTimer.current);
+    setActionToast({ message, kind: 'error' });
     actionToastTimer.current = setTimeout(() => setActionToast(null), 4000);
   }, []);
   const handleUndoAction = useCallback(() => {
-    if (!actionToast) return;
+    if (!actionToast?.onUndo) return;
     actionToast.onUndo();
     setActionToast(null);
   }, [actionToast]);
@@ -1534,6 +1535,33 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
     showActionToast(`Added ${card.name}`, () => onRemoveCardsRef.current?.([card.name]));
   }, [onAddCards, pushDeckHistory, showActionToast]);
 
+  // Enter-to-add: skip the dropdown and try to resolve+add the typed name directly.
+  // Uses fuzzy lookup so minor capitalization/spelling slips still work.
+  const handleSearchKeyDown = useCallback(async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const name = searchQuery.trim();
+    if (!name || !onAddCards) return;
+    // Capture the first dropdown result (if any) before we clear state.
+    const firstResult = searchResults[0];
+    // Close the dropdown / cancel the in-flight debounced search immediately
+    // so the popover doesn't reappear while our lookup is running.
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowSearchResults(false);
+    setIsSearching(false);
+    if (firstResult) {
+      handleAddToDeck(firstResult);
+      return;
+    }
+    try {
+      const card = await getCardByName(name, false);
+      handleAddToDeck(card);
+    } catch {
+      showErrorToast(`Couldn't find "${name}"`);
+    }
+  }, [searchQuery, searchResults, onAddCards, handleAddToDeck, showErrorToast]);
+
   const handleShowBoardPicker = useCallback((card: ScryfallCard, event: React.MouseEvent) => {
     event.stopPropagation();
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
@@ -2107,6 +2135,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
                     placeholder="Add a card..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={handleSearchKeyDown}
                     onFocus={() => {
                       if (searchResults.length > 0) setShowSearchResults(true);
                     }}
@@ -2329,14 +2358,16 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
 
       {/* Action toast with undo */}
       {actionToast && createPortal(
-        <div className="fixed bottom-6 right-6 z-[999] px-4 py-2 bg-emerald-500/90 text-white text-sm rounded-lg shadow-lg animate-fade-in flex items-center gap-3">
+        <div className={`fixed bottom-6 right-6 z-[999] px-4 py-2 ${actionToast.kind === 'error' ? 'bg-rose-500/90' : 'bg-emerald-500/90'} text-white text-sm rounded-lg shadow-lg animate-fade-in flex items-center gap-3`}>
           {actionToast.message}
-          <button
-            onClick={handleUndoAction}
-            className="underline underline-offset-2 hover:text-white/80 transition-colors cursor-pointer px-1 py-0.5"
-          >
-            Undo
-          </button>
+          {actionToast.onUndo && (
+            <button
+              onClick={handleUndoAction}
+              className="underline underline-offset-2 hover:text-white/80 transition-colors cursor-pointer px-1 py-0.5"
+            >
+              Undo
+            </button>
+          )}
         </div>,
         document.body,
       )}

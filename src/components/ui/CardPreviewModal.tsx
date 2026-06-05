@@ -688,14 +688,20 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
       onTouchMove={onNavigate ? handleTouchMove : undefined}
       onTouchEnd={onNavigate ? handleTouchEnd : undefined}
     >
-      <div ref={contentRef} className={`relative w-fit max-w-[90vw] card-preview-content m-auto py-4 ${slideClass || 'animate-scale-in'}`} onClick={(e) => e.stopPropagation()}>
-        <button
-          onClick={onClose}
-          className="absolute top-2 right-2 bg-black/60 rounded-full p-1.5 text-white/70 hover:text-white transition-colors z-10"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
+      <div
+        ref={contentRef}
+        className={`relative w-fit max-w-[90vw] card-preview-content m-auto py-4 ${slideClass || 'animate-scale-in'}`}
+        onClick={(e) => {
+          // Stop propagation only when the click lands on actual content (image, buttons,
+          // links, text). Clicks on empty layout containers — e.g. the column space to
+          // the left/right of the card image, which is widened by the swap section
+          // below — fall through to the backdrop's onClose so the modal closes.
+          const target = e.target as HTMLElement;
+          if (target.closest('button, a, input, img, h3, p, span, label, svg, [role="button"]')) {
+            e.stopPropagation();
+          }
+        }}
+      >
         {/* Main layout: card column + optional combo panel side-by-side on desktop */}
         <div className={`${hasSidePanel ? 'md:flex md:items-start md:gap-5' : ''}`}>
           {/* Card column: image + info + swap candidates */}
@@ -1193,6 +1199,13 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
     {/* Navigation arrows + position indicator live OUTSIDE the scrolling backdrop
         so they stay pinned to the viewport (backdrop-filter on the backdrop creates
         a containing block that would otherwise trap position: fixed children). */}
+    <button
+      onClick={onClose}
+      aria-label="Close"
+      className="fixed top-2 right-2 z-[60] bg-black/60 hover:bg-black/80 rounded-full p-1.5 text-white/70 hover:text-white transition-colors shadow-lg"
+    >
+      <X className="w-5 h-5" />
+    </button>
     {inComboNav && (
       <>
         <button

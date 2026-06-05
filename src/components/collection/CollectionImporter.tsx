@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import { parseCollectionList } from '@/services/collection/parseCollectionList';
 import { getCardsByNames, getCardImageUrl } from '@/services/scryfall/client';
 import { bulkImport, type BulkImportCard } from '@/services/collection/db';
@@ -27,6 +27,8 @@ interface CollectionImporterProps {
   updatedLabel?: string;
   /** Header label (default: "Import Collection") */
   label?: string;
+  /** Hide the inline header label (e.g. when a wrapping section already provides one) */
+  hideLabel?: boolean;
   /** Called when the textarea content changes (has pending text or not) */
   onPendingChange?: (hasPending: boolean) => void;
   /** Called when the user clicks Cancel — use to close a surrounding popover */
@@ -90,7 +92,14 @@ export function ImportResultDisplay({ result, updatedLabel, progress }: { result
   );
 }
 
-export function CollectionImporter({ onImportCards, onCommanderDetected, onMetaDetected, updatedLabel, label, onPendingChange, onCancel, textareaClassName, externalResult, onResultChange, onProgressChange, onLegendariesDetected }: CollectionImporterProps = {}) {
+export interface CollectionImporterHandle {
+  /** Run import on the currently-pasted text. Resolves with the result (or null if nothing to import). */
+  triggerImport: () => Promise<ImportResult | null>;
+  /** Whether there is text awaiting import. */
+  hasPending: () => boolean;
+}
+
+export const CollectionImporter = forwardRef<CollectionImporterHandle, CollectionImporterProps>(function CollectionImporter({ onImportCards, onCommanderDetected, onMetaDetected, updatedLabel, label, hideLabel, onPendingChange, onCancel, textareaClassName, externalResult, onResultChange, onProgressChange, onLegendariesDetected }, ref) {
   const [importText, setImportText] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [progress, _setProgress] = useState('');
@@ -100,19 +109,28 @@ export function CollectionImporter({ onImportCards, onCommanderDetected, onMetaD
   const setProgress = (p: string) => { _setProgress(p); onProgressChange?.(p); };
   const setResult = (r: ImportResult | null) => { _setResult(r); onResultChange?.(r); };
 
-  const handleImport = async (text: string) => {
-    if (!text.trim()) return;
+  useImperativeHandle(ref, () => ({
+    triggerImport: async () => {
+      if (!importText.trim()) return null;
+      return await handleImport(importText);
+    },
+    hasPending: () => !!importText.trim(),
+  }));
+
+  const handleImport = async (text: string): Promise<ImportResult | null> => {
+    if (!text.trim()) return null;
 
     setIsImporting(true);
     setResult(null);
 
+    let finalResult: ImportResult | null = null;
     try {
       // Parse the input
       const { cards: parsed, meta } = parseCollectionList(text);
       if (parsed.length === 0) {
         setProgress('No cards found in input.');
         setIsImporting(false);
-        return;
+        return null;
       }
 
       // Auto-fill metadata (deck name, etc.) immediately while validation runs
@@ -174,7 +192,8 @@ export function CollectionImporter({ onImportCards, onCommanderDetected, onMetaD
           }
         }
         const counts = onImportCards(expandedNames);
-        setResult({ ...counts, updatedLabel, notFound });
+        finalResult = { ...counts, updatedLabel, notFound };
+        setResult(finalResult);
       } else {
         // Default: import to collection DB
         if (validatedParsed.length > 0) {
@@ -191,14 +210,16 @@ export function CollectionImporter({ onImportCards, onCommanderDetected, onMetaD
             edhrecRank: card.edhrec_rank,
           }));
           const { added, updated } = await bulkImport(bulkCards);
-          setResult({ added, updated, notFound });
+          finalResult = { added, updated, notFound };
+          setResult(finalResult);
           trackEvent('collection_imported', {
             cardCount: validatedParsed.length + notFound.length,
             added,
             updated,
           });
         } else {
-          setResult({ added: 0, updated: 0, notFound });
+          finalResult = { added: 0, updated: 0, notFound };
+          setResult(finalResult);
         }
       }
 
@@ -211,6 +232,7 @@ export function CollectionImporter({ onImportCards, onCommanderDetected, onMetaD
       setIsImporting(false);
       setProgress('');
     }
+    return finalResult;
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -234,8 +256,8 @@ export function CollectionImporter({ onImportCards, onCommanderDetected, onMetaD
   return (
     <div className="space-y-4">
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-sm font-medium">{label ?? 'Import Collection'}</label>
+        <div className={`flex items-center mb-2 ${hideLabel ? 'justify-end' : 'justify-between'}`}>
+          {!hideLabel && <label className="text-sm font-medium">{label ?? 'Import Collection'}</label>}
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isImporting}
@@ -308,4 +330,4 @@ export function CollectionImporter({ onImportCards, onCommanderDetected, onMetaD
       {!externalResult && <ImportResultDisplay result={result} updatedLabel={updatedLabel} progress={progress} />}
     </div>
   );
-}
+});

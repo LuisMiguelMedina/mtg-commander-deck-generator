@@ -43,6 +43,7 @@ import {
   Rows3,
   LayoutGrid,
   Replace,
+  Layers,
 } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { CardTypeIcon, ManaCost } from '@/components/ui/mtg-icons';
@@ -248,7 +249,7 @@ export type CardAction =
   | { type: 'maybeboard' }
   | { type: 'mustInclude' }
   | { type: 'exclude' }
-  | { type: 'addToList'; listId: string }
+  | { type: 'addToList'; listId: string; board?: 'main' | 'sideboard' | 'maybeboard' }
   | { type: 'createListAndAdd'; listName: string };
 
 export interface CardContextMenuProps {
@@ -383,25 +384,84 @@ export function CardContextMenu({ card, onAction, hasRemove, hasAddToDeck, hasSi
               </form>
             )}
             {userLists.length > 0 && (
-              <div className="max-h-32 overflow-y-auto">
+              <div className="max-h-64 overflow-y-auto">
                 {userLists.map(list => {
-                  const alreadyIn = list.cards.includes(card.name);
+                  const isDeck = !!list.commanderName;
+                  const inMain = list.cards.includes(card.name);
+                  const inSide = list.sideboard?.includes(card.name) ?? false;
+                  const inMaybe = list.maybeboard?.includes(card.name) ?? false;
+
+                  if (!isDeck) {
+                    return (
+                      <button
+                        key={list.id}
+                        className={`${menuBtn}${inMain ? ' opacity-50 pointer-events-none' : ''}`}
+                        onClick={() => fire({ type: 'addToList', listId: list.id })}
+                        disabled={inMain}
+                      >
+                        {inMain ? (
+                          <Check className="w-3 h-3 text-emerald-400 shrink-0" />
+                        ) : (
+                          <List className="w-3 h-3 text-muted-foreground shrink-0" />
+                        )}
+                        <span className="truncate">{list.name}</span>
+                      </button>
+                    );
+                  }
+
+                  const allFull = inMain && inSide && inMaybe;
                   return (
-                    <button
-                      key={list.id}
-                      className={`${menuBtn}${alreadyIn ? ' opacity-50 pointer-events-none' : ''}`}
-                      onClick={() => fire({ type: 'addToList', listId: list.id })}
-                      disabled={alreadyIn}
-                    >
-                      {alreadyIn ? (
-                        <Check className="w-3 h-3 text-emerald-400 shrink-0" />
-                      ) : list.commanderName ? (
-                        <CardTypeIcon type="commander" size="sm" className="shrink-0" />
-                      ) : (
-                        <List className="w-3 h-3 text-muted-foreground shrink-0" />
-                      )}
-                      <span className="truncate">{list.name}</span>
-                    </button>
+                    <Popover key={list.id}>
+                      <PopoverTrigger asChild>
+                        <button
+                          className={`${menuBtn}${allFull ? ' opacity-50 pointer-events-none' : ''}`}
+                          disabled={allFull}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <CardTypeIcon type="commander" size="sm" className="shrink-0" />
+                          <span className="truncate flex-1">{list.name}</span>
+                          <ChevronRight className="w-3 h-3 text-muted-foreground/60 shrink-0" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent side="right" align="start" sideOffset={8} className="w-44 p-1" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className={`${menuBtn}${inMain ? ' opacity-50 pointer-events-none' : ''}`}
+                          onClick={() => fire({ type: 'addToList', listId: list.id, board: 'main' })}
+                          disabled={inMain}
+                        >
+                          {inMain ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          ) : (
+                            <Layers className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          )}
+                          <span>Mainboard</span>
+                        </button>
+                        <button
+                          className={`${menuBtn}${inSide ? ' opacity-50 pointer-events-none' : ''}`}
+                          onClick={() => fire({ type: 'addToList', listId: list.id, board: 'sideboard' })}
+                          disabled={inSide}
+                        >
+                          {inSide ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          ) : (
+                            <ArrowUpDown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          )}
+                          <span>Sideboard</span>
+                        </button>
+                        <button
+                          className={`${menuBtn}${inMaybe ? ' opacity-50 pointer-events-none' : ''}`}
+                          onClick={() => fire({ type: 'addToList', listId: list.id, board: 'maybeboard' })}
+                          disabled={inMaybe}
+                        >
+                          {inMaybe ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          ) : (
+                            <Bookmark className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                          )}
+                          <span>Maybeboard</span>
+                        </button>
+                      </PopoverContent>
+                    </Popover>
                   );
                 })}
               </div>
@@ -2062,7 +2122,13 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
   const [previewCard, setPreviewCard] = useState<ScryfallCard | null>(null);
   const [hoverCard, setHoverCard] = useState<{ card: ScryfallCard; rowRect: { right: number; top: number; height: number }; showBack?: boolean } | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [viewMode, _setViewMode] = useState<'list' | 'grid'>(
+    () => (localStorage.getItem('mtg-deck-view-mode') as 'list' | 'grid') || 'list'
+  );
+  const setViewMode = useCallback((v: 'list' | 'grid') => {
+    localStorage.setItem('mtg-deck-view-mode', v);
+    _setViewMode(v);
+  }, []);
   const [showTextEditor, _setShowTextEditor] = useState(() => localStorage.getItem('mtg-deck-show-text-editor') === 'true');
   const setShowTextEditor = useCallback((v: boolean | ((prev: boolean) => boolean)) => {
     _setShowTextEditor(prev => {
@@ -2081,6 +2147,14 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
     _setSortBy(prev => {
       const next = typeof v === 'function' ? v(prev) : v;
       localStorage.setItem('mtg-deck-sort-by', next);
+      return next;
+    });
+  }, []);
+  const [sortReversed, _setSortReversed] = useState<boolean>(() => localStorage.getItem('mtg-deck-sort-reversed') === 'true');
+  const toggleSortReversed = useCallback(() => {
+    _setSortReversed(prev => {
+      const next = !prev;
+      localStorage.setItem('mtg-deck-sort-reversed', String(next));
       return next;
     });
   }, []);
@@ -2445,37 +2519,39 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
       const cards = Array.from(groups[type].values());
 
       // Sort
+      const dirSign = sortReversed ? -1 : 1;
       cards.sort((a, b) => {
-        if (sortBy === 'name') return a.card.name.localeCompare(b.card.name);
-        if (sortBy === 'cmc') return (a.card.cmc - b.card.cmc) || a.card.name.localeCompare(b.card.name);
-        if (sortBy === 'price') {
+        let result = 0;
+        if (sortBy === 'name') result = a.card.name.localeCompare(b.card.name);
+        else if (sortBy === 'cmc') result = (a.card.cmc - b.card.cmc) || a.card.name.localeCompare(b.card.name);
+        else if (sortBy === 'price') {
           const priceA = parseFloat(getCardPrice(a.card, customization.currency) || '0');
           const priceB = parseFloat(getCardPrice(b.card, customization.currency) || '0');
-          return priceB - priceA;
+          result = priceB - priceA;
         }
-        if (sortBy === 'score') {
+        else if (sortBy === 'score') {
           const inclMap = generatedDeck?.cardInclusionMap;
           const getIncl = (name: string) => {
             if (!inclMap) return 0;
             return inclMap[name] ?? (name.includes(' // ') ? inclMap[name.split(' // ')[0]] : 0) ?? 0;
           };
-          return getIncl(b.card.name) - getIncl(a.card.name) || a.card.name.localeCompare(b.card.name);
+          result = getIncl(b.card.name) - getIncl(a.card.name) || a.card.name.localeCompare(b.card.name);
         }
-        if (sortBy === 'relevancy') {
+        else if (sortBy === 'relevancy') {
           const relMap = generatedDeck?.cardRelevancyMap;
           const getRel = (name: string) => {
             if (!relMap) return 0;
             return relMap[name] ?? (name.includes(' // ') ? relMap[name.split(' // ')[0]] : 0) ?? 0;
           };
-          return getRel(b.card.name) - getRel(a.card.name) || a.card.name.localeCompare(b.card.name);
+          result = getRel(b.card.name) - getRel(a.card.name) || a.card.name.localeCompare(b.card.name);
         }
-        if (sortBy === 'edhrank') {
+        else if (sortBy === 'edhrank') {
           // Lower edhrec_rank = more popular. Cards without a rank sort to the bottom.
           const rankA = a.card.edhrec_rank ?? Number.MAX_SAFE_INTEGER;
           const rankB = b.card.edhrec_rank ?? Number.MAX_SAFE_INTEGER;
-          return rankA - rankB || a.card.name.localeCompare(b.card.name);
+          result = rankA - rankB || a.card.name.localeCompare(b.card.name);
         }
-        if (sortBy === 'color') {
+        else if (sortBy === 'color') {
           const colorKey = (c: typeof a.card) => {
             const ci = c.color_identity || [];
             if (ci.length === 0) return 6; // colorless
@@ -2483,16 +2559,16 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
             const order: Record<string, number> = { W: 0, U: 1, B: 2, R: 3, G: 4 };
             return order[ci[0]] ?? 6;
           };
-          return colorKey(a.card) - colorKey(b.card) || a.card.name.localeCompare(b.card.name);
+          result = colorKey(a.card) - colorKey(b.card) || a.card.name.localeCompare(b.card.name);
         }
-        return 0;
+        return result * dirSign;
       });
 
       result[type] = cards;
     });
 
     return result;
-  }, [generatedDeck, commander, sortBy, formatConfig.hasCommander]);
+  }, [generatedDeck, commander, sortBy, sortReversed, customization.currency, formatConfig.hasCommander]);
 
   // Count MDFC lands (spell // land cards categorized under their spell type, not Land)
   const mdfcLandCount = useMemo(() => {
@@ -2954,7 +3030,28 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
         break;
       case 'addToList': {
         const list = userLists.find(l => l.id === action.listId);
-        if (list && !list.cards.includes(name)) {
+        if (!list) break;
+        const board = action.board ?? 'main';
+        if (board === 'sideboard') {
+          const current = list.sideboard ?? [];
+          if (current.includes(name)) break;
+          const prev = [...current];
+          updateList(action.listId, { sideboard: [...current, name] });
+          setToastMessage({
+            text: `Added "${name}" to "${list.name}" sideboard`,
+            onUndo: () => { updateList(action.listId, { sideboard: prev }); setToastMessage(null); },
+          });
+        } else if (board === 'maybeboard') {
+          const current = list.maybeboard ?? [];
+          if (current.includes(name)) break;
+          const prev = [...current];
+          updateList(action.listId, { maybeboard: [...current, name] });
+          setToastMessage({
+            text: `Added "${name}" to "${list.name}" maybeboard`,
+            onUndo: () => { updateList(action.listId, { maybeboard: prev }); setToastMessage(null); },
+          });
+        } else {
+          if (list.cards.includes(name)) break;
           const prevCards = [...list.cards];
           updateList(action.listId, { cards: [...list.cards, name] });
           setToastMessage({
@@ -3095,10 +3192,12 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
     return getSwapCandidatesForCard(generatedDeck, previewCard);
   }, [previewCard, generatedDeck]);
 
-  const handleHover = (card: ScryfallCard | null, e?: React.MouseEvent, showBack?: boolean) => {
+  const handleHover = (card: ScryfallCard | null, e?: React.MouseEvent, showBack?: boolean, anchorY?: number) => {
     if (card && e) {
       const rect = e.currentTarget.getBoundingClientRect();
-      setHoverCard({ card, rowRect: { right: rect.right, top: rect.top, height: rect.height }, showBack });
+      const top = anchorY != null ? anchorY - 20 : rect.top;
+      const height = anchorY != null ? 40 : rect.height;
+      setHoverCard({ card, rowRect: { right: rect.right, top, height }, showBack });
     } else {
       setHoverCard(null);
     }
@@ -3287,6 +3386,9 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
             }
           }
         }}
+        onMouseEnter={(e) => handleHover(card, e, false, gridLayout === 'stacks' ? e.clientY : undefined)}
+        onMouseMove={gridLayout === 'stacks' ? (e) => handleHover(card, e, false, e.clientY) : undefined}
+        onMouseLeave={() => handleHover(null)}
         className={`relative group cursor-pointer ${isSelected ? 'ring-2 ring-primary rounded' : ''} ${canSelect && isCommanderType ? 'opacity-60' : ''}`}
       >
         <img
@@ -3572,7 +3674,15 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
           <div className="hidden flex-1 items-center gap-2 sm:gap-3 flex-wrap">
             {/* Sort */}
             <div className="flex items-center gap-2 bg-card/50 rounded-lg px-3 py-1.5 border border-border/50">
-              <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+              <button
+                type="button"
+                onClick={toggleSortReversed}
+                title={sortReversed ? 'Reversed order — click to restore default' : 'Default order — click to reverse'}
+                aria-label={sortReversed ? 'Reverse sort order' : 'Default sort order'}
+                className={`transition-colors ${sortReversed ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <ArrowUpDown className="w-4 h-4" />
+              </button>
               <span className="text-xs text-muted-foreground">SORT:</span>
               <select
                 value={sortBy}
@@ -3767,7 +3877,15 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
         <div ref={toolbarRef} className="flex items-center gap-2 flex-wrap mb-4">
           {/* Sort */}
           <div className="flex items-center gap-2 bg-card/50 rounded-lg px-3 py-1.5 border border-border/50">
-            <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+            <button
+              type="button"
+              onClick={toggleSortReversed}
+              title={sortReversed ? 'Reversed order — click to restore default' : 'Default order — click to reverse'}
+              aria-label={sortReversed ? 'Reverse sort order' : 'Default sort order'}
+              className={`transition-colors ${sortReversed ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <ArrowUpDown className="w-4 h-4" />
+            </button>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as 'name' | 'cmc' | 'price' | 'score' | 'relevancy' | 'edhrank' | 'color')}
@@ -4153,7 +4271,7 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
       </div>
 
       {/* Floating Preview */}
-      {hoverCard && viewMode === 'list' && (
+      {hoverCard && (
         <FloatingPreview card={hoverCard.card} rowRect={hoverCard.rowRect} showBack={hoverCard.showBack} />
       )}
 
@@ -4309,6 +4427,14 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
                 <TooltipContent side="right">Sort</TooltipContent>
               </Tooltip>
               <PopoverContent side="right" align="start" className="w-44 p-1.5">
+                <button
+                  type="button"
+                  onClick={toggleSortReversed}
+                  className="w-full flex items-center justify-between gap-2 px-2 py-1.5 mb-1 rounded text-xs text-muted-foreground hover:bg-accent/30 hover:text-foreground transition-colors"
+                >
+                  <span>{sortReversed ? 'Reversed' : 'Default order'}</span>
+                  <ArrowUpDown className={`w-3.5 h-3.5 ${sortReversed ? 'text-primary' : ''}`} />
+                </button>
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70 px-2 pt-1 pb-1.5">Sort by</div>
                 {([
                   { value: 'name', label: 'Name' },

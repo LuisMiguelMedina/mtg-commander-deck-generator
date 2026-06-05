@@ -14,6 +14,8 @@ const BASIC_LAND_NAMES = new Set(['Plains', 'Island', 'Swamp', 'Mountain', 'Fore
  */
 export function getMaxCopies(card: ScryfallCard): number {
   if (BASIC_LAND_NAMES.has(card.name)) return 99;
+  const typeLine = card.type_line || card.card_faces?.[0]?.type_line || '';
+  if (typeLine.startsWith('Basic')) return 99;
   const oracle = (card.oracle_text || card.card_faces?.[0]?.oracle_text || '').toLowerCase();
   if (oracle.includes('a deck can have any number of cards named')) return 99;
   const capMatch = oracle.match(/a deck can have up to (\w+) cards named/);
