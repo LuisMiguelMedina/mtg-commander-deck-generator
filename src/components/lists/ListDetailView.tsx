@@ -125,7 +125,7 @@ function getPageNumbers(current: number, total: number): (number | null)[] {
 
 interface ListDetailViewProps {
   list: UserCardList;
-  onBack: () => void;
+  onBack?: () => void;
   onEdit?: () => void;
   onDuplicate?: () => void;
   onExport?: () => void;
@@ -144,11 +144,16 @@ interface ListDetailViewProps {
    *  card data loads). Lets a parent theme the aurora for commander-less lists
    *  whose cachedColorIdentity is never populated by useUserLists. */
   onDerivedColorIdentityChange?: (colors: string[]) => void;
+  /** When true, hides page-only chrome (back button, name/description header,
+   *  edit/duplicate/export/delete action bar) so the component can be embedded
+   *  in a smaller floating panel. Filters, search, sort, and the card grid
+   *  remain visible. */
+  compact?: boolean;
 }
 
 // --- Component ---
 
-export function ListDetailView({ list, onBack, onEdit, onDuplicate, onExport, onDelete, onRemoveCard, onSwapCard, onAddCard, readOnly, onViewAsDeck, onConvertToDeck, onConvertToList, onColorFilterChange, onDerivedColorIdentityChange }: ListDetailViewProps) {
+export function ListDetailView({ list, onBack, onEdit, onDuplicate, onExport, onDelete, onRemoveCard, onSwapCard, onAddCard, readOnly, onViewAsDeck, onConvertToDeck, onConvertToList, onColorFilterChange, onDerivedColorIdentityChange, compact }: ListDetailViewProps) {
   const navigate = useNavigate();
 
   // Card data enrichment
@@ -344,15 +349,19 @@ export function ListDetailView({ list, onBack, onEdit, onDuplicate, onExport, on
 
   return (
     <div className="space-y-4">
-      {/* Header */}
+      {/* Header — hidden in compact mode (used by the floating panel, which
+          provides its own chrome via FloatingDialog). */}
+      {!compact && (
       <div>
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to lists
-        </button>
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to lists
+          </button>
+        )}
 
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
@@ -469,6 +478,7 @@ export function ListDetailView({ list, onBack, onEdit, onDuplicate, onExport, on
           </div>
         </div>
       </div>
+      )}
 
       {/* Loading indicator */}
       {loading && (
