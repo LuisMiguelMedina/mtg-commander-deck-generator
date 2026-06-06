@@ -117,6 +117,7 @@ export function FloatingListPanel({ open, onClose }: FloatingListPanelProps) {
               list={selectedList}
               compact
               readOnly
+              draggableCards
             />
           </div>
         ) : null}

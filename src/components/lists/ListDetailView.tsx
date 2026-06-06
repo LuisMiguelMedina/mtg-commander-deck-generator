@@ -149,11 +149,15 @@ interface ListDetailViewProps {
    *  in a smaller floating panel. Filters, search, sort, and the card grid
    *  remain visible. */
   compact?: boolean;
+  /** When true, grid-view card tiles become HTML5-draggable so they can be
+   *  dropped onto a deck view to add the card. Read with
+   *  `dataTransfer.getData('application/x-mtg-card-name')`. */
+  draggableCards?: boolean;
 }
 
 // --- Component ---
 
-export function ListDetailView({ list, onBack, onEdit, onDuplicate, onExport, onDelete, onRemoveCard, onSwapCard, onAddCard, readOnly, onViewAsDeck, onConvertToDeck, onConvertToList, onColorFilterChange, onDerivedColorIdentityChange, compact }: ListDetailViewProps) {
+export function ListDetailView({ list, onBack, onEdit, onDuplicate, onExport, onDelete, onRemoveCard, onSwapCard, onAddCard, readOnly, onViewAsDeck, onConvertToDeck, onConvertToList, onColorFilterChange, onDerivedColorIdentityChange, compact, draggableCards }: ListDetailViewProps) {
   const navigate = useNavigate();
 
   // Card data enrichment
@@ -692,6 +696,7 @@ export function ListDetailView({ list, onBack, onEdit, onDuplicate, onExport, on
           onRemove={onRemoveCard}
           onPreview={handlePreview}
           readOnly={readOnly}
+          draggable={draggableCards}
         />
       ) : (
         <ListViewTable
@@ -804,18 +809,22 @@ function GridView({
   onRemove,
   onPreview,
   readOnly,
+  draggable,
 }: {
   cards: ListCardData[];
   onRemove?: (name: string) => void;
   onPreview: (name: string) => void;
   readOnly?: boolean;
+  /** When true, card tiles can be HTML5-dragged out of the grid. The drop
+   *  target reads the card name from dataTransfer (`application/x-mtg-card-name`). */
+  draggable?: boolean;
 }) {
   const [parent] = useAutoAnimate({ duration: 250 });
 
   return (
     <div ref={parent} className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
       {cards.map((card, i) => (
-        <GridCard key={`${card.name}-${i}`} card={card} onRemove={onRemove} onPreview={onPreview} readOnly={readOnly} />
+        <GridCard key={`${card.name}-${i}`} card={card} onRemove={onRemove} onPreview={onPreview} readOnly={readOnly} draggable={draggable} />
       ))}
     </div>
   );
@@ -826,19 +835,31 @@ function GridCard({
   onRemove,
   onPreview,
   readOnly,
+  draggable,
 }: {
   card: ListCardData;
   onRemove?: (name: string) => void;
   onPreview: (name: string) => void;
   readOnly?: boolean;
+  draggable?: boolean;
 }) {
   const [showControls, setShowControls] = useState(false);
 
+  const handleDragStart = draggable
+    ? (e: React.DragEvent<HTMLDivElement>) => {
+        e.dataTransfer.setData('application/x-mtg-card-name', card.name);
+        e.dataTransfer.setData('text/plain', card.name);
+        e.dataTransfer.effectAllowed = 'copy';
+      }
+    : undefined;
+
   return (
     <div
-      className="relative group rounded-lg overflow-hidden bg-accent/20 border border-border/30 hover:border-primary/40 transition-all"
+      className={`relative group rounded-lg overflow-hidden bg-accent/20 border border-border/30 hover:border-primary/40 transition-all ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
       onMouseEnter={() => setShowControls(true)}
       onMouseLeave={() => setShowControls(false)}
+      draggable={draggable}
+      onDragStart={handleDragStart}
     >
       {card.imageUrl ? (
         <img
@@ -847,6 +868,7 @@ function GridCard({
           className="w-full aspect-[5/7] object-cover cursor-pointer"
           loading="lazy"
           onClick={() => onPreview(card.name)}
+          draggable={false}
         />
       ) : (
         <div

@@ -2181,6 +2181,11 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
   const [showIcons, setShowIcons] = useState(() => localStorage.getItem('mtg-deck-show-icons') !== 'false');
   const [showMenu, setShowMenu] = useState(false);
   const [listsPanelOpen, setListsPanelOpen] = useState(false);
+  // Drag-drop from FloatingListPanel onto the deck. Tracked via a counter
+  // because onDragEnter/onDragLeave fire per child as the cursor traverses
+  // the DOM tree — a boolean would flicker.
+  const [cardDragOverCount, setCardDragOverCount] = useState(0);
+  const isCardDragOver = cardDragOverCount > 0;
   const showMenuRef = useRef<HTMLDivElement>(null);
   const showMenuMobileRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -3668,9 +3673,43 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
     </TooltipProvider>
   );
 
+  // Drop handlers: only react to drags that carry our custom MIME type, so
+  // unrelated drags (file drops, text from elsewhere) don't trigger hover state.
+  const CARD_MIME = 'application/x-mtg-card-name';
+  const dragHasCard = (e: React.DragEvent) => e.dataTransfer.types.includes(CARD_MIME);
+
   return (
     <>
-      <div className="animate-slide-up">
+      <div
+        className={`animate-slide-up relative ${isCardDragOver ? 'ring-2 ring-primary/60 rounded-lg' : ''}`}
+        onDragEnter={(e) => {
+          if (!onAddCards || !dragHasCard(e)) return;
+          setCardDragOverCount(c => c + 1);
+        }}
+        onDragLeave={(e) => {
+          if (!onAddCards || !dragHasCard(e)) return;
+          setCardDragOverCount(c => Math.max(0, c - 1));
+        }}
+        onDragOver={(e) => {
+          if (!onAddCards || !dragHasCard(e)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+        }}
+        onDrop={(e) => {
+          if (!onAddCards || !dragHasCard(e)) return;
+          e.preventDefault();
+          const name = e.dataTransfer.getData(CARD_MIME);
+          setCardDragOverCount(0);
+          if (name) onAddCards([name], 'deck');
+        }}
+      >
+        {isCardDragOver && (
+          <div className="absolute inset-x-0 top-0 z-40 pointer-events-none flex justify-center">
+            <div className="mt-2 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-semibold shadow-lg">
+              Drop to add to deck
+            </div>
+          </div>
+        )}
         {/* Header + Mobile Stats combined card */}
         <div className="bg-card/50 rounded-lg border border-border/50 mb-4 xl:hidden">
         <div className="flex items-center justify-between p-3 flex-wrap gap-3">
