@@ -17,7 +17,8 @@ import { removeCards, addCard } from '@/services/deckBuilder/cardSwap';
 import { fetchCommanderData, fetchPartnerCommanderData, formatCommanderNameForUrl } from '@/services/edhrec';
 import { applyCommanderTheme, resetTheme } from '@/lib/commanderTheme';
 import type { BracketLevel, BudgetOption, GeneratedDeck, ThemeResult } from '@/types';
-import { Loader2, Wand2, ArrowLeft, ExternalLink, SlidersHorizontal, Bookmark, Check, Copy, X, Microscope, Swords } from 'lucide-react';
+import { Loader2, Wand2, ArrowLeft, ExternalLink, SlidersHorizontal, Bookmark, Check, Copy, X, Microscope, Swords, Library } from 'lucide-react';
+import { FloatingListPanel } from '@/components/lists/FloatingListPanel';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { trackEvent } from '@/services/analytics';
 import { CardPreviewModal } from '@/components/ui/CardPreviewModal';
@@ -46,6 +47,7 @@ export function BuilderPage() {
   const exportTriggerRef = useRef<(() => void) | null>(null);
   const [headerCollectionNames, setHeaderCollectionNames] = useState<Set<string> | null>(null);
   const [eaEnabled, setEaEnabled] = useState(() => localStorage.getItem('ea-features-enabled') === 'true');
+  const [listsPanelOpen, setListsPanelOpen] = useState(false);
   useEffect(() => {
     const handler = (e: Event) => setEaEnabled((e as CustomEvent<{ enabled: boolean }>).detail.enabled);
     window.addEventListener('ea-features-changed', handler);
@@ -697,6 +699,18 @@ export function BuilderPage() {
         </Button>
         {showDeck && (
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setListsPanelOpen(v => !v)}
+              className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-card/50 border border-border/50 transition-colors ${
+                listsPanelOpen
+                  ? 'text-foreground border-primary/50 bg-primary/10'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+              }`}
+              title="Open a list alongside the deck"
+            >
+              <Library className="w-3.5 h-3.5" />
+              Lists
+            </button>
             {eaEnabled && (
               <button
                 onClick={() => {
@@ -1229,6 +1243,10 @@ export function BuilderPage() {
         </div>,
         document.body
       )}
+      <FloatingListPanel
+        open={listsPanelOpen}
+        onClose={() => setListsPanelOpen(false)}
+      />
     </main>
   );
 }

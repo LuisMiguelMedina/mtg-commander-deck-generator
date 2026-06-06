@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, List, Pencil, CopyPlus, X, Plus, MoreHorizontal, ChevronDown, ChevronRight, ClipboardPaste, Bold, Italic, Heading2, ListOrdered, Minus, Swords, Microscope, Scissors, Sparkles, RotateCw } from 'lucide-react';
+import { ArrowLeft, Loader2, List, Pencil, CopyPlus, X, Plus, MoreHorizontal, ChevronDown, ChevronRight, ClipboardPaste, Bold, Italic, Heading2, ListOrdered, Minus, Swords, Microscope, Scissors, Sparkles, RotateCw, Library } from 'lucide-react';
+import { FloatingListPanel } from '@/components/lists/FloatingListPanel';
 import { useStore } from '@/store';
 import { getCardsByNames, getCardByName, getFrontFaceTypeLine, searchCards, getCardImageUrl, getCardPrice, getCardBackFaceUrl, isDoubleFacedCard } from '@/services/scryfall/client';
 import { ManaCost } from '@/components/ui/mtg-icons';
@@ -28,7 +29,7 @@ import {
   isCacheFresh,
   cacheMatchesCommander,
 } from '@/services/deckBuilder/deckEnrichmentCache';
-import { CollectionImporter } from '@/components/collection/CollectionImporter';
+import { CollectionImporter, type CollectionImporterHandle } from '@/components/collection/CollectionImporter';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { trackEvent } from '@/services/analytics';
 import type { UserCardList, ScryfallCard, GeneratedDeck, DeckStats, DetectedCombo, EDHRECCombo, LoadPhase, SerializedEnrichment } from '@/types';
@@ -687,6 +688,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
 
   // EA Features toggle (controlled from the patch notes popover in the header)
   const [eaEnabled, setEaEnabled] = useState(() => localStorage.getItem('ea-features-enabled') === 'true');
+  const [listsPanelOpen, setListsPanelOpen] = useState(false);
   useEffect(() => {
     const handler = (e: Event) => setEaEnabled((e as CustomEvent<{ enabled: boolean }>).detail.enabled);
     window.addEventListener('ea-features-changed', handler);
@@ -792,6 +794,23 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
   // Bulk add state
   const [showBulkAdd, setShowBulkAdd] = useState(false);
   const bulkAddRef = useRef<HTMLDivElement>(null);
+  // Desktop floating panel and mobile inline panel both mount when
+  // showBulkAdd is true (CSS hides one); each needs its own ref.
+  const bulkImporterDesktopRef = useRef<CollectionImporterHandle>(null);
+  const bulkImporterMobileRef = useRef<CollectionImporterHandle>(null);
+  // Closing the bulk-add panel must not silently drop pasted-but-unimported
+  // text. If text is pending, trigger the import first; only keep the panel
+  // open if the import surfaced errors the user should see.
+  const closeBulkAddImporting = useCallback(async () => {
+    const desktop = bulkImporterDesktopRef.current;
+    const mobile = bulkImporterMobileRef.current;
+    const pending = desktop?.hasPending() ? desktop : mobile?.hasPending() ? mobile : null;
+    if (pending) {
+      const result = await pending.triggerImport();
+      if (result && result.notFound.length > 0) return;
+    }
+    setShowBulkAdd(false);
+  }, []);
 
   // Primer inline editing state
   const [editingPrimer, setEditingPrimer] = useState(false);
@@ -1488,12 +1507,12 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
     if (!showBulkAdd) return;
     const handleClick = (e: MouseEvent) => {
       if (bulkAddRef.current && !bulkAddRef.current.contains(e.target as Node)) {
-        setShowBulkAdd(false);
+        closeBulkAddImporting();
       }
     };
     window.addEventListener('mousedown', handleClick);
     return () => window.removeEventListener('mousedown', handleClick);
-  }, [showBulkAdd]);
+  }, [showBulkAdd, closeBulkAddImporting]);
 
   // Debounced card search
   useEffect(() => {
@@ -1764,6 +1783,18 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
                 <span>Inspect</span>
               </button>
             )}
+            <button
+              onClick={() => setListsPanelOpen(v => !v)}
+              title="Open a list alongside the deck"
+              className={`flex items-center gap-1.5 h-8 px-3 rounded-lg border text-sm transition-colors ${
+                listsPanelOpen
+                  ? 'border-primary/50 bg-primary/10 text-foreground'
+                  : 'border-border bg-card/50 hover:bg-accent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Library className="w-4 h-4" />
+              <span>Lists</span>
+            </button>
             <button
               onClick={() => navigate(`/playtest/list/${list.id}`)}
               title="Playtest this deck"
@@ -2218,7 +2249,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
                 <div className="relative" ref={bulkAddRef}>
                   <button
                     className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border bg-card/50 hover:bg-accent transition-colors ${showBulkAdd ? 'text-foreground bg-accent' : 'text-muted-foreground hover:text-foreground'}`}
-                    onClick={() => setShowBulkAdd(v => !v)}
+                    onClick={() => { if (showBulkAdd) closeBulkAddImporting(); else setShowBulkAdd(true); }}
                     title="Bulk add cards from a list"
                   >
                     <ClipboardPaste className="w-3.5 h-3.5" />
@@ -2228,6 +2259,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
                   {showBulkAdd && (
                     <div className="hidden sm:block absolute bottom-full mb-2 right-0 z-50 w-96 rounded-lg border border-border bg-card shadow-2xl p-4">
                       <CollectionImporter
+                        ref={bulkImporterDesktopRef}
                         onImportCards={handleBulkImport}
                         label="Bulk Add Cards"
                         updatedLabel="already in deck"
@@ -2241,6 +2273,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
               {showBulkAdd && (
                 <div className="sm:hidden">
                   <CollectionImporter
+                    ref={bulkImporterMobileRef}
                     onImportCards={handleBulkImport}
                     label="Bulk Add Cards"
                     updatedLabel="already in deck"
@@ -2470,6 +2503,10 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
           </div>
         </Drawer>
       )}
+      <FloatingListPanel
+        open={listsPanelOpen}
+        onClose={() => setListsPanelOpen(false)}
+      />
     </>
   );
 }

@@ -42,7 +42,6 @@ import {
   BookOpen,
   Rows3,
   LayoutGrid,
-  Library,
   Replace,
   Layers,
 } from 'lucide-react';
@@ -65,7 +64,6 @@ import { GROUP_OPTIONS, groupCardsBy, type GroupKey } from './visualGrid/groupin
 import { StacksColumn } from './visualGrid/StacksColumn';
 import { MasonryStacks } from './visualGrid/MasonryStacks';
 import { getRoleBadgeProps } from '@/components/deck/roleBadge';
-import { FloatingListPanel } from '@/components/lists/FloatingListPanel';
 
 // Stats filter for interactive highlighting
 type StatsFilter =
@@ -2180,7 +2178,6 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
   const [showPinBan, setShowPinBan] = useState(() => localStorage.getItem('mtg-deck-show-pin-ban') !== 'false');
   const [showIcons, setShowIcons] = useState(() => localStorage.getItem('mtg-deck-show-icons') !== 'false');
   const [showMenu, setShowMenu] = useState(false);
-  const [listsPanelOpen, setListsPanelOpen] = useState(false);
   // Drag-drop from FloatingListPanel onto the deck. Tracked via a counter
   // because onDragEnter/onDragLeave fire per child as the cursor traverses
   // the DOM tree — a boolean would flicker.
@@ -3700,7 +3697,10 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
           e.preventDefault();
           const name = e.dataTransfer.getData(CARD_MIME);
           setCardDragOverCount(0);
-          if (name) onAddCards([name], 'deck');
+          if (name) {
+            onAddCards([name], 'deck');
+            pushDeckHistory({ action: 'add', cardName: name });
+          }
         }}
       >
         {isCardDragOver && (
@@ -3740,16 +3740,6 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
                 {showEdhRank && <option value="edhrank">EDH RANK</option>}
               </select>
             </div>
-
-            {/* Lists Panel Toggle */}
-            <button
-              onClick={() => setListsPanelOpen(v => !v)}
-              className={`flex items-center gap-1.5 bg-card/50 rounded-lg px-3 py-1.5 border border-border/50 text-xs transition-colors ${listsPanelOpen ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-              title="Open a list alongside the deck"
-            >
-              <Library className="w-4 h-4" />
-              <span className="hidden sm:inline">Lists</span>
-            </button>
 
             {/* Show Toggles */}
             <div className="relative" ref={showMenuRef}>
@@ -3952,16 +3942,6 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
                 {showEdhRank && <option value="edhrank">EDH RANK</option>}
             </select>
           </div>
-
-          {/* Lists Panel Toggle (mobile) */}
-          <button
-            onClick={() => setListsPanelOpen(v => !v)}
-            className={`flex items-center gap-1.5 bg-card/50 rounded-lg px-3 py-1.5 border border-border/50 text-xs transition-colors ${listsPanelOpen ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-            title="Open a list alongside the deck"
-          >
-            <Library className="w-4 h-4" />
-            Lists
-          </button>
 
           {/* Show Toggles */}
           <div className="relative" ref={showMenuMobileRef}>
@@ -5133,10 +5113,6 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
         </div>,
         document.body
       )}
-      <FloatingListPanel
-        open={listsPanelOpen}
-        onClose={() => setListsPanelOpen(false)}
-      />
     </>
   );
 }
