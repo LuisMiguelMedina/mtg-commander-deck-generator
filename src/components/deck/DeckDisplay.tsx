@@ -3704,9 +3704,14 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
         }}
       >
         {isCardDragOver && (
-          <div className="absolute inset-x-0 top-0 z-40 pointer-events-none flex justify-center">
-            <div className="mt-2 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-semibold shadow-lg">
-              Drop to add to deck
+          <div className="absolute inset-0 z-40 pointer-events-none rounded-lg overflow-hidden">
+            {/* Tinted backdrop covering the whole drop area for clarity */}
+            <div className="absolute inset-0 bg-primary/15 backdrop-blur-[2px]" />
+            {/* Centered call-to-action pill */}
+            <div className="absolute inset-0 flex items-start justify-center pt-8">
+              <div className="px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-semibold shadow-2xl ring-2 ring-primary-foreground/20 animate-pulse">
+                Drop to add to deck
+              </div>
             </div>
           </div>
         )}
