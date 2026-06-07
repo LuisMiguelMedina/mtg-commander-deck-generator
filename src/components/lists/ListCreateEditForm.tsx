@@ -758,18 +758,33 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
 
             {/* Deck size — only shown when a commander is set */}
             {commanderName && (
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-muted-foreground whitespace-nowrap">Deck size</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={999}
-                  value={deckSize}
-                  onChange={(e) => setDeckSize(e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 0))}
-                  className="w-20 px-2 py-1 text-sm bg-background border border-border/30 rounded-lg focus:outline-none focus:border-primary text-center"
-                  placeholder="100"
-                />
-                <span className="text-xs text-muted-foreground">cards (including commander{canPartner ? 's' : ''})</span>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-muted-foreground whitespace-nowrap">Deck size</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={999}
+                    value={deckSize}
+                    onChange={(e) => setDeckSize(e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 0))}
+                    className="w-20 px-2 py-1 text-sm bg-background border border-border/30 rounded-lg focus:outline-none focus:border-primary text-center"
+                    placeholder="100"
+                  />
+                  <span className="text-xs text-muted-foreground">cards (including commander{canPartner ? 's' : ''})</span>
+                </div>
+                {typeof deckSize === 'number' && cards.length > 0 && cards.length !== deckSize && (
+                  <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs">
+                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                      <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                    <span>
+                      {cards.length} imported card{cards.length === 1 ? '' : 's'} — {cards.length < deckSize
+                        ? `${deckSize - cards.length} short of`
+                        : `${cards.length - deckSize} over`} the {deckSize}-card target.
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
