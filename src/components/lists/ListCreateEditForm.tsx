@@ -7,7 +7,7 @@ import { CollectionImporter, ImportResultDisplay, type ImportResult, type Collec
 import { CommanderIcon, CardTypeIcon } from '@/components/ui/mtg-icons';
 import { getPartnerType, getPartnerTypeLabel } from '@/lib/partnerUtils';
 import type { ScryfallCard, UserCardList } from '@/types';
-import { Search, Loader2, X, Plus, ArrowLeft, Trash2, Bold, Italic, Heading2, List, ListOrdered, Minus, LayoutGrid, Grid3x3, AlignLeft } from 'lucide-react';
+import { Search, Loader2, X, Plus, ArrowLeft, Trash2, Bold, Italic, Heading2, List, ListOrdered, Minus, LayoutGrid, Grid3x3, AlignLeft, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { ListCardGrid, type ListViewMode } from './ListCardGrid';
@@ -612,29 +612,10 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
               Commander <span className="text-muted-foreground font-normal">(optional, will populate after importing)</span>
             </label>
 
-            {/* Commander selection — dropdown from imported legendaries, or search fallback */}
-            {importedLegendaries.length > 0 ? (
-              <select
-                value={commanderName}
-                onChange={(e) => {
-                  const selected = importedLegendaries.find(c => c.name === e.target.value);
-                  if (selected) {
-                    setCommanderName(selected.name);
-                    setCommanderCard(selected);
-                    setPartnerCommanderName('');
-                    if (!deckSize) setDeckSize(100);
-                  } else {
-                    setCommanderName(''); setCommanderCard(null); setPartnerCommanderName(''); setDeckSize('');
-                  }
-                }}
-                className="w-full h-9 px-3 text-sm bg-background border border-border/30 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary truncate"
-              >
-                <option value="">Select a commander...</option>
-                {importedLegendaries.map(card => (
-                  <option key={card.id} value={card.name}>{card.name}</option>
-                ))}
-              </select>
-            ) : commanderName ? (
+            {/* Commander selection — confirmed display when set, otherwise
+                search input. If imported cards include legendary creatures,
+                a dropdown button appears next to the input for quick pick. */}
+            {commanderName ? (
               <div className="flex items-center gap-2 px-3 py-2 bg-background rounded-lg border border-border/30">
                 <span className="text-sm font-medium flex-1 truncate">{commanderName}</span>
                 <button
@@ -648,18 +629,63 @@ export function ListCreateEditForm({ existingList, mode: modeProp, onSave, onCan
                 </button>
               </div>
             ) : (
-              <div className="relative" ref={commanderSearchRef}>
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="Search for a commander..."
-                  value={commanderField === 'commander' ? commanderQuery : ''}
-                  onChange={(e) => { setCommanderField('commander'); setCommanderQuery(e.target.value); }}
-                  onFocus={() => { setCommanderField('commander'); (commanderResults.length > 0) && setShowCommanderResults(true); }}
-                  className="pl-9 pr-9 h-9 text-sm bg-background"
-                />
-                {isSearchingCommander && commanderField === 'commander' && (
-                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-primary" />
+              <div className="flex items-center gap-1.5">
+                <div className="relative flex-1" ref={commanderSearchRef}>
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    placeholder="Search for a commander..."
+                    value={commanderField === 'commander' ? commanderQuery : ''}
+                    onChange={(e) => { setCommanderField('commander'); setCommanderQuery(e.target.value); }}
+                    onFocus={() => { setCommanderField('commander'); (commanderResults.length > 0) && setShowCommanderResults(true); }}
+                    className="pl-9 pr-9 h-9 text-sm bg-background"
+                  />
+                  {isSearchingCommander && commanderField === 'commander' && (
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-primary" />
+                  )}
+                </div>
+                {importedLegendaries.length > 0 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        title={`Pick from ${importedLegendaries.length} imported legendary creature${importedLegendaries.length === 1 ? '' : 's'}`}
+                        className="h-9 px-2.5 inline-flex items-center gap-1 rounded-lg border border-border bg-background hover:bg-accent text-muted-foreground hover:text-foreground transition-colors text-xs"
+                      >
+                        <span className="font-semibold">{importedLegendaries.length}</span>
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-[320px] p-0 max-h-[360px] overflow-hidden flex flex-col">
+                      <div className="px-3 py-2 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        From imported cards
+                      </div>
+                      <ul className="flex-1 overflow-y-auto py-1">
+                        {importedLegendaries.map(card => (
+                          <li key={card.id}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCommanderName(card.name);
+                                setCommanderCard(card);
+                                setPartnerCommanderName('');
+                                if (!deckSize) setDeckSize(100);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-accent/50 text-left transition-colors"
+                            >
+                              <img
+                                src={getCardImageUrl(card, 'small') ?? ''}
+                                alt=""
+                                className="w-8 h-auto rounded shadow shrink-0"
+                                loading="lazy"
+                              />
+                              <span className="text-sm truncate">{card.name}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </PopoverContent>
+                  </Popover>
                 )}
               </div>
             )}
