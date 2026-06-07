@@ -4,7 +4,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useStore } from '@/store';
-import { getCardImageUrl, isDoubleFacedCard, getCardBackFaceUrl, getCardPrice, getFrontFaceTypeLine, getCardByName, isMdfcLand, getCachedCard } from '@/services/scryfall/client';
+import { getCardImageUrl, isDoubleFacedCard, getCardBackFaceUrl, getCardPrice, getFrontFaceTypeLine, getCardByName, isMdfcLand, getCachedCard, BASIC_LAND_NAMES } from '@/services/scryfall/client';
 import { getDeckFormatConfig } from '@/lib/constants/archetypes';
 import { getMaxCopies } from '@/lib/utils';
 import { DeckHistory } from '@/components/deck/DeckHistory';
@@ -65,12 +65,26 @@ import { StacksColumn } from './visualGrid/StacksColumn';
 import { MasonryStacks } from './visualGrid/MasonryStacks';
 import { getRoleBadgeProps } from '@/components/deck/roleBadge';
 
+/**
+ * Treat a card as "owned" if it's in the player's imported collection OR if it's
+ * a basic land (Plains/Island/Swamp/Mountain/Forest/Wastes) — basics are freely
+ * available to every player even when not explicitly imported. DFC names are
+ * checked by their front face.
+ */
+function isCardOwned(cardName: string, collectionNames: Set<string> | null | undefined): boolean {
+  if (!collectionNames) return false;
+  const front = cardName.includes(' // ') ? cardName.split(' // ')[0] : cardName;
+  if (BASIC_LAND_NAMES.has(front)) return true;
+  return collectionNames.has(front);
+}
+
 // Stats filter for interactive highlighting
 type StatsFilter =
   | { type: 'cmc'; value: number }
   | { type: 'color'; value: string }
   | { type: 'manaProduction'; value: string }
   | { type: 'role'; value: string }
+  | { type: 'owned'; value: 'owned' }
   | null;
 
 // Check if a card matches the current stats filter
@@ -748,10 +762,7 @@ function CategoryColumn({ type, cards, onPreview, onHover, matchingCardIds, avgC
   const hasMatch = matchingCardIds === null || cards.some(({ card }) => matchingCardIds.has(card.id));
   const hasMustInclude = cards.some(({ card }) => mustIncludeNames ? mustIncludeNames.has(card.name) : card.isMustInclude);
   const hasBanned = bannedNames ? cards.some(({ card }) => bannedNames.has(card.name)) : false;
-  const hasOwnedCard = collectionNames ? cards.some(({ card }) => {
-    const name = card.name.includes(' // ') ? card.name.split(' // ')[0] : card.name;
-    return collectionNames.has(name);
-  }) : false;
+  const hasOwnedCard = collectionNames ? cards.some(({ card }) => isCardOwned(card.name, collectionNames)) : false;
 
   return (
     <div className="break-inside-avoid-column mb-4">
@@ -815,7 +826,7 @@ function CategoryColumn({ type, cards, onPreview, onHover, matchingCardIds, avgC
               isSelected={selectedCards?.has(card.id)}
               isCommanderCard={type === 'Commander'}
               onToggleSelect={onToggleSelect}
-              isOwned={collectionNames ? collectionNames.has(card.name.includes(' // ') ? card.name.split(' // ')[0] : card.name) : undefined}
+              isOwned={collectionNames ? isCardOwned(card.name, collectionNames) : undefined}
               isMustIncludeLive={mustIncludeNames ? mustIncludeNames.has(card.name) : card.isMustInclude}
               isBannedLive={bannedNames ? bannedNames.has(card.name) : false}
               inclusionPercent={cardInclusionMap ? (cardInclusionMap[card.name] ?? cardInclusionMap[normalizedName] ?? null) : null}
@@ -1652,11 +1663,14 @@ function DeckStats({ activeFilter, onFilterChange, showRoles, onToggleRoles, hid
 
   // Get all cards for mana calculations
   const allCards = Object.values(categories).flat();
+  // Owned tally — include the commander(s), which sit outside `categories`,
+  // so a fully-owned 100-card deck reports 100/100, not 99.
   const ownedCount = (showCollection && collectionNames)
-    ? allCards.filter(c => {
-        const name = c.name.includes(' // ') ? c.name.split(' // ')[0] : c.name;
-        return collectionNames.has(name);
-      }).length
+    ? (
+        allCards.filter(c => isCardOwned(c.name, collectionNames)).length
+        + (generatedDeck.commander && isCardOwned(generatedDeck.commander.name, collectionNames) ? 1 : 0)
+        + (partnerCommander && isCardOwned(partnerCommander.name, collectionNames) ? 1 : 0)
+      )
     : null;
   const nonLandCards = allCards.filter(c => !getFrontFaceTypeLine(c).toLowerCase().includes('land'));
 
@@ -1696,6 +1710,7 @@ function DeckStats({ activeFilter, onFilterChange, showRoles, onToggleRoles, hid
                   {activeFilter.type === 'role' && `${
                     ({ ramp: 'Ramp', removal: 'Removal', boardwipe: 'Board Wipes', cardDraw: 'Card Advantage' } as Record<string, string>)[activeFilter.value] ?? activeFilter.value
                   }`}
+                  {activeFilter.type === 'owned' && 'Owned cards'}
                 </span>
               </button>
             )}
@@ -1711,12 +1726,28 @@ function DeckStats({ activeFilter, onFilterChange, showRoles, onToggleRoles, hid
               <div className="text-2xl font-bold text-foreground">{stats.averageCmc}</div>
               <div className="text-xs text-muted-foreground">Avg CMC</div>
             </div>
-            {ownedCount !== null && (
-              <div className="bg-accent/30 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-foreground">{ownedCount}</div>
-                <div className="text-xs text-muted-foreground">Owned</div>
-              </div>
-            )}
+            {ownedCount !== null && (() => {
+              const isActive = activeFilter?.type === 'owned';
+              const disabled = ownedCount === 0;
+              return (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => onFilterChange({ type: 'owned', value: 'owned' })}
+                  title={disabled ? 'No owned cards in this deck' : isActive ? 'Clear focus on owned cards' : 'Focus cards in your collection'}
+                  className={`rounded-lg p-3 text-center transition-colors ${
+                    disabled
+                      ? 'bg-accent/20 cursor-not-allowed opacity-60'
+                      : isActive
+                        ? 'bg-primary/20 ring-1 ring-primary/50'
+                        : 'bg-accent/30 hover:bg-accent/50 cursor-pointer'
+                  }`}
+                >
+                  <div className={`text-2xl font-bold ${isActive ? 'text-primary' : 'text-foreground'}`}>{ownedCount}</div>
+                  <div className={`text-xs ${isActive ? 'text-primary font-medium' : 'text-muted-foreground'}`}>Owned</div>
+                </button>
+              );
+            })()}
           </div>
           {!taggerReady ? (
             <div className="-mt-2">
@@ -1776,6 +1807,7 @@ function DeckStats({ activeFilter, onFilterChange, showRoles, onToggleRoles, hid
               {activeFilter.type === 'role' && `${
                 ({ ramp: 'Ramp', removal: 'Removal', boardwipe: 'Board Wipes', cardDraw: 'Card Advantage' } as Record<string, string>)[activeFilter.value] ?? activeFilter.value
               }`}
+              {activeFilter.type === 'owned' && 'Owned cards'}
             </span>
           </button>
         </div>
@@ -2294,15 +2326,11 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
     return () => document.removeEventListener('deck-optimizer-grade', handler);
   }, []);
 
-  // Only show owned indicators if not every card in the deck is owned
+  // Surface the "In Collection" toggle whenever a collection exists. The user can
+  // turn checkmarks off via the show menu if they don't want them.
   const showOwnedIndicators = useMemo(() => {
     if (!collectionNames || !generatedDeck) return false;
-    const allCards = Object.values(generatedDeck.categories).flat();
-    const allOwned = allCards.every(c => {
-      const name = c.name.includes(' // ') ? c.name.split(' // ')[0] : c.name;
-      return collectionNames.has(name);
-    });
-    return !allOwned;
+    return true;
   }, [collectionNames, generatedDeck]);
 
   // Track dirty state: snapshot mustIncludeCards + appliedIncludeLists at generation time
@@ -3149,13 +3177,20 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
     if (!statsFilter) return null;
     const allGrouped = Object.values(groupedCards).flat();
     const ids = new Set<string>();
+    // 'owned' needs collectionNames (in scope here), so it's handled outside
+    // cardMatchesFilter — that keeps cardMatchesFilter's signature pure.
+    const isOwnedFilter = statsFilter.type === 'owned';
     for (const { card } of allGrouped) {
-      if (cardMatchesFilter(card, statsFilter)) {
+      if (isOwnedFilter) {
+        if (collectionNames && isCardOwned(card.name, collectionNames)) {
+          ids.add(card.id);
+        }
+      } else if (cardMatchesFilter(card, statsFilter)) {
         ids.add(card.id);
       }
     }
     return ids;
-  }, [statsFilter, groupedCards]);
+  }, [statsFilter, groupedCards, collectionNames]);
 
   // Build set of card IDs matching the search query (name or oracle text)
   const searchMatchingIds = useMemo(() => {
@@ -3246,8 +3281,7 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
     return sum + (isNaN(price) ? 0 : price * c.quantity);
   }, 0);
   const nonOwnedPrice = (customization.ignoreOwnedBudget && collectionNames) ? allGroupedCards.reduce((sum, c) => {
-    const name = c.card.name.includes(' // ') ? c.card.name.split(' // ')[0] : c.card.name;
-    if (collectionNames.has(name)) return sum;
+    if (isCardOwned(c.card.name, collectionNames)) return sum;
     const price = parseFloat(getCardPrice(c.card, customization.currency) || '0');
     return sum + (isNaN(price) ? 0 : price * c.quantity);
   }, 0) : null;
