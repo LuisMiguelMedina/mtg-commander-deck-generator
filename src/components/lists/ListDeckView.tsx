@@ -686,6 +686,9 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
   const [showOverflow, setShowOverflow] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
 
+  // Controlled popover for color-identity violations (so "Remove all" can close it)
+  const [offendersOpen, setOffendersOpen] = useState(false);
+
   // EA Features toggle (controlled from the patch notes popover in the header)
   const [eaEnabled, setEaEnabled] = useState(() => localStorage.getItem('ea-features-enabled') === 'true');
   const [listsPanelOpen, setListsPanelOpen] = useState(false);
@@ -1934,7 +1937,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
             <span>
               {colorIdentityViolations.length} card{colorIdentityViolations.length === 1 ? '' : 's'} break{colorIdentityViolations.length === 1 ? 's' : ''} color identity
             </span>
-            <Popover>
+            <Popover open={offendersOpen} onOpenChange={setOffendersOpen}>
               <PopoverTrigger asChild>
                 <button
                   className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 border border-rose-500/40 transition-colors whitespace-nowrap"
@@ -1943,16 +1946,39 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
                 </button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-80 p-0 max-h-96 overflow-y-auto">
-                <div className="px-3 py-2 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Outside commander identity
+                <div className="px-3 py-2 border-b border-border flex items-center justify-between gap-3">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Outside commander identity
+                  </span>
+                  {handleRemoveCardsWithToast && (
+                    <button
+                      onClick={() => {
+                        handleRemoveCardsWithToast(colorIdentityViolations.map(c => c.name));
+                        setOffendersOpen(false);
+                      }}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 border border-rose-500/40 transition-colors whitespace-nowrap"
+                      title="Remove all offending cards from the deck"
+                    >
+                      Remove all
+                    </button>
+                  )}
                 </div>
                 <ul className="py-1">
                   {colorIdentityViolations.map(c => (
-                    <li key={c.name} className="px-3 py-1.5 text-sm flex items-center justify-between gap-3 hover:bg-accent/40">
-                      <span className="truncate">{c.name.includes(' // ') ? c.name.split(' // ')[0] : c.name}</span>
+                    <li key={c.name} className="px-3 py-1.5 text-sm flex items-center justify-between gap-2 hover:bg-accent/40">
+                      <span className="truncate flex-1 min-w-0">{c.name.includes(' // ') ? c.name.split(' // ')[0] : c.name}</span>
                       <span className="text-xs text-rose-300/80 font-mono shrink-0">
                         {(c.color_identity || []).join('') || '∅'}
                       </span>
+                      {handleRemoveCardsWithToast && (
+                        <button
+                          onClick={() => handleRemoveCardsWithToast([c.name])}
+                          title={`Remove ${c.name} from deck`}
+                          className="shrink-0 p-1 rounded text-muted-foreground hover:text-rose-300 hover:bg-rose-500/15 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>

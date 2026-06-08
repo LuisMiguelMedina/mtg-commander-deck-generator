@@ -1,31 +1,66 @@
+import { CollectionCommanders } from '@/components/collection/CollectionCommanders';
 import { CollectionImporter } from '@/components/collection/CollectionImporter';
 import { CollectionManager } from '@/components/collection/CollectionManager';
 import { CollectionStats } from '@/components/collection/CollectionStats';
 import { AuroraThemed } from '@/components/ui/AuroraThemed';
 import { useCollection } from '@/hooks/useCollection';
 import { getAuroraColors } from '@/lib/commanderTheme';
-import { ArrowLeft, ChevronDown, Info } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, BarChart3, Crown, Info, Upload } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+
+type TopTab = 'import' | 'stats' | 'commanders';
+
+const RARITY_TO_PRETTY: Record<string, string> = {
+  common: 'common', uncommon: 'uncommon', rare: 'rare', mythic: 'mythic',
+};
 
 export function CollectionPage() {
   const navigate = useNavigate();
-  const { count, cards, isLoading } = useCollection();
-  const [importOpen, setImportOpen] = useState(false);
-  const [didInitOpen, setDidInitOpen] = useState(false);
-  const [filterColors, setFilterColors] = useState<string[]>([]);
+  const { count, cards } = useCollection();
+  const [activeTab, setActiveTab] = useState<TopTab>('commanders');
 
-  useEffect(() => {
-    if (didInitOpen || isLoading) return;
-    setImportOpen(count === 0);
-    setDidInitOpen(true);
-  }, [didInitOpen, isLoading, count]);
+  // Filter state, lifted from CollectionManager so the Statistics tab can drive it.
+  const [selectedColors, setSelectedColors] = useState<Set<string>>(new Set());
+  const [selectedType, setSelectedType] = useState<string>('');
+  const [selectedRarity, setSelectedRarity] = useState<string>('');
 
-  const handleFilterColorsChange = useCallback((codes: string[]) => {
-    setFilterColors(codes);
-  }, []);
+  const auroraColors = useMemo(
+    () => getAuroraColors([...selectedColors]),
+    [selectedColors],
+  );
 
-  const auroraColors = useMemo(() => getAuroraColors(filterColors), [filterColors]);
+  const hasCollection = count > 0;
+  const totalQuantity = useMemo(
+    () => cards.reduce((sum, c) => sum + c.quantity, 0),
+    [cards],
+  );
+
+  const managerRef = useRef<HTMLDivElement | null>(null);
+  const scrollToManager = () => {
+    managerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // Stats click → filter the collection list below.
+  const handleColorClick = (code: 'W' | 'U' | 'B' | 'R' | 'G' | 'C' | 'M') => {
+    if (code === 'M') {
+      // Multicolor: clear single-color selection and use the "Exact" mode would be ideal,
+      // but for simplicity just clear filters and rely on the underlying chips for refinement.
+      setSelectedColors(new Set());
+    } else {
+      const next = new Set<string>([code]);
+      setSelectedColors(next);
+    }
+    scrollToManager();
+  };
+  const handleTypeClick = (type: string) => {
+    setSelectedType(prev => (prev === type ? '' : type));
+    scrollToManager();
+  };
+  const handleRarityClick = (rarity: string) => {
+    setSelectedRarity(prev => (prev === rarity ? '' : RARITY_TO_PRETTY[rarity] ?? rarity));
+    scrollToManager();
+  };
 
   return (
     <>
@@ -45,6 +80,13 @@ export function CollectionPage() {
             Import your MTG card collection, then enable "Build from Collection" when generating decks
             to only use cards you own.
           </p>
+          {hasCollection && (
+            <p className="text-xs text-muted-foreground/80 tabular-nums pt-1">
+              <span className="text-foreground font-medium">{count.toLocaleString()}</span> unique
+              <span className="mx-1.5 text-border">·</span>
+              <span className="text-foreground font-medium">{totalQuantity.toLocaleString()}</span> total
+            </p>
+          )}
         </div>
 
         <aside className="p-4 rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm w-full max-w-xs space-y-3 mb-6 lg:mb-0 lg:absolute lg:top-24 lg:right-4 lg:z-30">
@@ -68,37 +110,94 @@ export function CollectionPage() {
         </aside>
 
         <div className="space-y-8">
-          {/* Import Section */}
-          <section className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm max-w-2xl overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setImportOpen(o => !o)}
-              aria-expanded={importOpen}
-              className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-accent/30 transition-colors"
-            >
-              <span>Import Collection</span>
-              <ChevronDown
-                className={`w-4 h-4 text-muted-foreground transition-transform ${importOpen ? 'rotate-180' : ''}`}
-              />
-            </button>
-            {importOpen && (
-              <div className="px-4 pb-4 pt-1 border-t border-border/40">
-                <CollectionImporter hideLabel />
+          {/* Top section — tabs when there's a collection; just the importer otherwise */}
+          {hasCollection ? (
+            <section className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
+              <div className="flex items-center border-b border-border/40 overflow-x-auto overflow-y-hidden">
+                <TabButton
+                  active={activeTab === 'import'}
+                  onClick={() => setActiveTab('import')}
+                  icon={<Upload className="w-3.5 h-3.5" />}
+                  label="Import"
+                />
+                <TabButton
+                  active={activeTab === 'stats'}
+                  onClick={() => setActiveTab('stats')}
+                  icon={<BarChart3 className="w-3.5 h-3.5" />}
+                  label="Statistics"
+                />
+                <TabButton
+                  active={activeTab === 'commanders'}
+                  onClick={() => setActiveTab('commanders')}
+                  icon={<Crown className="w-3.5 h-3.5" />}
+                  label="Commanders"
+                />
               </div>
-            )}
-          </section>
-
-          {/* Collection Stats */}
-          {count > 0 && <CollectionStats cards={cards} />}
+              <div className={activeTab === 'commanders' ? '' : 'p-4'}>
+                {activeTab === 'stats' && (
+                  <CollectionStats
+                    cards={cards}
+                    onColorClick={handleColorClick}
+                    onTypeClick={handleTypeClick}
+                    onRarityClick={handleRarityClick}
+                  />
+                )}
+                {activeTab === 'import' && <CollectionImporter hideLabel />}
+                {activeTab === 'commanders' && <CollectionCommanders cards={cards} />}
+              </div>
+            </section>
+          ) : (
+            <section className="p-4 rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm max-w-2xl">
+              <CollectionImporter />
+            </section>
+          )}
 
           {/* Collection List */}
-          {count > 0 && (
-            <section className="p-4 rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm">
-              <CollectionManager onSelectedColorsChange={handleFilterColorsChange} />
+          {hasCollection && (
+            <section
+              ref={managerRef}
+              className="p-4 rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm scroll-mt-20"
+            >
+              <CollectionManager
+                selectedColors={selectedColors}
+                onSelectedColorsChange={setSelectedColors}
+                selectedType={selectedType}
+                onSelectedTypeChange={setSelectedType}
+                selectedRarity={selectedRarity}
+                onSelectedRarityChange={setSelectedRarity}
+              />
             </section>
           )}
         </div>
       </main>
     </>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px shrink-0 ${
+        active
+          ? 'text-foreground border-primary'
+          : 'text-muted-foreground border-transparent hover:text-foreground hover:bg-accent/30'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }

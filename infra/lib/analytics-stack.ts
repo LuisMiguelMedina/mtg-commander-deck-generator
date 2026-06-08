@@ -51,6 +51,8 @@ export class AnalyticsStack extends cdk.Stack {
       authType: lambda.FunctionUrlAuthType.NONE,
       cors: {
         allowedOrigins: [
+          'https://manafoundry.gg',
+          'https://www.manafoundry.gg',
           'https://20q2.github.io',
           'http://localhost:5173',
           'http://localhost:4173',

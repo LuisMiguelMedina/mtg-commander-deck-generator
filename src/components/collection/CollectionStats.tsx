@@ -4,6 +4,10 @@ import { CardTypeIcon } from '@/components/ui/mtg-icons';
 
 interface CollectionStatsProps {
   cards: CollectionCard[];
+  /** Optional click handlers — when provided, the matching rows become buttons that fire a filter request. */
+  onColorClick?: (code: 'W' | 'U' | 'B' | 'R' | 'G' | 'C' | 'M') => void;
+  onTypeClick?: (type: string) => void;
+  onRarityClick?: (rarity: string) => void;
 }
 
 const COLOR_HEX: Record<string, string> = {
@@ -37,7 +41,7 @@ const COLOR_ORDER = ['W', 'U', 'B', 'R', 'G'] as const;
 const PIE_COLORS = [...COLOR_ORDER, 'M' as const, 'C' as const];
 
 
-export function CollectionStats({ cards }: CollectionStatsProps) {
+export function CollectionStats({ cards, onColorClick, onTypeClick, onRarityClick }: CollectionStatsProps) {
   const stats = useMemo(() => {
     if (cards.length === 0) return null;
 
@@ -109,8 +113,9 @@ export function CollectionStats({ cards }: CollectionStatsProps) {
             const maxColorCount = Math.max(...PIE_COLORS.map(k => stats.colorCounts[k] || 0));
             const fillPct = maxColorCount > 0 ? (count / maxColorCount) * 100 : 0;
             const pctOfTotal = ((count / cards.length) * 100).toFixed(0);
-            return (
-              <div key={c} className="space-y-0.5">
+            const interactive = !!onColorClick;
+            const content = (
+              <>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     {c === 'M' ? (
@@ -131,7 +136,20 @@ export function CollectionStats({ cards }: CollectionStatsProps) {
                     style={{ width: `${fillPct}%`, backgroundColor: bg }}
                   />
                 </div>
-              </div>
+              </>
+            );
+            return interactive ? (
+              <button
+                key={c}
+                type="button"
+                onClick={() => onColorClick!(c)}
+                title={`Filter collection by ${COLOR_LABELS[c]}`}
+                className="w-full text-left space-y-0.5 rounded-md px-1 -mx-1 py-0.5 -my-0.5 hover:bg-accent/40 transition-colors"
+              >
+                {content}
+              </button>
+            ) : (
+              <div key={c} className="space-y-0.5">{content}</div>
             );
           })}
         </div>
@@ -147,11 +165,11 @@ export function CollectionStats({ cards }: CollectionStatsProps) {
             const fillPct = maxTypeCount > 0 ? (count / maxTypeCount) * 100 : 0;
             const cc = stats.typeColorCounts[t];
             const totalPips = [...COLOR_ORDER, 'C' as const].reduce((s, c) => s + (cc[c] || 0), 0);
-            return (
-              <div key={t} className="flex items-center gap-1.5 text-[11px]">
-                <span title={t} className="shrink-0 w-4 text-center">
-                  <CardTypeIcon type={t} size="sm" className="opacity-60" />
-                </span>
+            const interactive = !!onTypeClick;
+            const content = (
+              <>
+                <CardTypeIcon type={t} size="sm" className="opacity-60 shrink-0" />
+                <span className="text-muted-foreground w-20 shrink-0 text-left">{t}</span>
                 <div className="flex-1 h-2 bg-border/30 rounded-full overflow-hidden flex">
                   {totalPips > 0 && [...COLOR_ORDER, 'C' as const].map(c => {
                     const segPct = (cc[c] || 0) / totalPips * fillPct;
@@ -160,7 +178,22 @@ export function CollectionStats({ cards }: CollectionStatsProps) {
                     return <div key={c} className="h-full" style={{ width: `${segPct}%`, backgroundColor: bg }} />;
                   })}
                 </div>
-                <span className="text-muted-foreground tabular-nums w-5 text-right shrink-0">{count}</span>
+                <span className="text-muted-foreground tabular-nums w-7 text-right shrink-0">{count}</span>
+              </>
+            );
+            return interactive ? (
+              <button
+                key={t}
+                type="button"
+                onClick={() => onTypeClick!(t)}
+                title={`Filter collection by ${t}`}
+                className="w-full flex items-center gap-1.5 text-[11px] rounded-md px-1 -mx-1 py-0.5 hover:bg-accent/40 transition-colors"
+              >
+                {content}
+              </button>
+            ) : (
+              <div key={t} className="flex items-center gap-1.5 text-[11px]">
+                {content}
               </div>
             );
           })}
@@ -178,8 +211,9 @@ export function CollectionStats({ cards }: CollectionStatsProps) {
               const cfg = RARITY_CONFIG[r];
               const fillPct = maxRarityCount > 0 ? (count / maxRarityCount) * 100 : 0;
               const pctOfTotal = ((count / totalRarityCards) * 100).toFixed(0);
-              return (
-                <div key={r} className="space-y-0.5">
+              const interactive = !!onRarityClick;
+              const content = (
+                <>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: cfg.color }} />
@@ -196,7 +230,20 @@ export function CollectionStats({ cards }: CollectionStatsProps) {
                       style={{ width: `${fillPct}%`, backgroundColor: cfg.color }}
                     />
                   </div>
-                </div>
+                </>
+              );
+              return interactive ? (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => onRarityClick!(r)}
+                  title={`Filter collection by ${cfg.label}`}
+                  className="w-full text-left space-y-0.5 rounded-md px-1 -mx-1 py-0.5 -my-0.5 hover:bg-accent/40 transition-colors"
+                >
+                  {content}
+                </button>
+              ) : (
+                <div key={r} className="space-y-0.5">{content}</div>
               );
             })}
           </div>

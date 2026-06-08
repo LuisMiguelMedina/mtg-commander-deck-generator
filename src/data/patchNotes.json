@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.2.36",
+    "notes": [
+      "New Commanders tab on the Collection page — every legendary you own, ranked by how many EDHREC staples you have for it. The Spotlight up top shows your top 'Ready to play' pick.",
+      "Basic lands count as owned in deck views automatically — no need to import them. The owned count now includes your commander too, so a fully-owned 100-card deck reads 100, not 99.",
+      "New floating Lists panel in the deck view — drag cards from a list straight onto the deck."
+    ]
+  },
+  {
     "version": "1.2.35",
     "notes": [
       "Split Lists and Decks into their own tabs in the navbar",

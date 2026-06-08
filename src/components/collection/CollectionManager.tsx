@@ -104,11 +104,25 @@ function sortCards(cards: CollectionCard[], sortKey: SortKey, sortDir: 'asc' | '
 // --- Component ---
 
 interface CollectionManagerProps {
-  /** Notified whenever the color filter set changes (WUBRG/C codes). */
-  onSelectedColorsChange?: (codes: string[]) => void;
+  /** Controlled color filter set (WUBRG/C codes). */
+  selectedColors: Set<string>;
+  onSelectedColorsChange: (next: Set<string>) => void;
+  /** Controlled type filter ('' = all). */
+  selectedType: string;
+  onSelectedTypeChange: (next: string) => void;
+  /** Controlled rarity filter ('' = all). */
+  selectedRarity: string;
+  onSelectedRarityChange: (next: string) => void;
 }
 
-export function CollectionManager({ onSelectedColorsChange }: CollectionManagerProps = {}) {
+export function CollectionManager({
+  selectedColors,
+  onSelectedColorsChange,
+  selectedType,
+  onSelectedTypeChange,
+  selectedRarity,
+  onSelectedRarityChange,
+}: CollectionManagerProps) {
   const navigate = useNavigate();
   const {
     cards, count, removeCard, updateQuantity, clearCollection,
@@ -119,19 +133,17 @@ export function CollectionManager({ onSelectedColorsChange }: CollectionManagerP
   const [searchQuery, setSearchQuery] = useState('');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [selectedColors, setSelectedColors] = useState<Set<string>>(new Set());
   const [colorFilterMode, setColorFilterMode] = useState<ColorFilterMode>('at-least');
-  const [selectedType, setSelectedType] = useState<string>('');
-  const [selectedRarity, setSelectedRarity] = useState<string>('');
   const [commandersOnly, setCommandersOnly] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
   const [copiedCount, setCopiedCount] = useState<number | null>(null);
 
+  // Reset to first page whenever an external filter request lands.
   useEffect(() => {
-    onSelectedColorsChange?.([...selectedColors]);
-  }, [selectedColors, onSelectedColorsChange]);
+    setPage(1);
+  }, [selectedColors, selectedType, selectedRarity]);
 
   // Filter & sort
   const filteredCards = useMemo(() => {
@@ -199,19 +211,17 @@ export function CollectionManager({ onSelectedColorsChange }: CollectionManagerP
   const activeFilters = (selectedColors.size > 0 ? 1 : 0) + (selectedType ? 1 : 0) + (selectedRarity ? 1 : 0) + (commandersOnly ? 1 : 0);
 
   const toggleColor = (code: string) => {
-    setSelectedColors(prev => {
-      const next = new Set(prev);
-      if (next.has(code)) next.delete(code);
-      else next.add(code);
-      return next;
-    });
+    const next = new Set(selectedColors);
+    if (next.has(code)) next.delete(code);
+    else next.add(code);
+    onSelectedColorsChange(next);
     setPage(1);
   };
 
   const clearFilters = () => {
-    setSelectedColors(new Set());
-    setSelectedType('');
-    setSelectedRarity('');
+    onSelectedColorsChange(new Set());
+    onSelectedTypeChange('');
+    onSelectedRarityChange('');
     setCommandersOnly(false);
     setSearchQuery('');
     setPage(1);
@@ -356,7 +366,7 @@ export function CollectionManager({ onSelectedColorsChange }: CollectionManagerP
           .map(([type, num]) => (
             <button
               key={type}
-              onClick={() => { setSelectedType(prev => prev === type ? '' : type); setPage(1); }}
+              onClick={() => { onSelectedTypeChange(selectedType === type ? '' : type); setPage(1); }}
               className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-full transition-colors cursor-pointer ${
                 selectedType === type
                   ? 'bg-primary/20 text-primary ring-1 ring-primary/40'
@@ -456,7 +466,7 @@ export function CollectionManager({ onSelectedColorsChange }: CollectionManagerP
         <div className="relative">
           <select
             value={selectedType}
-            onChange={(e) => { setSelectedType(e.target.value); setPage(1); }}
+            onChange={(e) => { onSelectedTypeChange(e.target.value); setPage(1); }}
             className="appearance-none pl-2.5 pr-7 py-1 text-xs rounded-md bg-background border border-border cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="">All Types</option>
@@ -471,7 +481,7 @@ export function CollectionManager({ onSelectedColorsChange }: CollectionManagerP
         <div className="relative">
           <select
             value={selectedRarity}
-            onChange={(e) => { setSelectedRarity(e.target.value); setPage(1); }}
+            onChange={(e) => { onSelectedRarityChange(e.target.value); setPage(1); }}
             className="appearance-none pl-2.5 pr-7 py-1 text-xs rounded-md bg-background border border-border cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="">All Rarities</option>

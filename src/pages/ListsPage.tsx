@@ -24,6 +24,11 @@ const PSEUDO_MUST_INCLUDE_ID = '__must-include';
 const PSEUDO_EXCLUDED_ID = '__excluded';
 const PSEUDO_IDS = new Set<string>([PSEUDO_MUST_INCLUDE_ID, PSEUDO_EXCLUDED_ID]);
 
+// Normalize a card name to its front face for DFC-tolerant matching. Cards may
+// be stored in list.cards as either "Front // Back" (added via card search) or
+// "Front" alone (imported from a deck file that omitted the back face).
+const dfcFront = (n: string) => n.includes(' // ') ? n.split(' // ')[0] : n;
+
 function buildPseudoList(id: string, cards: string[]): UserCardList {
   const isInclude = id === PSEUDO_MUST_INCLUDE_ID;
   return {
@@ -406,42 +411,51 @@ export function ListsPage() {
           onDuplicate={() => { duplicateList(list.id); navigate(list.type === 'deck' ? '/decks' : '/lists'); }}
           onRemoveCards={(names) => {
             const current = getListById(list.id) ?? list;
-            const updated = current.cards.filter(c => !names.includes(c));
+            // Match DFC tolerantly: callers pass the canonical Scryfall name
+            // ("Front // Back"), but list.cards may store the front face only
+            // (e.g. when imported from a deck file that omitted the back face).
+            // Without this, the popover X on an off-color DFC silently does
+            // nothing because filter() never matches.
+            const removeFronts = new Set(names.map(dfcFront));
+            const updated = current.cards.filter(c => !removeFronts.has(dfcFront(c)));
             updateList(list.id, { cards: updated, generationSummary: undefined });
           }}
           onAddCards={(names, destination) => {
             const current = getListById(list.id) ?? list;
             if (destination === 'deck') {
-              const existing = new Set(current.cards);
-              updateList(list.id, { cards: [...current.cards, ...names.filter(n => !existing.has(n))], generationSummary: undefined });
+              const existing = new Set(current.cards.map(dfcFront));
+              updateList(list.id, { cards: [...current.cards, ...names.filter(n => !existing.has(dfcFront(n)))], generationSummary: undefined });
             } else if (destination === 'sideboard') {
-              const existing = new Set(current.sideboard || []);
-              updateList(list.id, { sideboard: [...(current.sideboard || []), ...names.filter(n => !existing.has(n))] });
+              const existing = new Set((current.sideboard || []).map(dfcFront));
+              updateList(list.id, { sideboard: [...(current.sideboard || []), ...names.filter(n => !existing.has(dfcFront(n)))] });
             } else {
-              const existing = new Set(current.maybeboard || []);
-              updateList(list.id, { maybeboard: [...(current.maybeboard || []), ...names.filter(n => !existing.has(n))] });
+              const existing = new Set((current.maybeboard || []).map(dfcFront));
+              updateList(list.id, { maybeboard: [...(current.maybeboard || []), ...names.filter(n => !existing.has(dfcFront(n)))] });
             }
           }}
           onMoveToSideboard={(names) => {
             const current = getListById(list.id) ?? list;
-            const updatedCards = current.cards.filter(c => !names.includes(c));
-            const existingSb = new Set(current.sideboard || []);
-            updateList(list.id, { cards: updatedCards, sideboard: [...(current.sideboard || []), ...names.filter(n => !existingSb.has(n))], generationSummary: undefined });
+            const removeFronts = new Set(names.map(dfcFront));
+            const updatedCards = current.cards.filter(c => !removeFronts.has(dfcFront(c)));
+            const existingSb = new Set((current.sideboard || []).map(dfcFront));
+            updateList(list.id, { cards: updatedCards, sideboard: [...(current.sideboard || []), ...names.filter(n => !existingSb.has(dfcFront(n)))], generationSummary: undefined });
           }}
           onMoveToMaybeboard={(names) => {
             const current = getListById(list.id) ?? list;
-            const updatedCards = current.cards.filter(c => !names.includes(c));
-            const existingMb = new Set(current.maybeboard || []);
-            updateList(list.id, { cards: updatedCards, maybeboard: [...(current.maybeboard || []), ...names.filter(n => !existingMb.has(n))], generationSummary: undefined });
+            const removeFronts = new Set(names.map(dfcFront));
+            const updatedCards = current.cards.filter(c => !removeFronts.has(dfcFront(c)));
+            const existingMb = new Set((current.maybeboard || []).map(dfcFront));
+            updateList(list.id, { cards: updatedCards, maybeboard: [...(current.maybeboard || []), ...names.filter(n => !existingMb.has(dfcFront(n)))], generationSummary: undefined });
           }}
           onMoveToDeck={(names, source) => {
             const current = getListById(list.id) ?? list;
-            const existing = new Set(current.cards);
-            const newCards = [...current.cards, ...names.filter(n => !existing.has(n))];
+            const existing = new Set(current.cards.map(dfcFront));
+            const newCards = [...current.cards, ...names.filter(n => !existing.has(dfcFront(n)))];
+            const removeFronts = new Set(names.map(dfcFront));
             if (source === 'sideboard') {
-              updateList(list.id, { cards: newCards, sideboard: (current.sideboard || []).filter(c => !names.includes(c)), generationSummary: undefined });
+              updateList(list.id, { cards: newCards, sideboard: (current.sideboard || []).filter(c => !removeFronts.has(dfcFront(c))), generationSummary: undefined });
             } else {
-              updateList(list.id, { cards: newCards, maybeboard: (current.maybeboard || []).filter(c => !names.includes(c)), generationSummary: undefined });
+              updateList(list.id, { cards: newCards, maybeboard: (current.maybeboard || []).filter(c => !removeFronts.has(dfcFront(c))), generationSummary: undefined });
             }
           }}
           onRemoveFromBoard={(name, source) => {

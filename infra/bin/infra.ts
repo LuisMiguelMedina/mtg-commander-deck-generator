@@ -6,6 +6,7 @@ dotenv.config({ path: path.join(__dirname, '../../.env.local') });
 import * as cdk from 'aws-cdk-lib';
 import { AnalyticsStack } from '../lib/analytics-stack';
 import { TaggerStack } from '../lib/tagger-stack';
+import { SiteStack } from '../lib/site-stack';
 
 const app = new cdk.App();
 
@@ -16,3 +17,4 @@ const env = {
 
 new AnalyticsStack(app, 'MtgDeckBuilderAnalytics', { env });
 new TaggerStack(app, 'MtgDeckBuilderTagger', { env });
+new SiteStack(app, 'MtgDeckBuilderSite', { env });

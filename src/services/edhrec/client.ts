@@ -35,7 +35,10 @@ const rateLimiter = new RateLimiter();
 // Cache for commander data
 const commanderCache = new Map<string, { data: EDHRECCommanderData; timestamp: number }>();
 const partnerPopularityCache = new Map<string, { data: Map<string, number>; timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+// EDHREC commander pages update on the order of days, not minutes. Hold cached
+// entries for 14 days — note this is an in-memory cache so it's still capped at
+// the lifetime of the browser session, but within a session we never re-fetch.
+const CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 14 days
 
 // Raw EDHREC response types
 // Note: EDHREC cardlist cards have limited fields - they're pre-categorized by tag
@@ -900,7 +903,7 @@ interface RawTopCommandersResponse {
 }
 
 const topCommanderCache = new Map<string, { data: EDHRECTopCommander[]; timestamp: number }>();
-const TOP_COMMANDER_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+const TOP_COMMANDER_CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 14 days (in-memory; capped by session)
 
 /**
  * Fetch the full EDHREC commander typeahead list (all commander names).
