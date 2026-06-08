@@ -12,6 +12,7 @@ import { OptimizePage } from '@/pages/OptimizePage';
 import { AnalyzePage } from '@/pages/AnalyzePage';
 import { CollectionPage } from '@/pages/CollectionPage';
 import { ListsPage } from '@/pages/ListsPage';
+import { MigratePage } from '@/pages/MigratePage';
 import { PlaytestPage } from '@/pages/PlaytestPage';
 import { PlaytestLandingPage } from '@/pages/PlaytestLandingPage';
 import { useStore } from '@/store';
@@ -630,6 +631,7 @@ function App() {
         <Route path="/collection" element={<Layout><CollectionPage /></Layout>} />
         <Route path="/decks/*" element={<Layout><ListsPage /></Layout>} />
         <Route path="/lists/*" element={<Layout><ListsPage /></Layout>} />
+        <Route path="/migrate" element={<Layout><MigratePage /></Layout>} />
         <Route path="/playtest" element={<Layout><PlaytestLandingPage /></Layout>} />
         <Route path="/playtest/list/:listId" element={<PlaytestPage kind="list" />} />
         <Route path="/playtest/generated" element={<PlaytestPage kind="generated" />} />
