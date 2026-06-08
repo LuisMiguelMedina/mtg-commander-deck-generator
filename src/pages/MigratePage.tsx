@@ -71,7 +71,14 @@ export function MigratePage() {
     );
   }
   if (stage.kind === 'applying') {
-    return <PageShell><p className="text-sm text-muted-foreground">Applying migration…</p></PageShell>;
+    return (
+      <PageShell>
+        <div className="glass rounded-2xl p-10 flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+          <p className="text-sm text-muted-foreground">Applying migration…</p>
+        </div>
+      </PageShell>
+    );
   }
   if (stage.kind === 'done') {
     return <PageShell><DoneView summary={stage.summary} /></PageShell>;
@@ -95,12 +102,27 @@ export function MigratePage() {
 
 function PageShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="container mx-auto px-4 py-8 max-w-3xl text-center">
-      <h1 className="text-2xl font-bold mb-2">Migrate your ManaFoundry data</h1>
-      <p className="text-muted-foreground text-sm mb-6">
-        Back up everything on this site as a portable file, or restore from a backup file made on another browser or host.
-      </p>
+    <main className="flex-1 container mx-auto px-4 py-6 max-w-3xl text-center animate-fade-in">
+      <div className="text-center py-6 mb-4">
+        <h1 className="text-4xl font-bold mb-3">
+          Migrate your <span className="gradient-text">ManaFoundry</span> data
+        </h1>
+        <p className="text-base text-muted-foreground max-w-xl mx-auto">
+          Back up everything on this site as a portable file, or restore from a backup made on another browser or host.
+        </p>
+      </div>
       {children}
+    </main>
+  );
+}
+
+function StepHeader({ step, title }: { step: number; title: string }) {
+  return (
+    <div className="flex items-center justify-center gap-2 mb-4">
+      <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
+        {step}
+      </div>
+      <h2 className="text-lg font-semibold">{title}</h2>
     </div>
   );
 }
@@ -133,17 +155,18 @@ function ExportSection() {
   );
 
   return (
-    <section className="border border-border rounded-lg p-5">
-      <div className="flex flex-col items-center gap-2 mb-2">
-        <Download className="w-6 h-6 text-foreground/80" />
-        <h2 className="text-lg font-semibold leading-tight">Back up this browser</h2>
-        <p className="text-sm text-muted-foreground max-w-md">
-          Saves your lists, decks, collection, and preferences as a single JSON file you can restore anywhere.
-        </p>
-      </div>
+    <section className="glass rounded-2xl p-6 sm:p-8">
+      <StepHeader step={1} title="Back up this browser" />
+      <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
+        Saves your lists, decks, collection, and preferences as a single JSON file you can restore anywhere.
+      </p>
 
-      <div className="mt-4 flex flex-col items-center gap-2">
-        <Button onClick={onClick} disabled={busy || hasData === false}>
+      <div className="flex flex-col items-center gap-2">
+        <Button
+          onClick={onClick}
+          disabled={busy || hasData === false}
+          className="btn-shimmer h-11 px-6 text-sm"
+        >
           <Download className="w-4 h-4" />
           {busy ? 'Preparing…' : 'Download backup'}
         </Button>
@@ -153,18 +176,18 @@ function ExportSection() {
       </div>
 
       {downloaded && (
-        <div className="mt-4 border border-emerald-500/40 bg-emerald-500/10 rounded-md p-4">
+        <div className="mt-6 border border-emerald-500/40 bg-emerald-500/10 rounded-xl p-5 animate-fade-in">
           <div className="flex flex-col items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-            <div className="font-medium text-sm">Backup file saved.</div>
+            <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+            <div className="font-semibold text-sm">Backup file saved</div>
           </div>
           {isLegacyHost ? (
-            <div className="text-sm text-foreground/90 mt-3">
+            <div className="text-sm text-foreground/90 mt-3 max-w-md mx-auto">
               <p>
                 Now open{' '}
                 <a
                   href="https://manafoundry.gg/migrate"
-                  className="font-semibold underline underline-offset-2 hover:text-white transition-colors text-emerald-200"
+                  className="font-semibold underline underline-offset-2 text-emerald-200 hover:text-white transition-colors"
                 >
                   manafoundry.gg/migrate
                 </a>{' '}
@@ -172,14 +195,14 @@ function ExportSection() {
               </p>
               <a
                 href="https://manafoundry.gg/migrate"
-                className="inline-flex items-center gap-1 mt-3 px-3 py-1.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-100 text-xs font-medium transition-colors"
+                className="inline-flex items-center gap-1.5 mt-4 px-4 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-100 text-sm font-medium transition-colors"
               >
-                Go to manafoundry.gg/migrate <ArrowRight className="w-3 h-3" />
+                Go to manafoundry.gg/migrate <ArrowRight className="w-3.5 h-3.5" />
               </a>
             </div>
           ) : (
-            <div className="text-sm text-foreground/90 mt-2">
-              You can use the upload section below to restore from this file later, or take it to another browser.
+            <div className="text-sm text-foreground/90 mt-2 max-w-md mx-auto">
+              You can use the restore section below to load this file later, or take it to another browser.
             </div>
           )}
         </div>
@@ -197,15 +220,12 @@ function UploadSection({
   onClearError: () => void;
 }) {
   return (
-    <section className="border border-border rounded-lg p-5">
-      <div className="flex flex-col items-center gap-2 mb-4">
-        <Upload className="w-6 h-6 text-foreground/80" />
-        <h2 className="text-lg font-semibold leading-tight">Restore from a backup file</h2>
-        <p className="text-sm text-muted-foreground max-w-md">
-          Upload a <code className="text-xs px-1 py-0.5 rounded bg-muted">manafoundry-backup-*.json</code> file
-          to bring your data into this browser.
-        </p>
-      </div>
+    <section className="glass rounded-2xl p-6 sm:p-8">
+      <StepHeader step={2} title="Restore from a backup file" />
+      <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
+        Upload a <code className="text-xs px-1.5 py-0.5 rounded bg-muted/60 text-foreground/80">manafoundry-backup-*.json</code> file
+        to bring your data into this browser.
+      </p>
 
       {error ? (
         <ErrorView message={error} onRetry={onClearError} />
@@ -223,9 +243,9 @@ function PickerView({
     <label
       onDragOver={e => e.preventDefault()}
       onDrop={onDrop}
-      className="block border-2 border-dashed border-border rounded-lg p-10 text-center cursor-pointer hover:bg-accent/30 transition-colors"
+      className="block border-2 border-dashed border-border rounded-xl p-10 text-center cursor-pointer hover:bg-accent/30 hover:border-primary/50 transition-colors group"
     >
-      <Upload className="w-8 h-8 mx-auto mb-3 text-muted-foreground" />
+      <Upload className="w-9 h-9 mx-auto mb-3 text-muted-foreground group-hover:text-primary transition-colors" />
       <div className="text-sm font-medium mb-1">Drop your backup file here, or click to browse</div>
       <div className="text-xs text-muted-foreground">JSON files only</div>
       <input type="file" accept="application/json,.json" className="hidden" onChange={onPick} />
@@ -235,11 +255,11 @@ function PickerView({
 
 function ErrorView({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div className="border border-destructive/40 bg-destructive/10 rounded-lg p-4 flex flex-col items-center gap-3">
-      <AlertCircle className="w-5 h-5 text-destructive" />
-      <div className="text-sm font-medium text-destructive">Couldn't read this file</div>
-      <div className="text-sm text-foreground/80">{message}</div>
-      <Button variant="outline" size="sm" onClick={onRetry}>Choose a different file</Button>
+    <div className="border border-destructive/40 bg-destructive/10 rounded-xl p-6 flex flex-col items-center gap-3 animate-fade-in">
+      <AlertCircle className="w-6 h-6 text-destructive" />
+      <div className="text-base font-semibold text-destructive">Couldn't read this file</div>
+      <div className="text-sm text-foreground/80 max-w-md">{message}</div>
+      <Button variant="outline" size="sm" onClick={onRetry} className="mt-1">Choose a different file</Button>
     </div>
   );
 }
@@ -260,9 +280,9 @@ function ReviewView({
   const fileInfo = `Exported ${envelope.exportedAt ? new Date(envelope.exportedAt).toLocaleString() : '(unknown date)'} from ${envelope.sourceHost || '(unknown host)'} (v${envelope.appVersion || '?'})`;
 
   return (
-    <div className="space-y-6">
-      <div className="text-xs text-muted-foreground flex items-center justify-center gap-2">
-        <FileJson className="w-4 h-4" /> {fileInfo}
+    <div className="space-y-5">
+      <div className="glass rounded-xl px-4 py-3 inline-flex items-center justify-center gap-2 text-xs text-muted-foreground mx-auto">
+        <FileJson className="w-4 h-4 text-primary/80" /> {fileInfo}
       </div>
 
       <Section
@@ -298,9 +318,9 @@ function ReviewView({
         replaceHelp="Clear your current preferences and load only the file's values."
       />
 
-      <div className="flex justify-center gap-3 pt-2">
-        <Button onClick={onApply}>Apply migration</Button>
-        <Button variant="outline" onClick={onCancel}>Cancel</Button>
+      <div className="flex justify-center gap-3 pt-4">
+        <Button onClick={onApply} className="btn-shimmer h-11 px-6">Apply migration</Button>
+        <Button variant="outline" onClick={onCancel} className="h-11 px-6">Cancel</Button>
       </div>
     </div>
   );
@@ -321,15 +341,17 @@ function Section({
   const fileNounPlural = fileCount === 1 ? fileNoun : `${fileNoun}s`;
   const localNounPlural = localCount === 1 ? fileNoun : `${fileNoun}s`;
   return (
-    <div className="border border-border rounded-lg p-4">
-      <div className="font-medium text-sm mb-1">{title}</div>
-      <div className="text-xs text-muted-foreground mb-3">
-        File: {fileCount} {fileNounPlural} · You: {localCount} {localNounPlural}
+    <div className="glass rounded-xl p-5">
+      <div className="font-semibold text-base mb-1">{title}</div>
+      <div className="text-xs text-muted-foreground mb-4">
+        File: <span className="text-foreground/80 font-medium">{fileCount}</span> {fileNounPlural}
+        {' · '}
+        You: <span className="text-foreground/80 font-medium">{localCount}</span> {localNounPlural}
       </div>
       {fileCount === 0 ? (
-        <div className="text-xs text-muted-foreground">Nothing in the file for this section.</div>
+        <div className="text-xs text-muted-foreground italic">Nothing in the file for this section.</div>
       ) : (
-        <div className="space-y-2 flex flex-col items-center">
+        <div className="space-y-2.5 flex flex-col items-center">
           <Radio name={title} value="merge" current={strategy} onChange={onChange} label="Merge" help={mergeHelp} />
           <Radio name={title} value="replace" current={strategy} onChange={onChange} label="Replace" help={replaceHelp} />
           <Radio name={title} value="skip" current={strategy} onChange={onChange} label="Skip" help="Leave this section unchanged." />
@@ -349,18 +371,25 @@ function Radio({
   label: string;
   help: string;
 }) {
+  const selected = current === value;
   return (
-    <label className="flex items-start gap-2 cursor-pointer text-sm text-left max-w-md">
+    <label
+      className={`flex items-start gap-3 cursor-pointer text-sm text-left max-w-md w-full px-4 py-2.5 rounded-lg border transition-colors ${
+        selected
+          ? 'border-primary/60 bg-primary/10'
+          : 'border-border/60 hover:border-border hover:bg-accent/30'
+      }`}
+    >
       <input
         type="radio"
         name={name}
-        checked={current === value}
+        checked={selected}
         onChange={() => onChange(value)}
         className="mt-0.5 accent-primary"
       />
       <div>
         <div className="font-medium">{label}</div>
-        <div className="text-xs text-muted-foreground">{help}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{help}</div>
       </div>
     </label>
   );
@@ -368,21 +397,22 @@ function Radio({
 
 function DoneView({ summary }: { summary: ImportSummary }) {
   return (
-    <div className="border border-emerald-500/40 bg-emerald-500/10 rounded-lg p-5 flex flex-col items-center">
-      <div className="flex items-center gap-2 mb-3">
-        <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-        <div className="font-medium">Migration complete</div>
+    <div className="glass rounded-2xl p-8 flex flex-col items-center border border-emerald-500/40 animate-fade-in">
+      <div className="w-14 h-14 rounded-full bg-emerald-500/20 flex items-center justify-center mb-3">
+        <CheckCircle2 className="w-8 h-8 text-emerald-400" />
       </div>
-      <ul className="text-sm text-foreground/90 space-y-1 mb-4">
-        <li>Imported {summary.listsImported} list{summary.listsImported === 1 ? '' : 's'}/decks</li>
-        <li>Imported {summary.collectionCardsImported} collection card{summary.collectionCardsImported === 1 ? '' : 's'}</li>
-        <li>Applied {summary.preferencesApplied} preference{summary.preferencesApplied === 1 ? '' : 's'}</li>
+      <div className="text-xl font-bold mb-1">Migration complete</div>
+      <p className="text-sm text-muted-foreground mb-5">Your data is now restored on this browser.</p>
+      <ul className="text-sm text-foreground/90 space-y-1.5 mb-6">
+        <li><span className="font-semibold text-foreground">{summary.listsImported}</span> list{summary.listsImported === 1 ? '' : 's'}/decks imported</li>
+        <li><span className="font-semibold text-foreground">{summary.collectionCardsImported}</span> collection card{summary.collectionCardsImported === 1 ? '' : 's'} imported</li>
+        <li><span className="font-semibold text-foreground">{summary.preferencesApplied}</span> preference{summary.preferencesApplied === 1 ? '' : 's'} applied</li>
       </ul>
-      <div className="flex justify-center gap-3">
-        <Link to="/decks" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-xs font-medium h-8 px-3 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors">
+      <div className="flex flex-wrap justify-center gap-3">
+        <Link to="/decks" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium h-10 px-4 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors">
           Go to your decks
         </Link>
-        <Link to="/collection" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-xs font-medium h-8 px-3 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors">
+        <Link to="/collection" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium h-10 px-4 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors">
           Go to your collection
         </Link>
       </div>
