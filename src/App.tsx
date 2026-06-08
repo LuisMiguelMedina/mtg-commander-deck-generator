@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { BrowserRouter, Routes, Route, useLocation, Link } from 'react-router-dom';
-import { Settings, Sparkles, Wand2, ListChecks, Library, BarChart3, Microscope } from 'lucide-react';
+import { Settings, Sparkles, Wand2, ListChecks, Library, BarChart3, Microscope, Download } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import patchNotes from '@/data/patchNotes.json';
 import { HomePage } from '@/pages/HomePage';
 import { BuilderPage } from '@/pages/BuilderPage';
@@ -191,6 +193,59 @@ export function PreferencesDropdown() {
   );
 }
 
+function MigrationDownloadButton() {
+  const [hasData, setHasData] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    import('@/services/migration/export').then(({ hasAnythingToExport }) =>
+      hasAnythingToExport().then(v => { if (!cancelled) setHasData(v); })
+    );
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleClick = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { downloadBackup } = await import('@/services/migration/export');
+      await downloadBackup();
+    } finally {
+      setBusy(false);
+    }
+  }, [busy]);
+
+  const disabled = hasData === false || busy;
+
+  const btn = (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleClick}
+      disabled={disabled}
+      className="h-6 px-2 text-xs"
+    >
+      <Download className="w-3 h-3" />
+      {busy ? 'Preparing…' : 'Download backup'}
+    </Button>
+  );
+
+  if (hasData === false) {
+    return (
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>{btn}</span>
+          </TooltipTrigger>
+          <TooltipContent>Nothing to back up yet</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+  return btn;
+}
+
 // Layout wrapper with header/footer
 function Layout({ children }: { children: React.ReactNode }) {
   const { commander, generatedDeck, reset } = useStore();
@@ -273,11 +328,12 @@ function Layout({ children }: { children: React.ReactNode }) {
           <div className="bg-amber-500/15 border-b border-amber-500/30 text-amber-100 backdrop-blur-md relative z-50">
             <div className="container mx-auto px-4 py-2 text-sm flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
               <span className="text-amber-200/90">This site has an official page!</span>
+              <MigrationDownloadButton />
               <a
                 href={`https://manafoundry.gg${location.pathname}${location.search}${location.hash}`}
                 className="font-semibold underline underline-offset-2 hover:text-white transition-colors"
               >
-                Continue at manafoundry.gg
+                Continue at manafoundry.gg →
               </a>
             </div>
           </div>
