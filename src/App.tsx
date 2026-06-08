@@ -282,7 +282,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               </a>
               <Link
                 to="/migrate"
-                className="ml-auto font-semibold underline underline-offset-2 hover:text-white transition-colors"
+                className="font-semibold underline underline-offset-2 hover:text-white transition-colors"
               >
                 Bring my decks to the new site →
               </Link>
