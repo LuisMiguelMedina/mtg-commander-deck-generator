@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Upload, FileJson, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Upload, Download, FileJson, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   parseAndMigrate,
@@ -12,6 +12,7 @@ import {
   type SectionStrategy,
 } from '@/services/migration/import';
 import { MigrationError, type MigrationEnvelope } from '@/services/migration/schema';
+import { downloadBackup, hasAnythingToExport } from '@/services/migration/export';
 
 type Stage =
   | { kind: 'picking' }
@@ -50,17 +51,10 @@ export function MigratePage() {
 
   const reset = () => setStage({ kind: 'picking' });
 
-  return (
-    <div className="container mx-auto px-4 py-8 max-w-3xl">
-      <h1 className="text-2xl font-bold mb-2">Migrate from another ManaFoundry site</h1>
-      <p className="text-muted-foreground text-sm mb-6">
-        Upload a <code className="text-xs px-1 py-0.5 rounded bg-muted">manafoundry-backup-*.json</code> file
-        exported from another browser or host to restore your lists, decks, collection, and preferences.
-      </p>
-
-      {stage.kind === 'picking' && <PickerView onPick={onPick} onDrop={onDrop} />}
-      {stage.kind === 'error' && <ErrorView message={stage.message} onRetry={reset} />}
-      {stage.kind === 'review' && (
+  // Review/applying/done occupy the whole page — no parallel actions during the migration flow.
+  if (stage.kind === 'review') {
+    return (
+      <PageShell>
         <ReviewView
           envelope={stage.envelope}
           diff={stage.diff}
@@ -73,12 +67,154 @@ export function MigratePage() {
           }}
           onCancel={reset}
         />
-      )}
-      {stage.kind === 'applying' && (
-        <p className="text-sm text-muted-foreground">Applying migration…</p>
-      )}
-      {stage.kind === 'done' && <DoneView summary={stage.summary} />}
+      </PageShell>
+    );
+  }
+  if (stage.kind === 'applying') {
+    return <PageShell><p className="text-sm text-muted-foreground">Applying migration…</p></PageShell>;
+  }
+  if (stage.kind === 'done') {
+    return <PageShell><DoneView summary={stage.summary} /></PageShell>;
+  }
+
+  // Default landing: both Download and Upload, side by side.
+  return (
+    <PageShell>
+      <div className="space-y-6">
+        <ExportSection />
+        <UploadSection
+          onPick={onPick}
+          onDrop={onDrop}
+          error={stage.kind === 'error' ? stage.message : null}
+          onClearError={reset}
+        />
+      </div>
+    </PageShell>
+  );
+}
+
+function PageShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-3xl">
+      <h1 className="text-2xl font-bold mb-2">Migrate your ManaFoundry data</h1>
+      <p className="text-muted-foreground text-sm mb-6">
+        Back up everything on this site as a portable file, or restore from a backup file made on another browser or host.
+      </p>
+      {children}
     </div>
+  );
+}
+
+function ExportSection() {
+  const [hasData, setHasData] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    hasAnythingToExport().then(v => { if (!cancelled) setHasData(v); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const onClick = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await downloadBackup();
+      setDownloaded(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const isLegacyHost = typeof window !== 'undefined' && (
+    window.location.hostname === '20q2.github.io' ||
+    window.location.hostname === 'localhost'
+  );
+
+  return (
+    <section className="border border-border rounded-lg p-5">
+      <div className="flex items-start gap-3 mb-2">
+        <Download className="w-5 h-5 text-foreground/80 mt-0.5 shrink-0" />
+        <div>
+          <h2 className="text-lg font-semibold leading-tight">Back up this browser</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Saves your lists, decks, collection, and preferences as a single JSON file you can restore anywhere.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center gap-3">
+        <Button onClick={onClick} disabled={busy || hasData === false}>
+          <Download className="w-4 h-4" />
+          {busy ? 'Preparing…' : 'Download backup'}
+        </Button>
+        {hasData === false && (
+          <span className="text-xs text-muted-foreground">Nothing to back up yet.</span>
+        )}
+      </div>
+
+      {downloaded && (
+        <div className="mt-4 border border-emerald-500/40 bg-emerald-500/10 rounded-md p-4">
+          <div className="flex items-start gap-2 mb-2">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="font-medium text-sm">Backup file saved.</div>
+          </div>
+          {isLegacyHost ? (
+            <div className="text-sm text-foreground/90 pl-7">
+              Now open{' '}
+              <a
+                href="https://manafoundry.gg/migrate"
+                className="font-semibold underline underline-offset-2 hover:text-white transition-colors text-emerald-200"
+              >
+                manafoundry.gg/migrate
+              </a>{' '}
+              and upload that file there to restore your data on the new site.
+              <a
+                href="https://manafoundry.gg/migrate"
+                className="inline-flex items-center gap-1 mt-3 px-3 py-1.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-100 text-xs font-medium transition-colors"
+              >
+                Go to manafoundry.gg/migrate <ArrowRight className="w-3 h-3" />
+              </a>
+            </div>
+          ) : (
+            <div className="text-sm text-foreground/90 pl-7">
+              You can use the upload section below to restore from this file later, or take it to another browser.
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function UploadSection({
+  onPick, onDrop, error, onClearError,
+}: {
+  onPick: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onDrop: (e: React.DragEvent<HTMLElement>) => void;
+  error: string | null;
+  onClearError: () => void;
+}) {
+  return (
+    <section className="border border-border rounded-lg p-5">
+      <div className="flex items-start gap-3 mb-4">
+        <Upload className="w-5 h-5 text-foreground/80 mt-0.5 shrink-0" />
+        <div>
+          <h2 className="text-lg font-semibold leading-tight">Restore from a backup file</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Upload a <code className="text-xs px-1 py-0.5 rounded bg-muted">manafoundry-backup-*.json</code> file
+            to bring your data into this browser.
+          </p>
+        </div>
+      </div>
+
+      {error ? (
+        <ErrorView message={error} onRetry={onClearError} />
+      ) : (
+        <PickerView onPick={onPick} onDrop={onDrop} />
+      )}
+    </section>
   );
 }
 
