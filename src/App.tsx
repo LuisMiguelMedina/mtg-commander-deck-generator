@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { BrowserRouter, Routes, Route, useLocation, Link } from 'react-router-dom';
-import { Settings, Sparkles, Wand2, ListChecks, Library, BarChart3, Microscope } from 'lucide-react';
+import { Settings, Sparkles, Wand2, ListChecks, Library, BarChart3, Microscope, MessageSquare } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import patchNotes from '@/data/patchNotes.json';
 import { HomePage } from '@/pages/HomePage';
@@ -13,6 +13,7 @@ import { ListsPage } from '@/pages/ListsPage';
 import { MigratePage } from '@/pages/MigratePage';
 import { PlaytestPage } from '@/pages/PlaytestPage';
 import { PlaytestLandingPage } from '@/pages/PlaytestLandingPage';
+import { CommunityPollPage } from '@/pages/CommunityPollPage';
 import { useStore } from '@/store';
 import { useCollection } from '@/hooks/useCollection';
 import { loadUserLists } from '@/hooks/useUserLists';
@@ -445,6 +446,13 @@ function Layout({ children }: { children: React.ReactNode }) {
                         <span className="text-sm">Metrics</span>
                       </Link>
                     )}
+                    <Link
+                      to="/community-poll"
+                      className="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent transition-colors mb-1"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-violet-300/90" />
+                      <span className="text-sm">Community Poll</span>
+                    </Link>
                     <button
                       onClick={toggleEaFeatures}
                       className="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent transition-colors mb-2"
@@ -627,6 +635,8 @@ function App() {
         <Route path="/decks/*" element={<Layout><ListsPage /></Layout>} />
         <Route path="/lists/*" element={<Layout><ListsPage /></Layout>} />
         <Route path="/migrate" element={<Layout><MigratePage /></Layout>} />
+        <Route path="/community-poll" element={<Layout><CommunityPollPage /></Layout>} />
+        <Route path="/community-poll/admin" element={<Layout><CommunityPollPage admin /></Layout>} />
         <Route path="/playtest" element={<Layout><PlaytestLandingPage /></Layout>} />
         <Route path="/playtest/list/:listId" element={<PlaytestPage kind="list" />} />
         <Route path="/playtest/generated" element={<PlaytestPage kind="generated" />} />
