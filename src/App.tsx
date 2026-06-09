@@ -18,7 +18,28 @@ import { useCollection } from '@/hooks/useCollection';
 import { loadUserLists } from '@/hooks/useUserLists';
 import { trackEvent } from '@/services/analytics';
 import { getBanList } from '@/services/scryfall/client';
+import { AuroraThemed } from '@/components/ui/AuroraThemed';
+import { getAuroraColors } from '@/lib/commanderTheme';
 import type { ScryfallCard } from '@/types';
+
+// Aurora palette + horizontal parallax for the four "hub" routes. AuroraThemed
+// lives in Layout so a single instance persists across these navigations and
+// animates the color swap; rendering it per-page would cut rather than
+// transition. Detail views (e.g. /lists/:id) own their own AuroraThemed
+// driven by the list's color identity, so we skip the layout aurora there.
+//
+// `shift` is the wrapper's translateX applied via a transformed containing
+// block — the aurora-bg blobs glide left/right as you move between hubs,
+// so Home → Decks → Lists feels like one continuous sweep.
+type HubAurora = { identity: string[]; shift: string };
+
+function getLayoutAurora(pathname: string): HubAurora | null {
+  if (pathname === '/')                                       return { identity: [],    shift: '12vw'  };
+  if (pathname === '/decks' || pathname === '/decks/')        return { identity: ['U'], shift: '0'     };
+  if (pathname === '/lists' || pathname === '/lists/')        return { identity: ['G'], shift: '-12vw' };
+  if (pathname === '/migrate')                                return { identity: [],    shift: '0'     };
+  return null;
+}
 
 // Lazy-load MetricsPage — only imported in dev, completely excluded from prod bundle
 const MetricsPage = import.meta.env.DEV
@@ -263,8 +284,32 @@ function Layout({ children }: { children: React.ReactNode }) {
     window.location.hostname === 'localhost'
   );
 
+  const layoutAurora = getLayoutAurora(location.pathname);
+
   return (
     <div className="min-h-screen bg-background flex flex-col relative">
+      {/* Hub-route aurora — Home / Decks browse / Lists browse / Migrate. A
+          single AuroraThemed instance lives here so the color swap animates
+          across navigations. The outer wrapper extends past the viewport
+          on both sides and applies a translateX so the aurora-bg blobs
+          (whose containing block is the transformed wrapper) glide left/
+          right as you move between hubs. `aurora-tabbed` pulls the blob
+          positions inward to compensate for the wider wrapper. */}
+      {layoutAurora !== null && (
+        <div
+          className="aurora-tabbed fixed z-0 pointer-events-none"
+          style={{
+            top: 0,
+            bottom: 0,
+            left: '-25vw',
+            right: '-25vw',
+            transform: `translateX(${layoutAurora.shift})`,
+            transition: 'transform 800ms cubic-bezier(0.4, 0, 0.2, 1)',
+          }}
+        >
+          <AuroraThemed colors={getAuroraColors(layoutAurora.identity)} />
+        </div>
+      )}
       {/* Commander Art Background (hidden on collection page) */}
       {!isCollectionPage && (!isAnalyzePage || !!generatedDeck) && (!isListsPage || !!generatedDeck) && <CommanderBackground commander={commander} deckGenerated={!!generatedDeck} />}
 

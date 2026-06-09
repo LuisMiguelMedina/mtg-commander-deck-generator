@@ -13,8 +13,6 @@ import {
 } from '@/services/migration/import';
 import { MigrationError, type MigrationEnvelope } from '@/services/migration/schema';
 import { downloadBackup, hasAnythingToExport } from '@/services/migration/export';
-import { AuroraThemed } from '@/components/ui/AuroraThemed';
-import { getAuroraColors } from '@/lib/commanderTheme';
 
 type Stage =
   | { kind: 'picking' }
@@ -137,22 +135,18 @@ export function MigratePage() {
 }
 
 function PageShell({ children }: { children: React.ReactNode }) {
-  const aurora = getAuroraColors([]);
   return (
-    <>
-      <AuroraThemed colors={aurora} />
-      <main className="flex-1 container mx-auto px-4 py-6 max-w-3xl animate-fade-in">
-        <div className="text-center py-6 mb-4">
-          <h1 className="text-4xl font-bold mb-3">
-            Migrate your <span className="gradient-text">ManaFoundry</span> data
-          </h1>
-          <p className="text-base text-muted-foreground max-w-xl mx-auto">
-            Back up everything on this site as a portable file, or restore from a backup made on another browser or host.
-          </p>
-        </div>
-        {children}
-      </main>
-    </>
+    <main className="flex-1 container mx-auto px-4 py-6 max-w-3xl animate-fade-in">
+      <div className="text-center py-6 mb-4">
+        <h1 className="text-4xl font-bold mb-3">
+          Migrate your <span className="gradient-text">ManaFoundry</span> data
+        </h1>
+        <p className="text-base text-muted-foreground max-w-xl mx-auto">
+          Back up everything on this site as a portable file, or restore from a backup made on another browser or host.
+        </p>
+      </div>
+      {children}
+    </main>
   );
 }
 

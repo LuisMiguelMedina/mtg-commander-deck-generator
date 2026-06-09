@@ -659,25 +659,6 @@ export function ListsPage() {
   // Browse view
   return (
     <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl">
-      {/* Aurora wrapper — transform creates a new containing block for the
-          fixed-position aurora-bg child, so the parallax shift takes effect.
-          Decks: centered. Lists: slid left. The wrapper extends past the
-          viewport on both sides (-25vw) so the aurora still covers the
-          visible area after the shift; otherwise the wrapper's right edge
-          becomes a hard vertical line where the aurora ends. */}
-      <div
-        className="aurora-tabbed fixed z-0 pointer-events-none"
-        style={{
-          top: 0,
-          bottom: 0,
-          left: '-25vw',
-          right: '-25vw',
-          transform: `translateX(${currentView.kind === 'list' ? '-12vw' : '0'})`,
-          transition: 'transform 800ms cubic-bezier(0.4, 0, 0.2, 1)',
-        }}
-      >
-        <div className="aurora-bg" />
-      </div>
       <div className="flex items-center justify-between mb-6">
         <button
           onClick={() => navigate('/')}
