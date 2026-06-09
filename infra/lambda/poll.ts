@@ -160,3 +160,51 @@ export async function handleSubmit(body: string | undefined, headers: Record<str
   await client.send(new PutItemCommand({ TableName: TABLE_NAME, Item: marshall(record) }));
   return jsonResponse(200, { suggestion: toPublic(record) });
 }
+
+export async function handleList(headers: Record<string, string | undefined> | undefined) {
+  const anonId = headers?.['x-anon-id'] || headers?.['X-Anon-Id'];
+
+  // 1. Fetch every suggestion (newest first). Expected list size ≤ 500 even years out — single query is fine.
+  const suggestions: SuggestionRecord[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let exclusiveStartKey: Record<string, any> | undefined;
+  do {
+    const res = await client.send(new QueryCommand({
+      TableName: TABLE_NAME,
+      KeyConditionExpression: 'pk = :pk',
+      ExpressionAttributeValues: marshall({ ':pk': PK_SUGGESTION }),
+      ScanIndexForward: false,
+      ExclusiveStartKey: exclusiveStartKey,
+    }));
+    for (const raw of res.Items || []) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      suggestions.push(unmarshall(raw as any) as SuggestionRecord);
+    }
+    exclusiveStartKey = res.LastEvaluatedKey;
+  } while (exclusiveStartKey);
+
+  // 2. If anonId provided + valid, look up which suggestions they've voted on.
+  let myVotes: string[] = [];
+  if (isValidUuid(anonId) && suggestions.length > 0) {
+    // BatchGet up to 100 at a time. Simpler than per-row GetItem and avoids N round-trips.
+    const { BatchGetItemCommand } = await import('@aws-sdk/client-dynamodb');
+    const keys = suggestions.map(s => marshall({ pk: `${PK_VOTE_PREFIX}${s.id}`, sk: anonId }));
+    for (let i = 0; i < keys.length; i += 100) {
+      const batch = keys.slice(i, i + 100);
+      const res = await client.send(new BatchGetItemCommand({
+        RequestItems: { [TABLE_NAME]: { Keys: batch, ProjectionExpression: 'pk' } },
+      }));
+      const items = res.Responses?.[TABLE_NAME] || [];
+      for (const raw of items) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const u = unmarshall(raw as any) as { pk: string };
+        myVotes.push(u.pk.slice(PK_VOTE_PREFIX.length));
+      }
+    }
+  }
+
+  return jsonResponse(200, {
+    suggestions: suggestions.map(toPublic),
+    myVotes,
+  });
+}
