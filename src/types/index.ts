@@ -629,6 +629,10 @@ export interface SerializedEnrichment {
   edhrecTypes?: Record<string, number>;
 
   detectedCombos?: DetectedCombo[];
+  /** Raw combo pool used to re-evaluate detectedCombos when the deck list changes
+   * (e.g., adding a "MISSING" card from the combo display). Without this, warm
+   * cache loads can't update combo completeness in response to card edits. */
+  rawCombos?: EDHRECCombo[];
   gapAnalysis?: GapAnalysisCard[];
   swapCandidates?: Record<string, ScryfallCard[]>;
   bracketEstimation?: import('@/services/deckBuilder/bracketEstimator').BracketEstimation;

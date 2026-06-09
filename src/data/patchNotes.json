@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.2.37",
+    "notes": [
+      "New site url is live! Follow the banner for the new link, as well as a migration tool to bring your decks, lists, and collections over to the new site.",
+      "When you duplicate a deck, you're now taken straight to the new copy instead of staying on the previous one.",
+      "Polish on mobile for creating lists and decks."
+    ]
+  },
+  {
     "version": "1.2.36",
     "notes": [
       "New Commanders tab on the Collection page — every legendary you own, ranked by how many EDHREC staples you have for it. The Spotlight up top shows your top 'Ready to play' pick.",

@@ -770,7 +770,10 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
     setActionToast(null);
   }, [actionToast]);
 
-  // Wrapped remove handler that shows toast with undo
+  // Wrapped remove handler that shows toast with undo. Callers (DeckDisplay,
+  // ComboDisplay wrappers) are responsible for pushing the matching 'remove'
+  // history entry — wrapping it here would double-push for DeckDisplay, which
+  // already records history before calling onRemoveCards.
   const handleRemoveCardsWithToast = useMemo(() => {
     if (!onRemoveCards) return undefined;
     return (names: string[]) => {
@@ -906,6 +909,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
         edhrecCurve: args.edhrecResult.edhrecCurve,
         edhrecTypes: args.edhrecResult.edhrecTypes,
         detectedCombos: args.detectedCombos,
+        rawCombos: rawCombosRef.current,
       };
       await writeEnrichmentCache({
         listId: list.id,
@@ -922,7 +926,10 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
       setSideboardCards(payload.sideboardCards);
       setMaybeboardCards(payload.maybeboardCards);
       setArtUrl(getArtCropUrl(payload.commanderCard));
-      rawCombosRef.current = [];
+      // Restore the raw combo pool so incremental updates (add/remove a missing
+      // combo card) can re-evaluate completeness instead of falling back to the
+      // stale detectedCombos array.
+      rawCombosRef.current = payload.rawCombos ?? [];
       const syntheticDeck: GeneratedDeck = {
         commander: payload.commanderCard,
         partnerCommander: payload.partnerCard,
@@ -1245,6 +1252,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
               ...a.map(c => ({ ...c, source: 'commander' as const })),
               ...b.map(c => ({ ...c, source: 'color-identity' as const })),
             ];
+            rawCombosRef.current = merged;
             detectedCombos = detectCombosInDeck(merged, allDeckNames, commanderCard, partnerCard);
           } catch { /* non-critical */ }
 
@@ -1453,6 +1461,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
         edhrecCurve: enrichResult.edhrecCurve,
         edhrecTypes: enrichResult.edhrecTypes,
         detectedCombos,
+        rawCombos: rawCombosRef.current,
       };
       await writeEnrichmentCache({
         listId: list.id,
@@ -2403,10 +2412,22 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
             <ComboDisplay
               combos={generatedDeck?.detectedCombos ?? []}
               hideMustInclude
-              onAddToDeck={onAddCards ? (names) => onAddCards(names, 'deck') : undefined}
-              onRemoveFromDeck={handleRemoveCardsWithToast}
-              onMoveToSideboard={onMoveToSideboard}
-              onMoveToMaybeboard={onMoveToMaybeboard}
+              onAddToDeck={onAddCards ? (names) => {
+                onAddCards(names, 'deck');
+                for (const n of names) pushDeckHistory({ action: 'add', cardName: n });
+              } : undefined}
+              onRemoveFromDeck={handleRemoveCardsWithToast ? (names) => {
+                for (const n of names) pushDeckHistory({ action: 'remove', cardName: n });
+                handleRemoveCardsWithToast(names);
+              } : undefined}
+              onMoveToSideboard={onMoveToSideboard ? (names) => {
+                onMoveToSideboard(names);
+                for (const n of names) pushDeckHistory({ action: 'sideboard', cardName: n });
+              } : undefined}
+              onMoveToMaybeboard={onMoveToMaybeboard ? (names) => {
+                onMoveToMaybeboard(names);
+                for (const n of names) pushDeckHistory({ action: 'maybeboard', cardName: n });
+              } : undefined}
               phasesDone={phasesDone}
             />
           )}
