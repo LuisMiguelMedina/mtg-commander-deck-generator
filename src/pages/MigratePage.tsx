@@ -23,8 +23,36 @@ type Stage =
   | { kind: 'applying' }
   | { kind: 'done'; summary: ImportSummary };
 
+// We force a full page reload after applying so every in-memory cache
+// (useUserLists, Zustand store, Dexie liveQueries) re-initializes from the
+// freshly written storage. The summary is stashed in sessionStorage so the
+// Done view can survive the reload.
+const SUMMARY_STORAGE_KEY = 'manafoundry-migration-summary';
+
+function consumePersistedSummary(): ImportSummary | null {
+  try {
+    const raw = sessionStorage.getItem(SUMMARY_STORAGE_KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(SUMMARY_STORAGE_KEY);
+    const parsed = JSON.parse(raw) as ImportSummary;
+    if (
+      typeof parsed.listsImported === 'number' &&
+      typeof parsed.collectionCardsImported === 'number' &&
+      typeof parsed.preferencesApplied === 'number'
+    ) {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function MigratePage() {
-  const [stage, setStage] = useState<Stage>({ kind: 'picking' });
+  const [stage, setStage] = useState<Stage>(() => {
+    const persisted = consumePersistedSummary();
+    return persisted ? { kind: 'done', summary: persisted } : { kind: 'picking' };
+  });
 
   const handleFile = useCallback(async (file: File) => {
     try {
@@ -65,7 +93,13 @@ export function MigratePage() {
           onApply={async () => {
             setStage({ kind: 'applying' });
             const summary = await applyMigration(stage.envelope, stage.plan);
-            setStage({ kind: 'done', summary });
+            try {
+              sessionStorage.setItem(SUMMARY_STORAGE_KEY, JSON.stringify(summary));
+            } catch {
+              // If sessionStorage is unavailable we still want a fresh page; the
+              // Done view summary just won't survive the reload.
+            }
+            window.location.reload();
           }}
           onCancel={reset}
         />
