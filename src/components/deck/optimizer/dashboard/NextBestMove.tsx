@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Lightbulb, ArrowRight, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ScryfallCard, PlanScore, Misfit, GapAnalysisCard, DetectedCombo } from '@/types';
-import type { RoleBreakdown, CurvePhaseAnalysis } from '@/services/deckBuilder/deckAnalyzer';
+import type { RoleBreakdown, CurvePhaseAnalysis, OptimizeCard, OptimizeSwaps } from '@/services/deckBuilder/deckAnalyzer';
 import { TABS, type TabKey } from '../constants';
 
 // Map TabKey → its sidebar icon (so suggestion nav buttons look like the tabs they open)
@@ -21,7 +21,7 @@ export interface NextBestMoveProps {
   /** Number of cards over deck target (positive = over, negative = under). */
   deckExcess: number;
   commander: ScryfallCard;
-  onNavigate: (tab: TabKey) => void;
+  onNavigate: (tab: TabKey, opts?: { cardName: string; side: 'add' | 'remove' }) => void;
   /** Mana base verdict from analysis.manaBase.verdict */
   manaVerdict?: 'critically-low' | 'low' | 'slightly-low' | 'ok' | 'high';
   /** Current land count */
@@ -30,6 +30,12 @@ export interface NextBestMoveProps {
   suggestedLands?: number;
   /** True when EDHREC data is limited for this commander */
   limitedData?: boolean;
+  /**
+   * Shared swap list — the SAME data that drives the optimize tab's columns.
+   * The trim/fill tier-1 suggestions read from here so the dashboard and the
+   * optimize tab always recommend the exact same card.
+   */
+  baseSwaps?: OptimizeSwaps | null;
 }
 
 interface Suggestion {
@@ -37,6 +43,8 @@ interface Suggestion {
   tier: 1 | 2 | 3;
   /** Card name recommended (used for dedup across suggestions). */
   cardName?: string;
+  /** Which optimize column the cardName belongs to, when navigating to the optimize tab. */
+  side?: 'add' | 'remove';
   message: React.ReactNode;
   navigateTo?: TabKey;
   navLabel?: string;
@@ -46,24 +54,38 @@ function buildSuggestions(props: NextBestMoveProps): Suggestion[] {
   const {
     planScore, misfits, gapAnalysis, roleBreakdowns, curvePhases, detectedCombos, deckExcess,
     manaVerdict, currentLands, suggestedLands, limitedData,
+    baseSwaps,
   } = props;
   if (!planScore) return [];
 
   const candidates: Suggestion[] = [];
 
+  // The optimize tab's columns are these exact lists. By picking suggestions
+  // straight off the top of `baseSwaps`, the dashboard always points at a
+  // card the user will actually see when they click into the optimize tab.
+  const topRemoval: OptimizeCard | undefined = baseSwaps?.removals?.[0];
+  const topAddition: OptimizeCard | undefined = baseSwaps?.additions?.[0];
+
+  // Same lookup logic as the optimize tab uses to suggest a swap-in pairing.
+  const replacementFor = (removalName: string) =>
+    misfits?.find(m => m.card.name === removalName)?.suggestedReplacement
+      ?? gapAnalysis?.find(g => g.name !== removalName);
+
   // ── Tier 1: Critical structural issues ──────────────────────────────
 
-  // trim-over-target
-  if (deckExcess > 0 && misfits && misfits.length > 0) {
-    const worst = misfits[0];
-    const replacement = worst.suggestedReplacement;
+  // trim-over-target — read straight off the shared optimize list so the
+  // suggestion and the column always match (e.g. game-changer misfits
+  // surface in both rather than only on the dashboard).
+  if (deckExcess > 0 && topRemoval) {
+    const replacement = replacementFor(topRemoval.name);
     candidates.push({
-      id: `trim-${worst.card.name}`,
+      id: `trim-${topRemoval.name}`,
       tier: 1,
-      cardName: worst.card.name,
+      cardName: topRemoval.name,
+      side: 'remove',
       message: (
         <>
-          Trim <strong className="text-rose-300">{worst.card.name}</strong> — you're{' '}
+          Trim <strong className="text-rose-300">{topRemoval.name}</strong> — you're{' '}
           <strong>{deckExcess}</strong> card{deckExcess !== 1 ? 's' : ''} over target
           {replacement && (
             <>. Consider swapping in <strong className="text-violet-300">{replacement.name}</strong> ({Math.round(replacement.inclusion)}% of decks)</>
@@ -76,19 +98,21 @@ function buildSuggestions(props: NextBestMoveProps): Suggestion[] {
     });
   }
 
-  // fill-under-target
-  if (deckExcess < 0 && gapAnalysis && gapAnalysis.length > 0) {
-    const topGap = gapAnalysis[0];
+  // fill-under-target — same idea on the additions side.
+  if (deckExcess < 0 && topAddition) {
     const abs = Math.abs(deckExcess);
+    const inclusionStr = topAddition.inclusion != null
+      ? `, and this one's in ${Math.round(topAddition.inclusion)}% of decks`
+      : '';
     candidates.push({
-      id: `fill-${topGap.name}`,
+      id: `fill-${topAddition.name}`,
       tier: 1,
-      cardName: topGap.name,
+      cardName: topAddition.name,
+      side: 'add',
       message: (
         <>
-          Add <strong className="text-violet-300">{topGap.name}</strong> — you're{' '}
-          <strong>{abs}</strong> card{abs !== 1 ? 's' : ''} under target, and this one's in{' '}
-          {Math.round(topGap.inclusion)}% of decks.
+          Add <strong className="text-violet-300">{topAddition.name}</strong> — you're{' '}
+          <strong>{abs}</strong> card{abs !== 1 ? 's' : ''} under target{inclusionStr}.
         </>
       ),
       navigateTo: 'optimize',
@@ -148,48 +172,49 @@ function buildSuggestions(props: NextBestMoveProps): Suggestion[] {
 
   for (const { key: weakest } of weakSubs) {
     if (weakest === 'cardFit') {
-      // Only generate if not already covered by tier-1 trim/fill suggestions
+      // Only generate if not already covered by tier-1 trim/fill suggestions.
+      // Both branches read off `baseSwaps` for the same reason as tier 1 —
+      // dashboard and optimize tab must surface the same card.
       const alreadyCovered = candidates.some(c => c.navigateTo === 'optimize' && c.tier === 1);
       if (!alreadyCovered) {
-        if (misfits && misfits.length > 0) {
-          const worst = misfits[0];
-          const replacement = worst.suggestedReplacement;
-          if (!suggestedCards.has(worst.card.name)) {
-            candidates.push({
-              id: `cardfit-trim-${worst.card.name}`,
-              tier: 2,
-              cardName: worst.card.name,
-              message: (
-                <>
-                  Card Fit is weak — <strong className="text-rose-300">{worst.card.name}</strong> doesn't fit your plan
-                  {replacement && !suggestedCards.has(replacement.name) && (
-                    <>. Try <strong className="text-violet-300">{replacement.name}</strong> ({Math.round(replacement.inclusion)}% of decks) instead</>
-                  )}
-                  .
-                </>
-              ),
-              navigateTo: 'optimize',
-              navLabel: 'Card Fit',
-            });
-            suggestedCards.add(worst.card.name);
-          }
-        } else if (gapAnalysis && gapAnalysis.length > 0) {
-          const top = gapAnalysis.find(g => !suggestedCards.has(g.name));
-          if (top) {
-            candidates.push({
-              id: `cardfit-gap-${top.name}`,
-              tier: 2,
-              cardName: top.name,
-              message: (
-                <>
-                  Card Fit is weak — try adding <strong className="text-violet-300">{top.name}</strong>, played in {Math.round(top.inclusion)}% of decks like this.
-                </>
-              ),
-              navigateTo: 'optimize',
-              navLabel: 'Card Fit',
-            });
-            suggestedCards.add(top.name);
-          }
+        if (topRemoval && !suggestedCards.has(topRemoval.name)) {
+          const replacement = replacementFor(topRemoval.name);
+          candidates.push({
+            id: `cardfit-trim-${topRemoval.name}`,
+            tier: 2,
+            cardName: topRemoval.name,
+            side: 'remove',
+            message: (
+              <>
+                Card Fit is weak — <strong className="text-rose-300">{topRemoval.name}</strong> doesn't fit your plan
+                {replacement && !suggestedCards.has(replacement.name) && (
+                  <>. Try <strong className="text-violet-300">{replacement.name}</strong> ({Math.round(replacement.inclusion)}% of decks) instead</>
+                )}
+                .
+              </>
+            ),
+            navigateTo: 'optimize',
+            navLabel: 'Card Fit',
+          });
+          suggestedCards.add(topRemoval.name);
+        } else if (topAddition && !suggestedCards.has(topAddition.name)) {
+          const inclusionStr = topAddition.inclusion != null
+            ? `, played in ${Math.round(topAddition.inclusion)}% of decks like this`
+            : '';
+          candidates.push({
+            id: `cardfit-gap-${topAddition.name}`,
+            tier: 2,
+            cardName: topAddition.name,
+            side: 'add',
+            message: (
+              <>
+                Card Fit is weak — try adding <strong className="text-violet-300">{topAddition.name}</strong>{inclusionStr}.
+              </>
+            ),
+            navigateTo: 'optimize',
+            navLabel: 'Card Fit',
+          });
+          suggestedCards.add(topAddition.name);
         }
       }
     }
@@ -270,22 +295,36 @@ function buildSuggestions(props: NextBestMoveProps): Suggestion[] {
     }
 
     if (weakest === 'strategy') {
-      // Highest-synergy gap card not yet suggested
-      const themeGap = gapAnalysis?.find(g => g.synergy > 0 && !suggestedCards.has(g.name));
-      if (themeGap) {
+      // Prefer a theme-synergy add from `baseSwaps` so it's guaranteed to
+      // appear in the optimize tab's add column. Fall back to the highest
+      // synergy gap card if `baseSwaps` doesn't surface a theme item.
+      const themeAdd = baseSwaps?.additions?.find(
+        c => c.isThemeSynergy && !suggestedCards.has(c.name),
+      );
+      const themeGap = themeAdd
+        ? gapAnalysis?.find(g => g.name === themeAdd.name)
+        : gapAnalysis?.find(g => g.synergy > 0 && !suggestedCards.has(g.name));
+      const pickName = themeAdd?.name ?? themeGap?.name;
+      if (pickName) {
+        const synergyStr = themeGap ? ` (synergy +${themeGap.synergy.toFixed(2)}` : '';
+        const inclusionRaw = themeGap?.inclusion ?? themeAdd?.inclusion;
+        const inclusionStr = inclusionRaw != null
+          ? `${synergyStr ? ', ' : ' ('}played in ${Math.round(inclusionRaw)}% of builds)`
+          : (synergyStr ? ')' : '');
         candidates.push({
-          id: `strategy-${themeGap.name}`,
+          id: `strategy-${pickName}`,
           tier: 2,
-          cardName: themeGap.name,
+          cardName: pickName,
+          side: 'add',
           message: (
             <>
-              Strategy is thin — <strong className="text-violet-300">{themeGap.name}</strong> would help (synergy +{themeGap.synergy.toFixed(2)}, played in {Math.round(themeGap.inclusion)}% of builds).
+              Strategy is thin — <strong className="text-violet-300">{pickName}</strong> would help{synergyStr}{inclusionStr}.
             </>
           ),
           navigateTo: 'optimize',
           navLabel: 'Card Fit',
         });
-        suggestedCards.add(themeGap.name);
+        suggestedCards.add(pickName);
       }
     }
   }
@@ -302,6 +341,7 @@ function buildSuggestions(props: NextBestMoveProps): Suggestion[] {
           id: `combo-${nearMiss.comboId}`,
           tier: 3,
           cardName: missing,
+          side: 'add',
           message: (
             <>
               Complete the <strong className="text-foreground">{result}</strong> combo — you're 1 card away (<strong className="text-violet-300">{missing}</strong>).
@@ -387,7 +427,12 @@ export function NextBestMove(props: NextBestMoveProps) {
             {s.navigateTo ? (
               <button
                 type="button"
-                onClick={() => props.onNavigate(s.navigateTo!)}
+                onClick={() => props.onNavigate(
+                  s.navigateTo!,
+                  s.navigateTo === 'optimize' && s.cardName && s.side
+                    ? { cardName: s.cardName, side: s.side }
+                    : undefined,
+                )}
                 className="flex-1 min-w-0 flex items-start gap-3 text-left px-2 py-2"
                 aria-label={`Open ${s.navLabel}`}
               >

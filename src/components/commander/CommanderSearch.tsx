@@ -60,7 +60,17 @@ function sampleRandom<T>(arr: T[], n: number): T[] {
   return shuffled.slice(0, n);
 }
 
-export function CommanderSearch() {
+export interface CommanderSearchProps {
+  /**
+   * When provided, the search component delegates the selection to this
+   * callback INSTEAD of navigating to /build. Used by the inspector's
+   * "Generate & Inspect" flow so it can do its own inline build with default
+   * settings (no user preferences applied).
+   */
+  onSelectCommander?: (card: ScryfallCard) => void | Promise<void>;
+}
+
+export function CommanderSearch({ onSelectCommander }: CommanderSearchProps = {}) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ScryfallCard[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -181,13 +191,20 @@ export function CommanderSearch() {
     setQuery('');
     setResults([]);
     setShowResults(false);
-    setCommander(card);
-    navigate(`/build/${encodeURIComponent(card.name)}`);
     trackEvent('commander_selected', {
       commanderName: card.name,
       colorIdentity: card.color_identity,
       hasPartner: false,
     });
+    // If a host provided its own selection handler (e.g. inspector hub's
+    // inline generate-and-inspect flow), defer entirely — do NOT mutate
+    // store state or navigate, the host owns those decisions.
+    if (onSelectCommander) {
+      onSelectCommander(card);
+      return;
+    }
+    setCommander(card);
+    navigate(`/build/${encodeURIComponent(card.name)}`);
   };
 
   // Select a commander from the collection — fetch full ScryfallCard first

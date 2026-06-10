@@ -720,7 +720,7 @@ export function BuilderPage() {
                 className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-card/50 border border-border/50 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
               >
                 <Microscope className="w-3.5 h-3.5" />
-                Inspect
+                Inspect (Beta)
               </button>
             )}
             <button

@@ -8,7 +8,8 @@ export interface OptimizePlanHeaderProps {
   totals: OptimizePlanTotals;
   applying: boolean;
   hasSwaps: boolean;
-  hasUnchecked: boolean;
+  /** True when the user has selected any card to swap. Toggles the "Reset selections" button visibility. */
+  hasSelections: boolean;
   onApply: () => void;
   onReset: () => void;
   view: OptimizeView;
@@ -25,7 +26,7 @@ interface ToggleOption {
 }
 
 export function OptimizePlanHeader({
-  totals, applying, hasSwaps, hasUnchecked, onApply, onReset,
+  totals, applying, hasSwaps, hasSelections, onApply, onReset,
   view, onViewChange, comboCount,
 }: OptimizePlanHeaderProps) {
   const { totalChanges, removeCount, addCount, priceDelta, scoreDelta, projectedSize, targetSize, overBy } = totals;
@@ -134,7 +135,7 @@ export function OptimizePlanHeader({
             )}
           </div>
 
-          {hasUnchecked && (
+          {hasSelections && (
             <button
               type="button"
               onClick={onReset}

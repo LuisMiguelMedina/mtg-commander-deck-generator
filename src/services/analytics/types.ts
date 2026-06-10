@@ -85,7 +85,7 @@ export interface AnalyticsEventMetadata {
   analyze_deck_loaded: { source: 'paste' | 'list' | 'generated'; cardCount: number; hasCommander: boolean };
   analyze_deck_saved: { listName: string; cardCount: number; source: 'paste' | 'list' | 'generated' };
   analyze_lane_switched: { from: string; to: string };
-  analyze_cta_clicked: { from: 'builder' | 'list-deck' };
+  analyze_cta_clicked: { from: 'builder' | 'list-deck' | 'generate-lane-auto' };
   playtest_started: {
     /** Where the playtest was launched from. */
     source: 'list' | 'generated';

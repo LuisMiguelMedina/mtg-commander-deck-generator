@@ -1,92 +1,149 @@
-import { useState, useCallback } from 'react';
-import { Loader2, Sparkles } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { searchCommanders } from '@/services/scryfall/client';
+import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { ScryfallCard } from '@/types';
+import { Loader2 } from 'lucide-react';
+import { CommanderSearch } from '@/components/commander/CommanderSearch';
+import { generateDeck } from '@/services/deckBuilder/deckGenerator';
+import { fetchCommanderData } from '@/services/edhrec/client';
+import { useStore } from '@/store';
+import { trackEvent } from '@/services/analytics';
+import type { Customization, ScryfallCard, ThemeResult } from '@/types';
+
+// Pristine customization used for "Generate & Inspect" — explicitly empties the
+// user's banned/must-include lists and resets all preference-y fields so the
+// inspector sees a stock build for the chosen commander. Numeric land counts
+// get overwritten with EDHREC suggestions before generation.
+function buildPristineCustomization(): Customization {
+  return {
+    deckFormat: 99,
+    landCount: 37,
+    nonBasicLandCount: 15,
+    bannedCards: [],
+    banLists: [],
+    mustIncludeCards: [],
+    tempBannedCards: [],
+    tempMustIncludeCards: [],
+    maxCardPrice: null,
+    deckBudget: null,
+    budgetOption: 'any',
+    gameChangerLimit: 'unlimited',
+    bracketLevel: 'all',
+    maxRarity: null,
+    tinyLeaders: false,
+    ignoreOwnedBudget: false,
+    ignoreOwnedRarity: false,
+    collectionMode: false,
+    collectionStrategy: 'full',
+    collectionOwnedPercent: 75,
+    arenaOnly: false,
+    scryfallQuery: '',
+    comboCount: 1,
+    hyperFocus: false,
+    balancedRoles: true,
+    currency: 'USD',
+    appliedExcludeLists: [],
+    appliedIncludeLists: [],
+    advancedTargets: {
+      curvePercentages: null,
+      typePercentages: null,
+      roleTargets: null,
+      edhrecBlendWeight: null,
+      edhrecInclusionThreshold: null,
+    },
+    tempoAutoDetect: true,
+    tempoPacing: 'balanced',
+  };
+}
 
 export function GenerateLane() {
   const navigate = useNavigate();
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<ScryfallCard[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [picked, setPicked] = useState<ScryfallCard | null>(null);
+  const [working, setWorking] = useState(false);
+  const [progress, setProgress] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
-  const runSearch = useCallback(async (q: string) => {
-    setQuery(q);
-    setPicked(null);
-    if (q.trim().length < 2) { setResults([]); return; }
-    setSearching(true);
+  const handleSelectCommander = useCallback(async (card: ScryfallCard) => {
+    setWorking(true);
+    setError(null);
+    setProgress('Loading commander data…');
     try {
-      const r = await searchCommanders(q.trim());
-      setResults(r.slice(0, 8));
-    } finally {
-      setSearching(false);
-    }
-  }, []);
+      // Build with EDHREC theme context (first two themes auto-selected, like
+      // the standard generate flow). We DON'T write themes back into the store
+      // so the user's manual theme selections elsewhere stay intact.
+      const data = await fetchCommanderData(card.name).catch(() => null);
+      const themes = data?.themes ?? [];
+      const selectedThemes: ThemeResult[] = themes.map((t, index) => ({
+        name: t.name,
+        source: 'edhrec' as const,
+        slug: t.slug,
+        deckCount: t.count,
+        popularityPercent: t.popularityPercent,
+        isSelected: index < 2,
+      }));
 
-  const handleGenerate = useCallback(() => {
-    if (!picked) return;
-    navigate(`/build/${encodeURIComponent(picked.name)}`);
-  }, [navigate, picked]);
+      const pristine = buildPristineCustomization();
+
+      // Seed EDHREC-suggested land counts when available so the deck isn't
+      // wildly off-curve for this commander's color identity.
+      const landDist = data?.stats.landDistribution;
+      if (landDist && landDist.total > 0) {
+        pristine.landCount = Math.round(landDist.total);
+        pristine.nonBasicLandCount = Math.round(landDist.nonbasic);
+      }
+
+      const deck = await generateDeck({
+        commander: card,
+        partnerCommander: null,
+        colorIdentity: card.color_identity,
+        customization: pristine,
+        selectedThemes,
+        onProgress: (msg) => setProgress(msg),
+      });
+
+      // Write only deck-related session state. `customization` (the user's
+      // saved preferences — banned cards, must-includes, budget, etc.) is
+      // intentionally left alone. selectedThemes/edhrecThemes are cleared
+      // because they would otherwise be stale from a prior commander session
+      // and surface as the wrong theme labels in the inspector.
+      useStore.setState({
+        commander: card,
+        partnerCommander: null,
+        colorIdentity: card.color_identity,
+        generatedDeck: deck,
+        selectedThemes: [],
+        edhrecThemes: [],
+      });
+
+      trackEvent('analyze_cta_clicked', { from: 'generate-lane-auto' });
+      navigate('/analyze/overview');
+    } catch (e) {
+      console.error('[GenerateLane] inline build failed', e);
+      setError('Could not build a deck for this commander. Please try again.');
+      setWorking(false);
+    }
+  }, [navigate]);
+
+  if (working) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+        <Loader2 className="w-8 h-8 text-violet-300/80 animate-spin" />
+        <div className="text-sm font-medium">{progress || 'Building your deck…'}</div>
+        <p className="text-xs text-muted-foreground max-w-sm">
+          Using default settings — your banned, must-include, and customization preferences aren't applied.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground text-center">
-        Pick a commander — we'll build a deck on the Generate page, then bring you back here to analyze it.
+        Pick a commander — we'll build a default deck and drop you straight onto the inspector. Your saved preferences aren't applied.
       </p>
-
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => runSearch(e.target.value)}
-        placeholder="Search for a commander…"
-        className="w-full bg-card/50 border border-border/50 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-      />
-
-      {searching && (
-        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-          <Loader2 className="w-3 h-3 animate-spin" />
-          Searching…
-        </p>
-      )}
-
-      {results.length > 0 && !picked && (
-        <div className="flex flex-wrap gap-2">
-          {results.map(c => (
-            <button
-              key={c.name}
-              onClick={() => { setPicked(c); setResults([]); }}
-              className="text-xs px-2.5 py-1.5 rounded-md border border-border/50 hover:bg-accent hover:border-primary/50 transition-colors"
-            >
-              {c.name}
-            </button>
-          ))}
+      {error && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-400 text-center">
+          {error}
         </div>
       )}
-
-      {picked && (
-        <div className="rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm flex items-center justify-between">
-          <span>Commander: <span className="font-semibold">{picked.name}</span></span>
-          <button
-            onClick={() => { setPicked(null); setQuery(''); }}
-            className="text-xs text-muted-foreground hover:text-foreground"
-          >
-            Change
-          </button>
-        </div>
-      )}
-
-      <div className="flex justify-end">
-        <Button
-          onClick={handleGenerate}
-          disabled={!picked}
-          className="btn-shimmer"
-        >
-          <Sparkles className="w-4 h-4 mr-2" />
-          Generate & Inspect
-        </Button>
-      </div>
+      <CommanderSearch onSelectCommander={handleSelectCommander} />
     </div>
   );
 }

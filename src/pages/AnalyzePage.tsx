@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Loader2, Check } from 'lucide-react';
+import { Loader2, Check, FlaskConical } from 'lucide-react';
 import { TAB_SLUG_BY_KEY, TAB_KEY_BY_SLUG, type TabKey } from '@/components/deck/optimizer/constants';
 import { LaneTabs, type LaneKey } from '@/components/analyze/LaneTabs';
 import { WhatYoullSeeStrip } from '@/components/analyze/WhatYoullSeeStrip';
@@ -678,6 +678,12 @@ export function AnalyzePage() {
         </h2>
         <p className="text-base text-muted-foreground">
           Spot what's missing before you sleeve up.
+        </p>
+        <p className="mt-3 inline-flex items-start gap-1.5 text-[11px] text-violet-300/70">
+          <FlaskConical className="w-3 h-3 shrink-0 mt-0.5" aria-hidden="true" />
+          <span>
+            Inspector is still in early development — things may be buggy or behave in surprising ways, especially if your deck does something unique.
+          </span>
         </p>
       </div>
 

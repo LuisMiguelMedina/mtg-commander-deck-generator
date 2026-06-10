@@ -9,7 +9,7 @@ import type { ScryfallCard } from '@/types';
 import { fetchCommanderData, fetchPartnerCommanderData, fetchCommanderThemeData, fetchPartnerThemeData } from '@/services/edhrec/client';
 import { detectThemes, generateStrategyLabel, buildDetectionMessage, PACING_PHRASE, type DetectedThemeResult, type Pacing } from '@/services/deckBuilder/themeDetector';
 import { loadTaggerData } from '@/services/tagger/client';
-import { analyzeDeck, getDeckSummaryData, type DeckAnalysis, type RecommendedCard, type CurvePhase } from '@/services/deckBuilder/deckAnalyzer';
+import { analyzeDeck, getDeckSummaryData, computeOptimizeSwaps, type DeckAnalysis, type RecommendedCard, type CurvePhase, type OptimizeSwaps } from '@/services/deckBuilder/deckAnalyzer';
 import { recomputeRoleTargetsForPacing } from '@/services/deckBuilder/roleTargets';
 import { getCardByName, getCardsByNames, getCardPrice, WUBRG } from '@/services/scryfall/client';
 import { CardPreviewModal } from '@/components/ui/CardPreviewModal';
@@ -81,6 +81,17 @@ export function DeckOptimizer({
       document.dispatchEvent(new CustomEvent('analyze-set-sort', { detail: { sortKey: 'price' } }));
     }
   }, [onTabChange, controlledActiveTab]);
+  // When a dashboard suggestion sends us to the optimize tab with a specific
+  // card, stash it so OptimizeTabContent can pre-check the right tile.
+  const [pendingOptimizeSelection, setPendingOptimizeSelection] =
+    useState<{ cardName: string; side: 'add' | 'remove' } | null>(null);
+  const navigateFromDashboard = useCallback(
+    (tab: TabKey, opts?: { cardName: string; side: 'add' | 'remove' }) => {
+      if (tab === 'optimize' && opts) setPendingOptimizeSelection(opts);
+      setActiveTab(tab);
+    },
+    [setActiveTab],
+  );
   const [activeRole, setActiveRole] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<LandSection | null>(null);
   const [activeCurvePhases, setActiveCurvePhases] = useState<Set<CurvePhase>>(new Set());
@@ -1028,6 +1039,25 @@ export function DeckOptimizer({
 
   const deckExcess = currentCards.length - deckSize;
 
+  // Single source of truth for "what to swap." Both the dashboard's
+  // NextBestMove suggestions and the optimize tab's columns consume this same
+  // list, so they never drift out of sync. Recomputes only when its inputs
+  // actually change.
+  const detectedCombosForSwaps = useStore(s => s.generatedDeck?.detectedCombos);
+  const baseSwaps = useMemo<OptimizeSwaps | null>(() => {
+    if (!analysis) return null;
+    return computeOptimizeSwaps({
+      analysis,
+      currentCards,
+      cardInclusionMap,
+      commanderName,
+      partnerCommanderName,
+      mustIncludeNames: menuProps.mustIncludeNames,
+      bannedNames: menuProps.bannedNames,
+      detectedCombos: detectedCombosForSwaps,
+    });
+  }, [analysis, currentCards, cardInclusionMap, commanderName, partnerCommanderName, menuProps.mustIncludeNames, menuProps.bannedNames, detectedCombosForSwaps]);
+
   // True when the deck cards differ from what was analyzed — drives the
   // "this is stale, re-run me" gold treatment on the Re-analyze button.
   const currentCardKey = useMemo(() => currentCards.map(c => c.name).join('\0'), [currentCards]);
@@ -1264,12 +1294,11 @@ export function DeckOptimizer({
               <TooltipContent side="right">Check a different deck</TooltipContent>
             </Tooltip>
           )}
-          {TABS.filter(t => t.key !== 'cost' && t.key !== 'optimize').map(tab => {
+          {TABS.filter(t => t.key !== 'cost').map(tab => {
             const isActive = activeTab === tab.key;
             const tabGrade = tabGrades[tab.key];
             const gradeStyle = tabGrade ? (HEALTH_GRADE_STYLES[tabGrade] || HEALTH_GRADE_STYLES.C) : null;
             const bracketBadge = tab.key === 'bracket' && bracketLevel ? BRACKET_COLORS[bracketLevel] : null;
-            const misfitCount = tab.key === 'optimize' ? (analysis?.misfits?.length ?? 0) : 0;
             const tabHref = getTabHref?.(tab.key);
             return (
               <Tooltip key={tab.key}>
@@ -1300,11 +1329,6 @@ export function DeckOptimizer({
                     {bracketBadge && (
                       <span className={`text-[9px] font-bold leading-none px-1 py-0.5 rounded tabular-nums ${bracketBadge.text} ${bracketBadge.bg}`}>
                         {bracketLevel}
-                      </span>
-                    )}
-                    {misfitCount > 0 && (
-                      <span className="text-[9px] font-bold leading-none px-1 py-0.5 rounded tabular-nums text-rose-300 bg-rose-500/25">
-                        {misfitCount}
                       </span>
                     )}
                   </a>
@@ -1433,7 +1457,7 @@ export function DeckOptimizer({
                 />
               ) : undefined
             }
-            onNavigate={setActiveTab}
+            onNavigate={navigateFromDashboard}
             onSaveAsDeck={onSaveAsDeck}
             onOpenInDeckView={onOpenInDeckView}
             cardSynergyMap={useStore.getState().generatedDeck?.cardSynergyMap}
@@ -1441,6 +1465,7 @@ export function DeckOptimizer({
             deckTarget={deckSize}
             roleBreakdowns={analysis.roleBreakdowns}
             curvePhases={analysis.curvePhases}
+            baseSwaps={baseSwaps}
           />
         )}
 
@@ -1544,6 +1569,9 @@ export function DeckOptimizer({
             onFocusedMisfitChange={onFocusedMisfitChange}
             onAddCards={onAddCards}
             onRemoveCards={onRemoveCards}
+            preSelect={pendingOptimizeSelection}
+            onPreSelectConsumed={() => setPendingOptimizeSelection(null)}
+            baseSwaps={baseSwaps ?? undefined}
           />
         )}
 

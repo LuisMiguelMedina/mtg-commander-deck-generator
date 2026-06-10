@@ -82,12 +82,31 @@ export function bandFor(score: number): string {
   return 'Thin';
 }
 
-export function headlineFor(score: number): string {
-  if (score >= 90) return 'Your deck is performing optimally.';
-  if (score >= 75) return 'Your deck is performing well, with a little room to grow.';
-  if (score >= 60) return 'Your deck is solid, with clear room for improvement.';
-  if (score >= 40) return 'Your deck has the foundation, but needs some tuning.';
-  return 'Your deck is missing key pieces of its plan.';
+export function headlineFor(score: number, planName?: string | null): string {
+  const plan = planName?.trim() || null;
+  if (score >= 90) {
+    return plan
+      ? `Your deck masterfully executes the ${plan} plan.`
+      : 'Your deck is performing optimally.';
+  }
+  if (score >= 75) {
+    return plan
+      ? `Your deck reliably executes the ${plan} plan, with a little room to grow.`
+      : 'Your deck is performing well, with a little room to grow.';
+  }
+  if (score >= 60) {
+    return plan
+      ? `Your deck solidly follows the ${plan} plan, with clear room for improvement.`
+      : 'Your deck is solid, with clear room for improvement.';
+  }
+  if (score >= 40) {
+    return plan
+      ? `Your deck has the foundation of the ${plan} plan, but needs some tuning.`
+      : 'Your deck has the foundation, but needs some tuning.';
+  }
+  return plan
+    ? `Your deck is missing key pieces of the ${plan} plan.`
+    : 'Your deck is missing key pieces of its plan.';
 }
 
 // Roles: how close are we to per-role targets, weighted by role criticality.
@@ -202,7 +221,7 @@ export function composePlanScore(inputs: ComposePlanScoreInputs): PlanScore {
   }
   const overall = Math.round(weightTotal > 0 ? weighted / weightTotal : 0);
   const bandLabel = bandFor(overall);
-  const headline = headlineFor(overall);
+  const headline = headlineFor(overall, inputs.planName);
   const byline = inputs.sampleSize && inputs.sampleSize > 0
     ? `Based on ${inputs.sampleSize.toLocaleString()} decklists.`
     : 'Based on aggregated EDHREC data.';

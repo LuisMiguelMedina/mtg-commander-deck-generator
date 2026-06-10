@@ -153,7 +153,7 @@ export function PasteLane({ onAnalyze, loading }: PasteLaneProps) {
               Inspecting…
             </>
           ) : (
-            <>Inspect →</>
+            <>Inspect (Beta) →</>
           )}
         </Button>
       </div>

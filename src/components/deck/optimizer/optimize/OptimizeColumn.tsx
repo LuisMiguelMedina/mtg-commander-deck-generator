@@ -17,6 +17,7 @@ function triStateFor(names: string[], uncheckedNames: Set<string>): TriState {
 }
 
 const REMOVAL_CATEGORY_LABELS: Record<string, string> = {
+  'misfit': "Doesn't Fit Plan",
   'low-synergy': 'Low Synergy',
   'curve-fix': 'Curve Fix',
   'low-inclusion': 'Low Inclusion',

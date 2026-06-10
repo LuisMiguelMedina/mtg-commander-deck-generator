@@ -225,6 +225,11 @@ function Layout({ children }: { children: React.ReactNode }) {
   const isCollectionPage = location.pathname === '/collection';
   const isListsPage = location.pathname.startsWith('/lists') || location.pathname.startsWith('/decks');
   const isAnalyzePage = location.pathname.startsWith('/analyze');
+  // The bare /analyze route is the selection hub. AnalyzePage keeps a prior
+  // generatedDeck in the store across a back-navigation here (to preserve a
+  // build session), so we must explicitly suppress the commander-art backdrop
+  // on the hub rather than keying off generatedDeck.
+  const isAnalyzeHub = location.pathname === '/analyze' || location.pathname === '/analyze/';
   const isCreatePage = location.pathname === '/' || location.pathname.startsWith('/build/') || location.pathname.startsWith('/build-from-deck/');
 
   const [eaEnabled, setEaEnabled] = useState(() => localStorage.getItem('ea-features-enabled') === 'true');
@@ -312,7 +317,7 @@ function Layout({ children }: { children: React.ReactNode }) {
         </div>
       )}
       {/* Commander Art Background (hidden on collection page) */}
-      {!isCollectionPage && (!isAnalyzePage || !!generatedDeck) && (!isListsPage || !!generatedDeck) && <CommanderBackground commander={commander} deckGenerated={!!generatedDeck} />}
+      {!isCollectionPage && !isAnalyzeHub && (!isAnalyzePage || !!generatedDeck) && (!isListsPage || !!generatedDeck) && <CommanderBackground commander={commander} deckGenerated={!!generatedDeck} />}
 
       {/* Content wrapper with relative positioning */}
       <div className="relative z-10 flex flex-col min-h-screen pb-16 sm:pb-0">
@@ -380,11 +385,16 @@ function Layout({ children }: { children: React.ReactNode }) {
                     <Link
                       to="/analyze"
                       aria-current={isAnalyzePage ? 'page' : undefined}
-                      className={`text-sm transition-colors px-2 py-1 rounded-md flex items-center gap-1.5 ${
+                      className={`text-sm transition-colors px-2 py-1 rounded-md flex items-center ${
                         isAnalyzePage ? 'text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                       }`}
                     >
-                      Inspector (EA)
+                      <span className="relative inline-block">
+                        Inspector
+                        <span className="absolute -top-0.5 -right-4 text-[7px] font-medium tracking-wider text-muted-foreground/60 uppercase leading-none">
+                          Beta
+                        </span>
+                      </span>
                     </Link>
                   )}
                   <Link
@@ -571,8 +581,13 @@ function Layout({ children }: { children: React.ReactNode }) {
               }`}
               aria-label="Inspector"
             >
-              <Microscope className={`w-5 h-5 ${isAnalyzePage ? 'text-primary' : ''}`} />
-              <span className="text-[10px] font-medium">Inspector (EA)</span>
+              <div className="relative">
+                <Microscope className={`w-5 h-5 ${isAnalyzePage ? 'text-primary' : ''}`} />
+                <span className="absolute -top-0 -right-3.5 text-[6px] font-medium tracking-wider text-muted-foreground/60 uppercase leading-[1.1]">
+                  Beta
+                </span>
+              </div>
+              <span className="text-[10px] font-medium">Inspector</span>
             </Link>
           )}
           <Link

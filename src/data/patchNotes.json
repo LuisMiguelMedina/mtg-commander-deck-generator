@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.2.39",
+    "notes": [
+      "Moved the Inspector out of EA into Beta, its now available for everyone to see and use",
+      "Generate & Inspect now builds a default deck for your commander and drops you straight onto the Inspector — your saved preferences aren't touched."                  
+    ]
+  },
+  {
     "version": "1.2.38",
     "notes": [
       "New Community Poll page — suggest features for ManaFoundry, upvote ones you like, and see what's shipped from the poll.",

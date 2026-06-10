@@ -7,7 +7,7 @@ import { NextBestMove } from './dashboard/NextBestMove';
 import type {
   ScryfallCard, EDHRECCommanderData, DashboardWarning, SubScoreKey, DetectedCombo,
 } from '@/types';
-import type { DeckAnalysis, RoleBreakdown, CurvePhaseAnalysis } from '@/services/deckBuilder/deckAnalyzer';
+import type { DeckAnalysis, RoleBreakdown, CurvePhaseAnalysis, OptimizeSwaps } from '@/services/deckBuilder/deckAnalyzer';
 import type { ThemeMembership } from '@/components/analyze/themeMembership';
 import type { TabKey } from './constants';
 import type { ReactNode } from 'react';
@@ -28,7 +28,7 @@ export interface DashboardSummaryProps {
   sampleSize?: number | null;
   warnings: DashboardWarning[];
   adjustContent?: ReactNode;
-  onNavigate: (tab: TabKey) => void;
+  onNavigate: (tab: TabKey, opts?: { cardName: string; side: 'add' | 'remove' }) => void;
   onSaveAsDeck?: () => void;
   onOpenInDeckView?: () => void;
   // Panel props
@@ -37,6 +37,8 @@ export interface DashboardSummaryProps {
   deckTarget?: number;
   roleBreakdowns?: RoleBreakdown[];
   curvePhases?: CurvePhaseAnalysis[];
+  /** Shared swap list (also drives the optimize tab — same source as NextBestMove). */
+  baseSwaps?: OptimizeSwaps | null;
 }
 
 const SUBSCORE_META: Record<SubScoreKey, {
@@ -59,6 +61,7 @@ export function DashboardSummary(props: DashboardSummaryProps) {
     cardSynergyMap,
     detectedCombos, deckTarget,
     roleBreakdowns, curvePhases,
+    baseSwaps,
   } = props;
   const [strategyOpen, setStrategyOpen] = useState(false);
 
@@ -155,6 +158,7 @@ export function DashboardSummary(props: DashboardSummaryProps) {
         currentLands={analysis.manaBase?.currentLands}
         suggestedLands={analysis.manaBase?.adjustedSuggestion}
         limitedData={planScore.limitedData}
+        baseSwaps={baseSwaps ?? null}
       />
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 items-stretch">
         {(Object.keys(SUBSCORE_META) as SubScoreKey[]).map((key, i) => {

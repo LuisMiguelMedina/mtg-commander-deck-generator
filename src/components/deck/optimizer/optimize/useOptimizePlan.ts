@@ -4,6 +4,7 @@ import {
   computeOptimizeSwaps,
   type DeckAnalysis,
   type OptimizeCard,
+  type OptimizeSwaps,
 } from '@/services/deckBuilder/deckAnalyzer';
 import { getCardPrice, getCachedCard, getCardsByNames } from '@/services/scryfall/client';
 
@@ -21,6 +22,12 @@ export interface UseOptimizePlanOptions {
    *  play area on the right doesn't show red rings while the user is on a
    *  non-swap view (e.g. the combos panel). */
   highlightRemovals?: boolean;
+  /**
+   * Pre-computed swaps, shared across the dashboard's NextBestMove and the
+   * optimize tab. Pass this when the caller wants both surfaces to read from
+   * the same source. If omitted, the hook computes its own (legacy fallback).
+   */
+  baseSwaps?: OptimizeSwaps;
 }
 
 export interface OptimizePlanTotals {
@@ -47,21 +54,28 @@ export function useOptimizePlan(opts: UseOptimizePlanOptions) {
     commanderName, partnerCommanderName,
     mustIncludeNames, bannedNames, detectedCombos,
     onApply, highlightRemovals = true,
+    baseSwaps: sharedSwaps,
   } = opts;
 
   const [extraAdditions, setExtraAdditions] = useState<OptimizeCard[]>([]);
-  const [uncheckedRemovals, setUncheckedRemovals] = useState<Set<string>>(new Set());
-  const [uncheckedAdditions, setUncheckedAdditions] = useState<Set<string>>(new Set());
+  // Track which cards the user has explicitly opted INTO. Default is nothing
+  // selected — the optimize page asks the user to actively pick changes.
+  const [checkedRemovalNames, setCheckedRemovalNames] = useState<Set<string>>(new Set());
+  const [checkedAdditionNames, setCheckedAdditionNames] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
 
-  const baseSwaps = useMemo(
-    () => computeOptimizeSwaps({
+  // Prefer the swaps computed by the caller (DeckOptimizer) so the dashboard
+  // and optimize tab share identical data. Fall back to computing locally when
+  // no shared list is provided.
+  const localSwaps = useMemo(
+    () => sharedSwaps ?? computeOptimizeSwaps({
       analysis, currentCards, cardInclusionMap,
       commanderName, partnerCommanderName,
       mustIncludeNames, bannedNames, detectedCombos,
     }),
-    [analysis, currentCards, cardInclusionMap, commanderName, partnerCommanderName, mustIncludeNames, bannedNames, detectedCombos],
+    [sharedSwaps, analysis, currentCards, cardInclusionMap, commanderName, partnerCommanderName, mustIncludeNames, bannedNames, detectedCombos],
   );
+  const baseSwaps = localSwaps;
 
   const additions = useMemo(() => {
     if (extraAdditions.length === 0) return baseSwaps.additions;
@@ -73,13 +87,26 @@ export function useOptimizePlan(opts: UseOptimizePlanOptions) {
   const removals = baseSwaps.removals;
 
   const checkedRemovals = useMemo(
-    () => removals.filter(c => !uncheckedRemovals.has(c.name)),
-    [removals, uncheckedRemovals],
+    () => removals.filter(c => checkedRemovalNames.has(c.name)),
+    [removals, checkedRemovalNames],
   );
   const checkedAdditions = useMemo(
-    () => additions.filter(c => !uncheckedAdditions.has(c.name)),
-    [additions, uncheckedAdditions],
+    () => additions.filter(c => checkedAdditionNames.has(c.name)),
+    [additions, checkedAdditionNames],
   );
+  // Expose unchecked sets for the existing UI surface (OptimizeColumn uses
+  // `uncheckedNames` to render unchecked state). Derived from the current
+  // list + checked sets.
+  const uncheckedRemovals = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of removals) if (!checkedRemovalNames.has(c.name)) s.add(c.name);
+    return s;
+  }, [removals, checkedRemovalNames]);
+  const uncheckedAdditions = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of additions) if (!checkedAdditionNames.has(c.name)) s.add(c.name);
+    return s;
+  }, [additions, checkedAdditionNames]);
 
   const totals = useMemo<OptimizePlanTotals>(() => {
     const targetSize = analysis.manaBase.deckSize;
@@ -109,7 +136,7 @@ export function useOptimizePlan(opts: UseOptimizePlanOptions) {
   }, [analysis, currentCards.length, checkedRemovals, checkedAdditions]);
 
   const toggleRemoval = useCallback((name: string) => {
-    setUncheckedRemovals(prev => {
+    setCheckedRemovalNames(prev => {
       const next = new Set(prev);
       if (next.has(name)) next.delete(name);
       else next.add(name);
@@ -118,7 +145,7 @@ export function useOptimizePlan(opts: UseOptimizePlanOptions) {
   }, []);
 
   const toggleAddition = useCallback((name: string) => {
-    setUncheckedAdditions(prev => {
+    setCheckedAdditionNames(prev => {
       const next = new Set(prev);
       if (next.has(name)) next.delete(name);
       else next.add(name);
@@ -126,49 +153,50 @@ export function useOptimizePlan(opts: UseOptimizePlanOptions) {
     });
   }, []);
 
-  const selectAllRemovals = useCallback(() => setUncheckedRemovals(new Set()), []);
-  const deselectAllRemovals = useCallback(() => {
-    setUncheckedRemovals(new Set(removals.map(c => c.name)));
+  const selectAllRemovals = useCallback(() => {
+    setCheckedRemovalNames(new Set(removals.map(c => c.name)));
   }, [removals]);
-  const selectAllAdditions = useCallback(() => setUncheckedAdditions(new Set()), []);
-  const deselectAllAdditions = useCallback(() => {
-    setUncheckedAdditions(new Set(additions.map(c => c.name)));
+  const deselectAllRemovals = useCallback(() => setCheckedRemovalNames(new Set()), []);
+  const selectAllAdditions = useCallback(() => {
+    setCheckedAdditionNames(new Set(additions.map(c => c.name)));
   }, [additions]);
+  const deselectAllAdditions = useCallback(() => setCheckedAdditionNames(new Set()), []);
 
   // Bulk select/deselect of a specific subset of names — used by per-group
   // select/deselect buttons.
   const selectRemovalGroup = useCallback((names: string[]) => {
-    setUncheckedRemovals(prev => {
+    setCheckedRemovalNames(prev => {
       const next = new Set(prev);
-      for (const n of names) next.delete(n);
+      for (const n of names) next.add(n);
       return next;
     });
   }, []);
   const deselectRemovalGroup = useCallback((names: string[]) => {
-    setUncheckedRemovals(prev => {
-      const next = new Set(prev);
-      for (const n of names) next.add(n);
-      return next;
-    });
-  }, []);
-  const selectAdditionGroup = useCallback((names: string[]) => {
-    setUncheckedAdditions(prev => {
+    setCheckedRemovalNames(prev => {
       const next = new Set(prev);
       for (const n of names) next.delete(n);
       return next;
     });
   }, []);
-  const deselectAdditionGroup = useCallback((names: string[]) => {
-    setUncheckedAdditions(prev => {
+  const selectAdditionGroup = useCallback((names: string[]) => {
+    setCheckedAdditionNames(prev => {
       const next = new Set(prev);
       for (const n of names) next.add(n);
       return next;
     });
   }, []);
+  const deselectAdditionGroup = useCallback((names: string[]) => {
+    setCheckedAdditionNames(prev => {
+      const next = new Set(prev);
+      for (const n of names) next.delete(n);
+      return next;
+    });
+  }, []);
 
+  // Reset = clear all selections (return to the default "nothing selected" state).
   const resetSelections = useCallback(() => {
-    setUncheckedRemovals(new Set());
-    setUncheckedAdditions(new Set());
+    setCheckedRemovalNames(new Set());
+    setCheckedAdditionNames(new Set());
   }, []);
 
   const addExtraCandidate = useCallback((card: OptimizeCard) => {
@@ -176,10 +204,10 @@ export function useOptimizePlan(opts: UseOptimizePlanOptions) {
       if (prev.some(c => c.name === card.name)) return prev;
       return [...prev, card];
     });
-    setUncheckedAdditions(prev => {
-      if (!prev.has(card.name)) return prev;
+    setCheckedAdditionNames(prev => {
+      if (prev.has(card.name)) return prev;
       const next = new Set(prev);
-      next.delete(card.name);
+      next.add(card.name);
       return next;
     });
   }, []);
@@ -192,8 +220,8 @@ export function useOptimizePlan(opts: UseOptimizePlanOptions) {
     if (adds.length > 0) await getCardsByNames(adds);
     await onApply(rems, adds);
     setExtraAdditions([]);
-    setUncheckedRemovals(new Set());
-    setUncheckedAdditions(new Set());
+    setCheckedRemovalNames(new Set());
+    setCheckedAdditionNames(new Set());
     setTimeout(() => setApplying(false), 600);
   }, [totals.totalChanges, applying, checkedRemovals, checkedAdditions, onApply]);
 

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import type { ScryfallCard, DetectedCombo } from '@/types';
-import type { DeckAnalysis } from '@/services/deckBuilder/deckAnalyzer';
+import type { DeckAnalysis, OptimizeSwaps } from '@/services/deckBuilder/deckAnalyzer';
 import { getSwapCandidatesForCard } from '@/services/deckBuilder/cardSwap';
 import { useStore } from '@/store';
 import { ComboDisplay } from '@/components/deck/ComboDisplay';
@@ -28,6 +28,15 @@ export interface OptimizeTabContentProps {
   /** Direct deck mutators for the combos panel (Inspector context — no regen). */
   onAddCards?: (names: string[], destination: 'deck' | 'sideboard' | 'maybeboard') => void;
   onRemoveCards?: (names: string[]) => void;
+  /**
+   * When a user follows a dashboard suggestion into this tab, the suggested
+   * card is pre-checked on the matching side. Cleared via `onPreSelectConsumed`
+   * after it is applied so it doesn't re-apply on tab switches.
+   */
+  preSelect?: { cardName: string; side: 'add' | 'remove' } | null;
+  onPreSelectConsumed?: () => void;
+  /** Shared swap list lifted to DeckOptimizer so dashboard + optimize tab stay in sync. */
+  baseSwaps?: OptimizeSwaps;
 }
 
 export function OptimizeTabContent({
@@ -36,6 +45,8 @@ export function OptimizeTabContent({
   onApply, onPreviewCard,
   onFocusedMisfitChange,
   onAddCards, onRemoveCards,
+  preSelect, onPreSelectConsumed,
+  baseSwaps,
 }: OptimizeTabContentProps) {
   // Subscribe to store directly so we get a stable reference for the combos
   // array (Zustand returns the same slice instance until it actually changes).
@@ -53,6 +64,7 @@ export function OptimizeTabContent({
     mustIncludeNames, bannedNames, detectedCombos,
     onApply,
     highlightRemovals: view === 'swaps',
+    baseSwaps,
   });
   const highlightTimerRef = useRef<number | null>(null);
   const footerRef = useRef<HTMLDivElement | null>(null);
@@ -98,7 +110,21 @@ export function OptimizeTabContent({
   }, []);
 
   const hasSwaps = plan.removals.length > 0 || plan.additions.length > 0;
-  const hasUnchecked = plan.uncheckedRemovals.size > 0 || plan.uncheckedAdditions.size > 0;
+  const hasSelections = plan.checkedRemovals.length > 0 || plan.checkedAdditions.length > 0;
+
+  // Apply a pre-selection from a dashboard suggestion. If the suggested card
+  // isn't present in the current optimize list (e.g. due to capping), skip
+  // gracefully — the user will still land on the tab.
+  useEffect(() => {
+    if (!preSelect) return;
+    const list = preSelect.side === 'add' ? plan.additions : plan.removals;
+    const exists = list.some(c => c.name === preSelect.cardName);
+    if (exists) {
+      if (preSelect.side === 'add') plan.selectAdditionGroup([preSelect.cardName]);
+      else plan.selectRemovalGroup([preSelect.cardName]);
+    }
+    onPreSelectConsumed?.();
+  }, [preSelect, onPreSelectConsumed, plan.additions, plan.removals, plan.selectAdditionGroup, plan.selectRemovalGroup]);
 
   return (
     <div className="space-y-3 sm:space-y-4 px-3 sm:px-4 pb-3 sm:pb-4 pt-0">
@@ -106,7 +132,7 @@ export function OptimizeTabContent({
         totals={plan.totals}
         applying={plan.applying}
         hasSwaps={hasSwaps}
-        hasUnchecked={hasUnchecked}
+        hasSelections={hasSelections}
         onApply={plan.apply}
         onReset={plan.resetSelections}
         view={view}

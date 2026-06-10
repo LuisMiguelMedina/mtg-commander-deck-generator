@@ -1783,7 +1783,7 @@ function DeckStats({ activeFilter, onFilterChange, showRoles, onToggleRoles, hid
                       onClick={() => navigate('/analyze/overview')}
                       className="text-[10px] text-primary hover:text-primary/80 transition-colors"
                     >
-                      Inspect →
+                      Inspect (Beta) →
                     </button>
                   </div>
                   <div className="text-[11px] text-muted-foreground leading-snug">{overallGrade.headline}</div>

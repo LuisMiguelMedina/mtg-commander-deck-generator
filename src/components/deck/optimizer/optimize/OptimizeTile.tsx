@@ -106,14 +106,6 @@ export const OptimizeTile = forwardRef<HTMLButtonElement, OptimizeTileProps>(fun
           </span>
         )}
 
-        {!checked && (
-          <div className="absolute inset-x-0 bottom-1 flex justify-center opacity-0 group-hover/tile:opacity-100 transition-opacity">
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-black/70 text-white">
-              {side === 'remove' ? 'Re-keep' : 'Re-add'}
-            </span>
-          </div>
-        )}
-
         {/* Consensus / inclusion bar — width = inclusion %, color = how mainstream.
             Glanceable signal without adding a number to the tile. */}
         {checked && card.inclusion != null && (

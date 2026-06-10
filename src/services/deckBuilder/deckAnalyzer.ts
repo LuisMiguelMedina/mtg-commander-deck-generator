@@ -1185,6 +1185,53 @@ export function computeOptimizeSwaps(opts: ComputeOptimizeSwapsOptions): Optimiz
   generalCandidates.sort((a, b) => a.sortScore - b.sortScore);
   removalCandidates.push(...generalCandidates);
 
+  // ── Misfit cuts: cards flagged as not fitting the plan ──
+  // These bypass the inclusion floor AND the game-changer protection — a
+  // popular card (e.g. Imperial Seal at 80%+ in tutor decks, or any card on
+  // the Brackets Game Changer list) is "fine by EDHREC" but bad for *this*
+  // plan if it doesn't match the user's themes/roles. Surface them so the
+  // optimize tab matches what NextBestMove already suggested.
+  // Note: we still honor must-include + active combo pieces + commander —
+  // those reflect explicit user/strategy intent that overrides plan-fit.
+  if (analysis.misfits && analysis.misfits.length > 0) {
+    const alreadyIn = new Set(removalCandidates.map(c => c.name));
+    let priorityOffset = 0;
+    for (const m of analysis.misfits) {
+      const card = m.card;
+      if (alreadyIn.has(card.name)) continue;
+      if (BASIC_LANDS.has(card.name)) continue;
+      if (card.name === commanderName || card.name === partnerCommanderName) continue;
+      if (mustIncludeNames.has(card.name)) continue;
+      if (comboCountMap.has(card.name)) continue;
+
+      const role = card.deckRole || getCardRole(card.name) || undefined;
+      const roleLabel = role ? (ROLE_LABELS[role] || role) : undefined;
+      const cmdInclusion = inclusionMap[card.name] ?? null;
+      const globalInclusion = card.edhrec_rank != null
+        ? Math.max(1, 100 - Math.floor(card.edhrec_rank / 100))
+        : null;
+      const inclusion = cmdInclusion ?? globalInclusion ?? null;
+      const cmc = card.cmc ?? 0;
+      const typeLine = getFrontFaceTypeLine(card).split('—')[0].replace(/Legendary\s+/i, '').trim();
+      const primaryType = typeLine || undefined;
+      const imageUrl = getCardImageUrl(card, 'small');
+      const primaryReason = m.reasons[0]?.label ?? "Doesn't fit plan";
+
+      removalCandidates.push({
+        name: card.name, inclusion, role, roleLabel, cmc, primaryType, imageUrl,
+        isGameChanger: card.isGameChanger || undefined,
+        isThemeSynergy: card.isThemeSynergyCard || undefined,
+        reason: primaryReason,
+        reasonCategory: 'misfit',
+        // Push misfits to the top of the column. Preserve misfit-score order
+        // by offsetting per iteration (misfits arrive pre-sorted worst-first).
+        sortScore: -1000 + priorityOffset,
+      });
+      alreadyIn.add(card.name);
+      priorityOffset += 1;
+    }
+  }
+
   // ── Deck over target: fill remaining slots with lowest-inclusion cards ──
   const targetDeckSize = analysis.manaBase.deckSize;
   const deckExcess = currentCards.length - targetDeckSize;

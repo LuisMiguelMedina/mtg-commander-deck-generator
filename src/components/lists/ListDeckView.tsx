@@ -1792,7 +1792,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
                 className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-card/50 hover:bg-accent text-muted-foreground hover:text-foreground text-sm transition-colors"
               >
                 <Microscope className="w-4 h-4" />
-                <span>Inspect</span>
+                <span>Inspect (Beta)</span>
               </button>
             )}
             <button

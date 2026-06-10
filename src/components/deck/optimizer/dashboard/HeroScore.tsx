@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { Pencil, Bookmark, ExternalLink } from 'lucide-react';
+import { Pencil, Bookmark, ExternalLink, FlaskConical } from 'lucide-react';
 import { ColorIdentity } from '@/components/ui/mtg-icons';
 import { getCardImageUrl } from '@/services/scryfall/client';
 import { formatCommanderNameForUrl } from '@/services/edhrec/client';
@@ -252,6 +252,12 @@ export function HeroScore({
                 Limited data — some sub-scores excluded.
               </p>
             )}
+            <p className="mt-2 inline-flex items-start gap-1.5 text-[11px] text-violet-300/70">
+              <FlaskConical className="w-3 h-3 shrink-0 mt-0.5" aria-hidden="true" />
+              <span>
+                Inspector is still in early development — bugs may exist, and suggestions may be off if your deck does something unique.
+              </span>
+            </p>
           </div>
         </div>
 
