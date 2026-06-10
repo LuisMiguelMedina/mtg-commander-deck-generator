@@ -508,10 +508,27 @@
 
 /* Aurora-themed: pseudo-element gradients read from CSS variables instead
    of the hardcoded violet/teal. The wrapper component sets:
-     --aurora-color-a → first blob's HSL triplet
-     --aurora-color-b → second blob's HSL triplet
-   Falls back to C-neutral if vars are unset, so a missing identity is
-   visually quiet rather than broken. */
+     --aurora-color-a → first blob's full hsl() color
+     --aurora-color-b → second blob's full hsl() color
+   Registering them via @property gives them a `<color>` type, so transitions
+   smoothly interpolate between values instead of swapping instantly — the
+   blobs slide between palettes without needing a fade-to-zero opacity hack.
+   `color-mix` derives the half-alpha falloff stop from the same variable. */
+@property --aurora-color-a {
+  syntax: '<color>';
+  initial-value: hsl(220 15% 50%);
+  inherits: true;
+}
+@property --aurora-color-b {
+  syntax: '<color>';
+  initial-value: hsl(220 15% 50%);
+  inherits: true;
+}
+
+.aurora-themed {
+  transition: --aurora-color-a 800ms ease, --aurora-color-b 800ms ease;
+}
+
 .aurora-themed .aurora-bg::before,
 .aurora-themed .aurora-bg::after {
   opacity: 0.16;
@@ -519,16 +536,16 @@
 .aurora-themed .aurora-bg::before {
   background: radial-gradient(
     ellipse,
-    hsl(var(--aurora-color-a, 220 15% 50%)),
-    hsl(var(--aurora-color-a, 220 15% 50%) / 0.5),
+    var(--aurora-color-a),
+    color-mix(in hsl, var(--aurora-color-a) 50%, transparent),
     transparent 70%
   );
 }
 .aurora-themed .aurora-bg::after {
   background: radial-gradient(
     ellipse,
-    hsl(var(--aurora-color-b, 220 15% 50%)),
-    hsl(var(--aurora-color-b, 220 15% 50%) / 0.5),
+    var(--aurora-color-b),
+    color-mix(in hsl, var(--aurora-color-b) 50%, transparent),
     transparent 70%
   );
 }

@@ -1,6 +1,10 @@
 import { DynamoDBClient, BatchWriteItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import { randomUUID } from 'crypto';
+import {
+  handleSubmit, handleList, handleVote,
+  handleDevNote, handleShip, handleDelete,
+} from './poll';
 
 const client = new DynamoDBClient({});
 const TABLE_NAME = process.env.TABLE_NAME!;
@@ -19,8 +23,18 @@ export async function handler(event: {
 }) {
   try {
     const method = event.requestContext.http.method;
+    const action = event.queryStringParameters?.action;
+
+    // Poll dispatch — must come before analytics fall-through.
+    if (action === 'poll-list' && method === 'GET') return handleList(event.headers);
+    if (action === 'poll-submit' && method === 'POST') return handleSubmit(event.body, event.headers);
+    if (action === 'poll-vote' && method === 'POST') return handleVote(event.body, event.headers);
+    if (action === 'poll-devnote' && method === 'POST') return handleDevNote(event.body, event.headers);
+    if (action === 'poll-ship' && method === 'POST') return handleShip(event.body, event.headers);
+    if (action === 'poll-delete' && method === 'POST') return handleDelete(event.body, event.headers);
 
     if (method === 'POST') {
+      // No action → legacy analytics ingest.
       return handlePost(event.body);
     }
     if (method === 'GET') {
@@ -99,6 +113,7 @@ async function handleGet(params: Record<string, string>) {
     const fromDay = from.slice(0, 10); // "YYYY-MM-DD" for firstSeen comparison
     const regionCounts: Record<string, number> = {};
     const deviceCounts: Record<string, number> = {};
+    const hostCounts: Record<string, number> = {};
     const featureAdoption = {
       collectionMode: 0,
       hyperFocus: 0,
@@ -185,6 +200,11 @@ async function handleGet(params: Record<string, string>) {
 
       if (meta?.deviceType && typeof meta.deviceType === 'string') {
         deviceCounts[meta.deviceType] = (deviceCounts[meta.deviceType] || 0) + 1;
+      }
+
+      // Host (e.g., '20q2.github.io' vs 'manafoundry.gg' during the migration window).
+      if (meta?.host && typeof meta.host === 'string') {
+        hostCounts[meta.host] = (hostCounts[meta.host] || 0) + 1;
       }
 
       // Theme distribution and commander counts (deck_generated events only)
@@ -347,6 +367,7 @@ async function handleGet(params: Record<string, string>) {
         hourlyUniqueUsers,
         regionCounts,
         deviceCounts,
+        hostCounts,
         featureAdoption,
         listActivity,
         settingsCounts,

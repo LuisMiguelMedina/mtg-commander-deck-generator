@@ -37,6 +37,7 @@ export class AnalyticsStack extends cdk.Stack {
       environment: {
         TABLE_NAME: table.tableName,
         METRICS_SECRET: process.env.VITE_METRICS_SECRET || '',
+        POLL_ADMIN_SECRET: process.env.POLL_ADMIN_SECRET || '',
       },
       bundling: {
         minify: true,
@@ -58,7 +59,7 @@ export class AnalyticsStack extends cdk.Stack {
           'http://localhost:4173',
         ],
         allowedMethods: [lambda.HttpMethod.GET, lambda.HttpMethod.POST],
-        allowedHeaders: ['Content-Type', 'Authorization'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Anon-Id'],
         maxAge: cdk.Duration.hours(1),
       },
     });

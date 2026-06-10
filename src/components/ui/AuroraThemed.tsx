@@ -1,40 +1,19 @@
-import { useEffect, useState } from 'react';
-
 /**
- * Aurora background with a faint fade-out → swap → fade-in when the color
- * pair changes. The aurora-bg's pseudo-elements interpolate the gradient
- * via CSS vars; the outer wrapper handles the opacity choreography so the
- * color swap happens at the bottom of the dip, not abruptly.
+ * Aurora background. Color swaps animate smoothly: the `--aurora-color-a/b`
+ * CSS variables are registered as `<color>` via @property in index.css, with
+ * an 800ms transition on `.aurora-themed`. The blobs stay fully visible
+ * throughout and their colors interpolate to the new palette — no opacity
+ * dip needed. (The earlier JS fade-out → swap → fade-in hack was a
+ * workaround for CSS variables being untyped strings, which is no longer
+ * the case now that they're registered.)
  */
 export function AuroraThemed({ colors }: { colors: { a: string; b: string } }) {
-  const FADE_MS = 320;
-  const [displayed, setDisplayed] = useState(colors);
-  const [phase, setPhase] = useState<'idle' | 'fading-out' | 'fading-in'>('idle');
-
-  useEffect(() => {
-    if (colors.a === displayed.a && colors.b === displayed.b) return;
-    setPhase('fading-out');
-    const swap = setTimeout(() => {
-      setDisplayed(colors);
-      setPhase('fading-in');
-    }, FADE_MS);
-    return () => clearTimeout(swap);
-  }, [colors.a, colors.b, displayed.a, displayed.b]);
-
-  useEffect(() => {
-    if (phase !== 'fading-in') return;
-    const settle = setTimeout(() => setPhase('idle'), FADE_MS);
-    return () => clearTimeout(settle);
-  }, [phase]);
-
   return (
     <div
       className="aurora-themed"
       style={{
-        '--aurora-color-a': displayed.a,
-        '--aurora-color-b': displayed.b,
-        opacity: phase === 'fading-out' ? 0 : 1,
-        transition: `opacity ${FADE_MS}ms ease`,
+        '--aurora-color-a': `hsl(${colors.a})`,
+        '--aurora-color-b': `hsl(${colors.b})`,
       } as React.CSSProperties}
     >
       <div className="aurora-bg" />

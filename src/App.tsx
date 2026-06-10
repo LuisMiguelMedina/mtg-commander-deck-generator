@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { BrowserRouter, Routes, Route, useLocation, Link } from 'react-router-dom';
-import { Settings, Sparkles, Wand2, ListChecks, Library, BarChart3, Microscope } from 'lucide-react';
+import { Settings, Sparkles, Wand2, ListChecks, Library, BarChart3, Microscope, MessageSquare } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import patchNotes from '@/data/patchNotes.json';
 import { HomePage } from '@/pages/HomePage';
@@ -13,12 +13,34 @@ import { ListsPage } from '@/pages/ListsPage';
 import { MigratePage } from '@/pages/MigratePage';
 import { PlaytestPage } from '@/pages/PlaytestPage';
 import { PlaytestLandingPage } from '@/pages/PlaytestLandingPage';
+import { CommunityPollPage } from '@/pages/CommunityPollPage';
 import { useStore } from '@/store';
 import { useCollection } from '@/hooks/useCollection';
 import { loadUserLists } from '@/hooks/useUserLists';
 import { trackEvent } from '@/services/analytics';
 import { getBanList } from '@/services/scryfall/client';
+import { AuroraThemed } from '@/components/ui/AuroraThemed';
+import { getAuroraColors } from '@/lib/commanderTheme';
 import type { ScryfallCard } from '@/types';
+
+// Aurora palette + horizontal parallax for the four "hub" routes. AuroraThemed
+// lives in Layout so a single instance persists across these navigations and
+// animates the color swap; rendering it per-page would cut rather than
+// transition. Detail views (e.g. /lists/:id) own their own AuroraThemed
+// driven by the list's color identity, so we skip the layout aurora there.
+//
+// `shift` is the wrapper's translateX applied via a transformed containing
+// block — the aurora-bg blobs glide left/right as you move between hubs,
+// so Home → Decks → Lists feels like one continuous sweep.
+type HubAurora = { identity: string[]; shift: string };
+
+function getLayoutAurora(pathname: string): HubAurora | null {
+  if (pathname === '/')                                       return { identity: [],    shift: '12vw'  };
+  if (pathname === '/decks' || pathname === '/decks/')        return { identity: ['U'], shift: '0'     };
+  if (pathname === '/lists' || pathname === '/lists/')        return { identity: ['G'], shift: '-12vw' };
+  if (pathname === '/migrate')                                return { identity: [],    shift: '0'     };
+  return null;
+}
 
 // Lazy-load MetricsPage — only imported in dev, completely excluded from prod bundle
 const MetricsPage = import.meta.env.DEV
@@ -263,8 +285,32 @@ function Layout({ children }: { children: React.ReactNode }) {
     window.location.hostname === 'localhost'
   );
 
+  const layoutAurora = getLayoutAurora(location.pathname);
+
   return (
     <div className="min-h-screen bg-background flex flex-col relative">
+      {/* Hub-route aurora — Home / Decks browse / Lists browse / Migrate. A
+          single AuroraThemed instance lives here so the color swap animates
+          across navigations. The outer wrapper extends past the viewport
+          on both sides and applies a translateX so the aurora-bg blobs
+          (whose containing block is the transformed wrapper) glide left/
+          right as you move between hubs. `aurora-tabbed` pulls the blob
+          positions inward to compensate for the wider wrapper. */}
+      {layoutAurora !== null && (
+        <div
+          className="aurora-tabbed fixed z-0 pointer-events-none"
+          style={{
+            top: 0,
+            bottom: 0,
+            left: '-25vw',
+            right: '-25vw',
+            transform: `translateX(${layoutAurora.shift})`,
+            transition: 'transform 800ms cubic-bezier(0.4, 0, 0.2, 1)',
+          }}
+        >
+          <AuroraThemed colors={getAuroraColors(layoutAurora.identity)} />
+        </div>
+      )}
       {/* Commander Art Background (hidden on collection page) */}
       {!isCollectionPage && (!isAnalyzePage || !!generatedDeck) && (!isListsPage || !!generatedDeck) && <CommanderBackground commander={commander} deckGenerated={!!generatedDeck} />}
 
@@ -400,6 +446,13 @@ function Layout({ children }: { children: React.ReactNode }) {
                         <span className="text-sm">Metrics</span>
                       </Link>
                     )}
+                    <Link
+                      to="/community-poll"
+                      className="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent transition-colors mb-1"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-violet-300/90" />
+                      <span className="text-sm">Community Poll</span>
+                    </Link>
                     <button
                       onClick={toggleEaFeatures}
                       className="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent transition-colors mb-2"
@@ -582,6 +635,8 @@ function App() {
         <Route path="/decks/*" element={<Layout><ListsPage /></Layout>} />
         <Route path="/lists/*" element={<Layout><ListsPage /></Layout>} />
         <Route path="/migrate" element={<Layout><MigratePage /></Layout>} />
+        <Route path="/community-poll" element={<Layout><CommunityPollPage /></Layout>} />
+        <Route path="/community-poll/admin" element={<Layout><CommunityPollPage admin /></Layout>} />
         <Route path="/playtest" element={<Layout><PlaytestLandingPage /></Layout>} />
         <Route path="/playtest/list/:listId" element={<PlaytestPage kind="list" />} />
         <Route path="/playtest/generated" element={<PlaytestPage kind="generated" />} />
