@@ -1,6 +1,6 @@
 import type { ScryfallCard, ScryfallSearchResponse } from '@/types';
 import { getPartnerType, getPartnerWithName } from '@/lib/partnerUtils';
-import { readPersisted, writePersisted } from './cache';
+import { readPersisted, writePersisted, readPersistedMany, writePersistedMany } from './cache';
 
 const BASE_URL = import.meta.env.DEV ? '/scryfall-api' : 'https://api.scryfall.com';
 const MIN_REQUEST_DELAY = 100; // 100ms between requests (Scryfall allows 10/sec)
@@ -251,6 +251,7 @@ async function fetchCardByNameThrottled(name: string): Promise<ScryfallCard | nu
         cardCache.set(name, card);
         // Also cache under Scryfall's canonical name if different
         if (card.name !== name) cardCache.set(card.name, card);
+        void writePersisted(card.name, card);
         return card;
       }
     }
@@ -266,6 +267,7 @@ async function fetchCardByNameThrottled(name: string): Promise<ScryfallCard | nu
       if (!namedResponse.ok) return null;
       const card = await namedResponse.json() as ScryfallCard;
       cardCache.set(card.name, card);
+      void writePersisted(card.name, card);
       return card;
     }
 
@@ -291,16 +293,37 @@ export async function getCardsByNames(
 
   if (names.length === 0) return result;
 
-  // Check cache first and collect uncached names
+  // Check in-memory cache first
   const uncachedNames: string[] = [];
   for (const name of names) {
-    // When a preferred set is specified, use a composite cache key
     const cacheKey = preferredSet ? `${name}|${preferredSet}` : name;
     const cached = cardCache.get(cacheKey);
     if (cached) {
       result.set(name, freshCopy(cached));
     } else {
       uncachedNames.push(name);
+    }
+  }
+
+  // Check persistent cache for in-memory misses. Persistent cache is keyed by
+  // canonical name only (no preferredSet); a preferred-set request still falls
+  // through to the network for the set-specific printing.
+  if (!preferredSet && uncachedNames.length > 0) {
+    const persisted = await readPersistedMany(uncachedNames);
+    if (persisted.size > 0) {
+      const stillMissing: string[] = [];
+      for (const name of uncachedNames) {
+        const card = persisted.get(name);
+        if (card) {
+          cardCache.set(card.name, card);
+          if (card.name !== name) cardCache.set(name, card);
+          result.set(name, freshCopy(card));
+        } else {
+          stillMissing.push(name);
+        }
+      }
+      uncachedNames.length = 0;
+      uncachedNames.push(...stillMissing);
     }
   }
 
@@ -346,6 +369,11 @@ export async function getCardsByNames(
             if (preferredSet) cardCache.set(`${frontFace}|${preferredSet}`, card);
             else cardCache.set(frontFace, card);
           }
+        }
+        // Persist non-preferred-set batches. Skip for preferredSet because those
+        // are printing-specific and the persistent cache is canonical-name-only.
+        if (!preferredSet && data.data.length > 0) {
+          void writePersistedMany(data.data.map(card => ({ name: card.name, card })));
         }
         if (data.not_found.length > 0) {
           if (preferredSet) {
@@ -395,6 +423,9 @@ export async function getCardsByNames(
               result.set(frontFace, copy);
               cardCache.set(frontFace, card);
             }
+          }
+          if (data.data.length > 0) {
+            void writePersistedMany(data.data.map(card => ({ name: card.name, card })));
           }
         }
       } catch (err) {
