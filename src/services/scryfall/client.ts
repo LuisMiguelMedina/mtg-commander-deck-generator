@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { ScryfallCard, ScryfallSearchResponse } from '@/types';
 import { getPartnerType, getPartnerWithName } from '@/lib/partnerUtils';
 import { readPersisted, writePersisted, readPersistedMany, writePersistedMany } from './cache';
@@ -1069,4 +1070,54 @@ export async function fetchMultiCopyCardNames(): Promise<Map<string, number | nu
 
   multiCopyCardsCache = result;
   return result;
+}
+
+/** Path to the bundled MTG card-back fallback image. */
+export const CARD_BACK_URL = '/card-back.png';
+
+/**
+ * React hook returning a usable image URL for the given card name. Routes
+ * the cache miss through getCardByName (rate-limited + persistent-cached).
+ * Returns the card-back fallback URL until the real image resolves, on
+ * errors, or when name is null/undefined.
+ */
+export function useScryfallImage(
+  name: string | null | undefined,
+  version: 'small' | 'normal' | 'large' = 'normal',
+): { url: string; loading: boolean } {
+  const initial = name ? cardCache.get(name) ?? null : null;
+  const [resolved, setResolved] = useState<ScryfallCard | null>(initial);
+  const [loading, setLoading] = useState<boolean>(!!name && !initial);
+
+  useEffect(() => {
+    if (!name) {
+      setResolved(null);
+      setLoading(false);
+      return;
+    }
+    const cached = cardCache.get(name);
+    if (cached) {
+      setResolved(cached);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setResolved(null);
+    setLoading(true);
+    getCardByName(name)
+      .then(card => {
+        if (cancelled) return;
+        setResolved(card);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLoading(false);
+        // Leave `resolved` null so the card-back stays visible
+      });
+    return () => { cancelled = true; };
+  }, [name]);
+
+  const url = resolved ? getCardImageUrl(resolved, version) : CARD_BACK_URL;
+  return { url, loading };
 }
