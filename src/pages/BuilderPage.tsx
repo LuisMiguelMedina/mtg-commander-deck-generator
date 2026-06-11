@@ -108,12 +108,20 @@ export function BuilderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [genParam, commander?.name, partnerCommander?.name, partnerName]);
 
-  // Persist generated deck to sessionStorage. Regeneration reuses the same ?g=,
-  // so this overwrites the previous snapshot.
+  // Persist generated deck to sessionStorage. Only the current snapshot needs
+  // to survive a hard refresh — every fresh generation gets a new ?g= timestamp,
+  // so sweep stale deck:* keys before writing to avoid blowing the ~5MB quota.
   useEffect(() => {
     if (!generatedDeck || !genParam) return;
+    const currentKey = `deck:${genParam}`;
     try {
-      sessionStorage.setItem(`deck:${genParam}`, JSON.stringify(generatedDeck));
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const key = sessionStorage.key(i);
+        if (key && key.startsWith('deck:') && key !== currentKey) {
+          sessionStorage.removeItem(key);
+        }
+      }
+      sessionStorage.setItem(currentKey, JSON.stringify(generatedDeck));
     } catch (e) {
       console.warn('Failed to persist deck to sessionStorage:', e);
     }
