@@ -453,13 +453,19 @@ export async function getCardsByNames(
 
   // Re-fetch cards that came back with no price (e.g. unreleased reprints)
   // Skip when user specified a preferred set — they want that set's printing, not the cheapest
+  // Re-check ALL no-price cards in the result, not just network-fetched ones.
+  // The persistent cache can hold no-price entries from earlier generations
+  // (e.g. cards that were freshly-spoiled at the time and had no priced
+  // printings yet). We retry the upgrade every generation so they get priced
+  // once Scryfall publishes data — costs at most one batched search per gen.
   if (!preferredSet) {
-    const noPriceNames = uncachedNames.filter(name => {
+    const noPriceNames: string[] = [];
+    for (const name of names) {
       const card = result.get(name);
-      return card && !getCardPrice(card);
-    });
+      if (card && !getCardPrice(card)) noPriceNames.push(name);
+    }
     if (noPriceNames.length > 0) {
-      console.log(`[Scryfall] Re-fetching ${noPriceNames.length} cards with no price (batched)...`);
+      console.log(`[Scryfall] Re-checking ${noPriceNames.length} cards with no price (batched)...`);
       const repriced = await batchSearchByExactName(noPriceNames, { preferUsd: true });
       for (const [name, card] of repriced) {
         if (!getCardPrice(card)) continue;
@@ -1090,8 +1096,12 @@ export async function fetchMultiCopyCardNames(): Promise<Map<string, number | nu
   return result;
 }
 
-/** Path to the bundled MTG card-back fallback image. */
-export const CARD_BACK_URL = '/card-back.png';
+/**
+ * Path to the bundled MTG card-back fallback image. Must be base-aware:
+ * the app is served under Vite's `base` (e.g. /mtg-commander-deck-generator/),
+ * so a root-absolute '/card-back.png' would 404. BASE_URL always ends in '/'.
+ */
+export const CARD_BACK_URL = `${import.meta.env.BASE_URL}card-back.png`;
 
 /**
  * React hook returning a usable image URL for the given card name. Routes
