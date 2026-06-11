@@ -240,6 +240,8 @@ const FALLBACK_SEARCH_BATCH_SIZE = 15;
  * Callers are responsible for cache writes; this helper only resolves the
  * cards.
  */
+const FALLBACK_SEARCH_MAX_PAGES = 4; // 4 × 175 = 700 printings per batch ceiling
+
 async function batchSearchByExactName(
   names: string[],
   opts: { preferUsd: boolean },
@@ -251,43 +253,68 @@ async function batchSearchByExactName(
     const batch = names.slice(i, i + FALLBACK_SEARCH_BATCH_SIZE);
     const nameQuery = batch.map(n => `!"${n}"`).join(' OR ');
     const fullQuery = `(${nameQuery}) -is:digital`;
-    const url = `${BASE_URL}/cards/search?q=${encodeURIComponent(fullQuery)}&unique=prints&order=usd&dir=asc`;
 
-    try {
-      const response = await withRateLimit(() =>
-        fetch(url, { headers: { 'Accept': 'application/json' } }),
-      );
-      if (!response.ok) continue; // 404 = no matches for any name in this batch
+    // Collect printings across however many pages it takes. Stop early once
+    // every name in the batch has at least one printing, or when Scryfall
+    // tells us there are no more pages, or when we hit the page cap. Without
+    // pagination, popular cards (Command Tower has 200+ printings) flood the
+    // first page of 175 and starve other names in the batch.
+    const byName = new Map<string, ScryfallCard[]>();
+    const namesFound = new Set<string>();
+    let totalRows = 0;
+    let pagesFetched = 0;
 
-      const data = await response.json() as ScryfallSearchResponse;
+    for (let page = 1; page <= FALLBACK_SEARCH_MAX_PAGES; page++) {
+      const url = `${BASE_URL}/cards/search?q=${encodeURIComponent(fullQuery)}&unique=prints&order=usd&dir=asc&page=${page}`;
+      try {
+        const response = await withRateLimit(() =>
+          fetch(url, { headers: { 'Accept': 'application/json' } }),
+        );
+        if (!response.ok) break; // 404 on page 1 = no matches at all; later pages just stop here
 
-      // Group printings by canonical name (also index DFC front-face names so
-      // a request for "Front" matches a card named "Front // Back").
-      const byName = new Map<string, ScryfallCard[]>();
-      for (const card of data.data) {
-        const arr = byName.get(card.name) ?? [];
-        arr.push(card);
-        byName.set(card.name, arr);
-        if (card.name.includes(' // ')) {
-          const front = card.name.split(' // ')[0];
-          const farr = byName.get(front) ?? [];
-          farr.push(card);
-          byName.set(front, farr);
+        const data = await response.json() as ScryfallSearchResponse;
+        pagesFetched++;
+        totalRows += data.data.length;
+
+        for (const card of data.data) {
+          const arr = byName.get(card.name) ?? [];
+          arr.push(card);
+          byName.set(card.name, arr);
+          if (batch.includes(card.name)) namesFound.add(card.name);
+          if (card.name.includes(' // ')) {
+            const front = card.name.split(' // ')[0];
+            const farr = byName.get(front) ?? [];
+            farr.push(card);
+            byName.set(front, farr);
+            if (batch.includes(front)) namesFound.add(front);
+          }
         }
-      }
 
-      // Pick best printing per requested name. Printings are already ordered
-      // by USD ascending, so [0] is the cheapest available.
-      for (const name of batch) {
-        const printings = byName.get(name);
-        if (!printings || printings.length === 0) continue;
-        const best = opts.preferUsd
-          ? (printings.find(c => c.prices?.usd) ?? printings.find(c => getCardPrice(c)) ?? printings[0])
-          : printings[0];
-        out.set(name, best);
+        if (!data.has_more) break;
+        if (batch.every(n => namesFound.has(n))) break; // every name has at least one row
+      } catch (err) {
+        console.warn('[Scryfall] batchSearchByExactName batch failed:', err);
+        break;
       }
-    } catch (err) {
-      console.warn('[Scryfall] batchSearchByExactName batch failed:', err);
+    }
+
+    const missing = batch.filter(n => !namesFound.has(n));
+    if (missing.length > 0 || pagesFetched > 1) {
+      console.log(
+        `[Scryfall] batch search: ${batch.length} names, ${pagesFetched} page(s), ${totalRows} prints` +
+        (missing.length > 0 ? ` — missed: ${missing.join(', ')}` : ''),
+      );
+    }
+
+    // Pick best printing per requested name. Printings are ordered by USD
+    // ascending, so the first printing with a USD price is the cheapest.
+    for (const name of batch) {
+      const printings = byName.get(name);
+      if (!printings || printings.length === 0) continue;
+      const best = opts.preferUsd
+        ? (printings.find(c => c.prices?.usd) ?? printings.find(c => getCardPrice(c)) ?? printings[0])
+        : printings[0];
+      out.set(name, best);
     }
   }
 
