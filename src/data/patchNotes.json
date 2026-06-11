@@ -2,7 +2,8 @@
   {
     "version": "1.2.40",
     "notes": [
-      "Minor bugfixes and small qol improvements across the app"
+      "Minor bugfixes and small qol improvements across the app",
+      "Fixed the bug preventing the tagger information from coming to the new site correctly"
     ]
   },
   {
