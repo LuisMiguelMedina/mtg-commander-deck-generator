@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Star, Pin, ArrowLeft, ArrowLeftRight, Plus, ChevronLeft, ChevronRight, ChevronDown, ListChecks, Footprints, Infinity, Loader2 } from 'lucide-react';
-import { getCardImageUrl, isDoubleFacedCard, getCardBackFaceUrl, getCardPrice, getCardByName, getCardsByNames, getFrontFaceTypeLine, getCachedCard } from '@/services/scryfall/client';
+import { getCardImageUrl, isDoubleFacedCard, getCardBackFaceUrl, getCardPrice, getCardByName, getCardsByNames, getFrontFaceTypeLine, useScryfallImage } from '@/services/scryfall/client';
 import { fetchComboDetails, fetchSimilarCards, type ComboDetails } from '@/services/edhrec/client';
 import type { ScryfallCard, DetectedCombo, LoadPhase } from '@/types';
 import { useStore } from '@/store';
@@ -21,15 +21,6 @@ function getCardType(card: ScryfallCard): CardType {
   if (typeLine.includes('artifact')) return 'Artifact';
   if (typeLine.includes('enchantment')) return 'Enchantment';
   return 'Artifact';
-}
-
-function getScryfallImageUrl(cardName: string): string {
-  const cached = getCachedCard(cardName);
-  if (cached) {
-    const url = getCardImageUrl(cached, 'normal');
-    if (url) return url;
-  }
-  return `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(cardName)}&format=image&version=normal`;
 }
 
 interface CardPreviewModalProps {
@@ -248,6 +239,7 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
   // navigating so arrow keys / swipes can cycle through that combo's other cards.
   const [activeComboCards, setActiveComboCards] = useState<string[] | null>(null);
   const [hoverPreview, setHoverPreview] = useState<{ name: string; top: number; left: number; below: boolean } | null>(null);
+  const hoverImage = useScryfallImage(hoverPreview?.name ?? null, 'normal');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [swapPreview, setSwapPreview] = useState<ScryfallCard | null>(null);
   const [similarHydrated, setSimilarHydrated] = useState<ScryfallCard[] | null>(null);
@@ -1182,7 +1174,7 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
             }}
           >
             <img
-              src={getScryfallImageUrl(hoverPreview.name)}
+              src={hoverImage.url}
               alt={hoverPreview.name}
               className="w-48 rounded-lg shadow-2xl border border-white/10"
             />
