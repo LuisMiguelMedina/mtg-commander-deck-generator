@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.3.0",
+    "notes": [
+      "Its finally time to bump up our release version, this patch is filled with multiple small fixes that should greatly improve performance across most of the app, especially during long browser sessions"            
+    ]
+  },
+  {
     "version": "1.2.40",
     "notes": [
       "Minor bugfixes and small qol improvements across the app",
