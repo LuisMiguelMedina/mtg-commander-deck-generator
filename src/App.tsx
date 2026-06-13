@@ -584,25 +584,23 @@ function Layout({ children }: { children: React.ReactNode }) {
             <Wand2 className={`w-5 h-5 ${isCreatePage ? 'text-primary' : ''}`} />
             <span className="text-[10px] font-medium">Generate</span>
           </Link>
-          {eaEnabled && (
-            <Link
-              to="/analyze"
-              onClick={() => window.scrollTo(0, 0)}
-              aria-current={isAnalyzePage ? 'page' : undefined}
-              className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${
-                isAnalyzePage ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
-              }`}
-              aria-label="Inspector"
-            >
-              <div className="relative">
-                <Microscope className={`w-5 h-5 ${isAnalyzePage ? 'text-primary' : ''}`} />
-                <span className="absolute -top-0 -right-3.5 text-[6px] font-medium tracking-wider text-muted-foreground/60 uppercase leading-[1.1]">
-                  Beta
-                </span>
-              </div>
-              <span className="text-[10px] font-medium">Inspector</span>
-            </Link>
-          )}
+          <Link
+            to="/analyze"
+            onClick={() => window.scrollTo(0, 0)}
+            aria-current={isAnalyzePage ? 'page' : undefined}
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${
+              isAnalyzePage ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+            aria-label="Inspector"
+          >
+            <div className="relative">
+              <Microscope className={`w-5 h-5 ${isAnalyzePage ? 'text-primary' : ''}`} />
+              <span className="absolute -top-0 -right-3.5 text-[6px] font-medium tracking-wider text-muted-foreground/60 uppercase leading-[1.1]">
+                Beta
+              </span>
+            </div>
+            <span className="text-[10px] font-medium">Inspector</span>
+          </Link>
           <Link
             to="/decks"
             onClick={() => window.scrollTo(0, 0)}

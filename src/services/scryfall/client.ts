@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { ScryfallCard, ScryfallSearchResponse } from '@/types';
+import type { ScryfallCard, ScryfallSearchResponse, CardRuling } from '@/types';
 import { getPartnerType, getPartnerWithName } from '@/lib/partnerUtils';
 import { readPersisted, writePersisted, readPersistedMany, writePersistedMany } from './cache';
 
@@ -224,6 +224,33 @@ export async function getCardByName(name: string, exact = true): Promise<Scryfal
   cardCache.set(card.name, card);
   void writePersisted(card.name, card);
   return freshCopy(card);
+}
+
+// Rulings are shared across printings, so cache by oracle_id.
+const rulingsCache = new Map<string, CardRuling[]>();
+
+/**
+ * Fetch a card's Scryfall rulings (official WotC + Scryfall judgment notes).
+ * Cached in-memory by oracle_id. Returns [] on any error — rulings are
+ * non-critical and should never break the preview modal.
+ */
+export async function fetchCardRulings(card: ScryfallCard): Promise<CardRuling[]> {
+  const key = card.oracle_id || card.id;
+  const cached = rulingsCache.get(key);
+  if (cached) return cached;
+
+  try {
+    const response = await scryfallFetch<{ data: CardRuling[] }>(`/cards/${card.id}/rulings`);
+    const rulings = (response.data ?? []).map((r) => ({
+      source: r.source,
+      published_at: r.published_at,
+      comment: r.comment,
+    }));
+    rulingsCache.set(key, rulings);
+    return rulings;
+  } catch {
+    return [];
+  }
 }
 
 const FALLBACK_SEARCH_BATCH_SIZE = 15;

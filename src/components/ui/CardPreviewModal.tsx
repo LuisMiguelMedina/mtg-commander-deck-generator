@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, Star, Pin, ArrowLeft, ArrowLeftRight, Plus, ChevronLeft, ChevronRight, ChevronDown, ListChecks, Footprints, Infinity, Loader2 } from 'lucide-react';
-import { getCardImageUrl, isDoubleFacedCard, getCardBackFaceUrl, getCardPrice, getCardByName, getCardsByNames, getFrontFaceTypeLine, useScryfallImage } from '@/services/scryfall/client';
+import { X, Sparkles, Star, Pin, ArrowLeft, ArrowLeftRight, Plus, ChevronLeft, ChevronRight, ChevronDown, ListChecks, Footprints, Infinity, Loader2, ScrollText } from 'lucide-react';
+import { getCardImageUrl, isDoubleFacedCard, getCardBackFaceUrl, getCardPrice, getCardByName, getCardsByNames, getFrontFaceTypeLine, useScryfallImage, fetchCardRulings } from '@/services/scryfall/client';
 import { fetchComboDetails, fetchSimilarCards, type ComboDetails } from '@/services/edhrec/client';
-import type { ScryfallCard, DetectedCombo, LoadPhase } from '@/types';
+import type { ScryfallCard, DetectedCombo, LoadPhase, CardRuling } from '@/types';
 import { useStore } from '@/store';
 import { trackEvent } from '@/services/analytics';
 import { CardTypeIcon, ManaText } from '@/components/ui/mtg-icons';
@@ -21,6 +21,15 @@ function getCardType(card: ScryfallCard): CardType {
   if (typeLine.includes('artifact')) return 'Artifact';
   if (typeLine.includes('enchantment')) return 'Enchantment';
   return 'Artifact';
+}
+
+// Format a Scryfall ruling date ("2024-11-08") as "Nov 8, 2024". Parsed as UTC
+// to avoid the date shifting a day in negative-offset timezones.
+function formatRulingDate(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[m - 1]} ${d}, ${y}`;
 }
 
 interface CardPreviewModalProps {
@@ -244,6 +253,8 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
   const [swapPreview, setSwapPreview] = useState<ScryfallCard | null>(null);
   const [similarHydrated, setSimilarHydrated] = useState<ScryfallCard[] | null>(null);
   const [similarLoading, setSimilarLoading] = useState(false);
+  const [rulings, setRulings] = useState<CardRuling[] | null>(null);
+  const [sidePanelTab, setSidePanelTab] = useState<'combos' | 'rulings'>('combos');
   const [showSwaps, setShowSwaps] = useState(() => {
     if (initialSideTab === 'swaps') return true;
     const stored = localStorage.getItem('showSwapCandidates');
@@ -263,6 +274,7 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
     setCardOverride(null);
     setActiveComboCards(null);
     setSwapPreview(null);
+    setSidePanelTab('combos');
     if (initialSideTab === 'swaps') {
       setShowSwaps(true);
     } else {
@@ -536,6 +548,22 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
     };
   }, [card?.name, showSwaps, cardOverride, onSwapCard]);
 
+  // Lazy-fetch Scryfall rulings for the card the side panel represents. This
+  // tracks cardOverride ?? card — the same source the combo sections use — so
+  // clicking a combo pill loads that card's rulings, but previewing a swap
+  // candidate doesn't (the panel still reflects the focused card). Cached per
+  // oracle_id in the client, so re-views are free.
+  useEffect(() => {
+    const target = cardOverride ?? card;
+    if (!target) return;
+    let cancelled = false;
+    setRulings(null);
+    fetchCardRulings(target)
+      .then((r) => { if (!cancelled) setRulings(r); })
+      .catch(() => { if (!cancelled) setRulings([]); });
+    return () => { cancelled = true; };
+  }, [cardOverride?.id, card?.id]);
+
   // Sort swap candidates: card type match first, then matching subtype tag, then rest
   // Must be above the early return to satisfy Rules of Hooks
   const sortedSwapCandidates = useMemo(() => {
@@ -644,7 +672,16 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
     !cardOverride &&
     !card.isMustInclude
   );
-  const hasSidePanel = hasCombos;
+  const comboCount = deckCombos.length + (deckOnly ? 0 : knownCombos.length);
+  const hasRulings = (rulings?.length ?? 0) > 0;
+  const hasSidePanel = hasCombos || hasRulings;
+  // Show the tab switcher only when both sections have content; otherwise the
+  // lone section renders with its own header. Fall back to the available tab
+  // when the active one has nothing for this card.
+  const showTabSwitcher = hasCombos && hasRulings;
+  const activeSideTab = sidePanelTab === 'combos'
+    ? (hasCombos ? 'combos' : 'rulings')
+    : (hasRulings ? 'rulings' : 'combos');
   const canMustInclude = isMissingComboCard && !isInMustInclude;
   const alreadyMustIncluded = isInMustInclude;
 
@@ -849,10 +886,40 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
             </div>
           </div>
 
-          {/* Side panel — combos only */}
+          {/* Side panel — combos and/or rulings, separated by tabs */}
           {hasSidePanel && (
             <div className="mt-3 md:mt-0 w-full md:w-72 shrink-0 max-h-[30vh] sm:max-h-[35vh] md:max-h-[70vh] overflow-y-auto pr-1.5">
-              {deckCombos.length > 0 && (
+              {showTabSwitcher && (
+                <div className="flex gap-1 mb-3 p-1 rounded-lg bg-white/5 border border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setSidePanelTab('combos')}
+                    className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-semibold transition-colors ${
+                      activeSideTab === 'combos'
+                        ? 'bg-violet-500/20 text-violet-200'
+                        : 'text-white/50 hover:text-white/80 hover:bg-white/5'
+                    }`}
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    Combos
+                    <span className="text-[10px] font-medium px-1.5 rounded-full bg-white/10 text-white/50">{comboCount}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSidePanelTab('rulings')}
+                    className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-semibold transition-colors ${
+                      activeSideTab === 'rulings'
+                        ? 'bg-white/15 text-white/90'
+                        : 'text-white/50 hover:text-white/80 hover:bg-white/5'
+                    }`}
+                  >
+                    <ScrollText className="w-3 h-3" />
+                    Rulings
+                    <span className="text-[10px] font-medium px-1.5 rounded-full bg-white/10 text-white/50">{rulings?.length ?? 0}</span>
+                  </button>
+                </div>
+              )}
+              {activeSideTab === 'combos' && deckCombos.length > 0 && (
                 <>
                   <div className="flex items-center gap-1.5 mb-2.5 py-1.5 border-b border-white/10">
                     <Sparkles className="w-3.5 h-3.5 text-violet-400" />
@@ -866,7 +933,7 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
                   </div>
                 </>
               )}
-              {!deckOnly && knownCombos.length > 0 && (
+              {activeSideTab === 'combos' && !deckOnly && knownCombos.length > 0 && (
                 <>
                   <div className={`flex items-center gap-1.5 mb-2.5 py-1.5 border-b border-white/10 ${deckCombos.length > 0 ? 'mt-4' : ''}`}>
                     <Sparkles className="w-3.5 h-3.5 text-amber-400" />
@@ -876,6 +943,29 @@ export function CardPreviewModal({ card, onClose, onBuildDeck, isOwned, combos, 
                   <div className="space-y-2">
                     {knownCombos.map((combo) => (
                       <ComboEntry key={combo.comboId} combo={combo} currentCardName={currentCardName} cardTypeMap={cardTypeMap} handlePillHover={handlePillHover} setHoverPreview={setHoverPreview} handlePillClick={handlePillClick} isKnown />
+                    ))}
+                  </div>
+                </>
+              )}
+              {activeSideTab === 'rulings' && hasRulings && (
+                <>
+                  {!showTabSwitcher && (
+                    <div className="flex items-center gap-1.5 mb-2.5 py-1.5 border-b border-white/10">
+                      <ScrollText className="w-3.5 h-3.5 text-white/60" />
+                      <span className="text-[11px] font-bold text-white/70 tracking-wide uppercase">Rulings</span>
+                      <span className="ml-auto text-[10px] font-medium text-white/50 bg-white/10 px-1.5 py-0.5 rounded-full">{rulings!.length}</span>
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    {rulings!.map((ruling, idx) => (
+                      <div key={idx} className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5">
+                        <p className="text-[11px] text-white/70 leading-relaxed">
+                          <ManaText text={ruling.comment} />
+                        </p>
+                        <div className="mt-1.5 text-[10px] text-white/40">
+                          {ruling.source === 'wotc' ? 'WotC' : 'Scryfall'} · {formatRulingDate(ruling.published_at)}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </>

@@ -46,13 +46,7 @@ export function BuilderPage() {
   const { createList } = useUserLists();
   const exportTriggerRef = useRef<(() => void) | null>(null);
   const [headerCollectionNames, setHeaderCollectionNames] = useState<Set<string> | null>(null);
-  const [eaEnabled, setEaEnabled] = useState(() => localStorage.getItem('ea-features-enabled') === 'true');
   const [listsPanelOpen, setListsPanelOpen] = useState(false);
-  useEffect(() => {
-    const handler = (e: Event) => setEaEnabled((e as CustomEvent<{ enabled: boolean }>).detail.enabled);
-    window.addEventListener('ea-features-changed', handler);
-    return () => window.removeEventListener('ea-features-changed', handler);
-  }, []);
 
   const {
     commander,
@@ -708,6 +702,16 @@ export function BuilderPage() {
         {showDeck && (
           <div className="flex items-center gap-2">
             <button
+              onClick={() => {
+                trackEvent('analyze_cta_clicked', { from: 'builder' });
+                navigate('/analyze/overview');
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-card/50 border border-border/50 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              <Microscope className="w-3.5 h-3.5" />
+              Inspect (Beta)
+            </button>
+            <button
               onClick={() => setListsPanelOpen(v => !v)}
               className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-card/50 border border-border/50 transition-colors ${
                 listsPanelOpen
@@ -719,18 +723,6 @@ export function BuilderPage() {
               <Library className="w-3.5 h-3.5" />
               Lists
             </button>
-            {eaEnabled && (
-              <button
-                onClick={() => {
-                  trackEvent('analyze_cta_clicked', { from: 'builder' });
-                  navigate('/analyze/overview');
-                }}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-card/50 border border-border/50 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-              >
-                <Microscope className="w-3.5 h-3.5" />
-                Inspect (Beta)
-              </button>
-            )}
             <button
               onClick={() => navigate('/playtest/generated')}
               className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-card/50 border border-border/50 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"

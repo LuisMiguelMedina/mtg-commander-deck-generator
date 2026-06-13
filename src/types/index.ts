@@ -90,6 +90,13 @@ export interface ScryfallSearchResponse {
   data: ScryfallCard[];
 }
 
+// Scryfall ruling (official WotC / Scryfall judgment note for a card)
+export interface CardRuling {
+  source: 'wotc' | 'scryfall';
+  published_at: string; // ISO date, e.g. "2024-11-08"
+  comment: string;
+}
+
 // Archetype definitions
 export enum Archetype {
   AGGRO = 'aggro',

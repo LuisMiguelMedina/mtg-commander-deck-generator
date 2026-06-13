@@ -1814,7 +1814,7 @@ function DeckStats({ activeFilter, onFilterChange, showRoles, onToggleRoles, hid
               </div>
             );
           })()}
-          {overallGrade && localStorage.getItem('ea-features-enabled') === 'true' && (() => {
+          {overallGrade && (() => {
             const style = HEALTH_GRADE_STYLES[overallGrade.letter] || HEALTH_GRADE_STYLES.C;
             return (
               <div className="flex items-center gap-3 bg-accent/30 rounded-lg px-3 py-2.5 -mt-2">
