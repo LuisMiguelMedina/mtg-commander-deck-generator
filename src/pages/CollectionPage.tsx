@@ -31,10 +31,6 @@ export function CollectionPage() {
   );
 
   const hasCollection = count > 0;
-  const totalQuantity = useMemo(
-    () => cards.reduce((sum, c) => sum + c.quantity, 0),
-    [cards],
-  );
 
   const managerRef = useRef<HTMLDivElement | null>(null);
   const scrollToManager = () => {
