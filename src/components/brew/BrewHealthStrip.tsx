@@ -23,7 +23,7 @@ export function BrewHealthStrip() {
   return (
     <div className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm px-4 py-2.5 flex items-center gap-4 flex-wrap text-xs">
       <span className="inline-flex items-center gap-1.5 font-semibold text-violet-200">
-        <Sparkles className="w-3.5 h-3.5" /> Deck Score {h.deckScore}
+        <Sparkles className="w-3.5 h-3.5" /> Deck Score {Math.round(h.deckScore)}
       </span>
       {ROLE_ROW.map(r => (
         <span key={r.key} className="inline-flex items-center gap-1.5 text-muted-foreground tabular-nums">

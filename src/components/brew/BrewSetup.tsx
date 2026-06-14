@@ -20,8 +20,17 @@ export function BrewSetup({ loadingCommander, progress, onStart }: BrewSetupProp
         <p className="text-sm text-muted-foreground">Pick your themes and constraints, then build the deck one choice at a time.</p>
       </div>
 
-      <ArchetypeDisplay />
-      <DeckCustomizer />
+      {/* Mount the setup pickers only once the commander is loaded. DeckCustomizer early-returns
+          on a null commander BETWEEN hook groups, so mounting it while the commander is still
+          loading and letting it transition null->set crashes (Rules of Hooks). */}
+      {commander ? (
+        <>
+          <ArchetypeDisplay />
+          <DeckCustomizer />
+        </>
+      ) : (
+        <div className="text-center text-sm text-muted-foreground py-10">Loading commander…</div>
+      )}
 
       <div className="text-center pt-2">
         <Button
