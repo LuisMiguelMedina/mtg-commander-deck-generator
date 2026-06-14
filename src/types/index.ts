@@ -575,6 +575,13 @@ export interface AppState {
   generatedDeck: GeneratedDeck | null;
   deckHistory: DeckHistoryEntry[];
 
+  // Brew session (interactive brewing mode)
+  brewContext: import('@/services/brew/engine').BrewContext | null;
+  brewState: import('@/services/brew/engine').BrewState | null;
+  brewRoutes: import('@/services/brew/engine').BrewRoute[];
+  brewNode: import('@/services/brew/engine').BrewNode | null;
+  brewRerollExclusions: string[];
+
   // UI
   isLoading: boolean;
   loadingMessage: string;
@@ -603,6 +610,13 @@ export interface AppState {
   setError: (error: string | null) => void;
   setModifyMode: (on: boolean) => void;
   reset: () => void;
+  startBrewSession: (ctx: import('@/services/brew/engine').BrewContext) => void;
+  openBrewRoute: (route: import('@/services/brew/engine').BrewRoute) => void;
+  applyBrewOption: (option: import('@/services/brew/engine').BrewOption, passedNames: string[]) => void;
+  backToBrewFork: () => void;
+  undoBrewPick: () => void;
+  rerollBrew: () => void;
+  clearBrewSession: () => void;
 }
 
 // Deck view progressive load phases

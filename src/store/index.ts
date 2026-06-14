@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { AppState, Customization, BanList, AppliedList, ScryfallCard, GeneratedDeck, EDHRECTheme, ThemeResult, DeckHistoryEntry, DeckHistoryAction } from '@/types';
 import { isEuropean } from '@/lib/region';
 import { swapCard, addCard } from '@/services/deckBuilder/cardSwap';
+import { nextRoutes, openNode, applyPick, undoLast, type BrewContext, type BrewRoute, type BrewOption, type BrewState, type BrewPick } from '@/services/brew/engine';
 
 const BANNED_CARDS_KEY = 'mtg-deck-builder-banned-cards';
 const MUST_INCLUDE_CARDS_KEY = 'mtg-deck-builder-must-include-cards';
@@ -228,6 +229,13 @@ export const useStore = create<AppState>((set, get) => ({
   generatedDeck: null,
   deckHistory: [],
 
+  // Brew session
+  brewContext: null,
+  brewState: null,
+  brewRoutes: [],
+  brewNode: null,
+  brewRerollExclusions: [],
+
   // UI
   isLoading: false,
   loadingMessage: '',
@@ -403,6 +411,79 @@ export const useStore = create<AppState>((set, get) => ({
   }),
 
   clearDeckHistory: () => set({ deckHistory: [] }),
+
+  startBrewSession: (ctx: BrewContext) => {
+    const state: BrewState = {
+      picks: [], usedNames: [], themeAffinity: {}, rerollsUsed: {}, phase: 'nonland', history: [],
+    };
+    set({ brewContext: ctx, brewState: state, brewRoutes: nextRoutes(ctx, state), brewNode: null, brewRerollExclusions: [] });
+  },
+
+  openBrewRoute: (route: BrewRoute) => {
+    const { brewContext, brewState } = get();
+    if (!brewContext || !brewState) return;
+    const node = openNode(brewContext, brewState, route);
+    set({ brewNode: node, brewRerollExclusions: [] });
+  },
+
+  applyBrewOption: (option: BrewOption, passedNames: string[]) => {
+    const { brewContext, brewState, brewNode } = get();
+    if (!brewContext || !brewState || !brewNode) return;
+    const picks: BrewPick[] = option.cards.map((c, i) => ({
+      name: c.name, card: c.scryfall, role: c.role, subtype: c.subtype, inclusion: c.inclusion,
+      viaRouteId: brewNode.routeId, reasons: option.reasons[i] ?? [],
+    }));
+    // Affinity tags: use each card's subtype + (role as a coarse tag) so picking similar cards compounds.
+    const tags: Record<string, string[]> = {};
+    for (const c of option.cards) {
+      const t: string[] = [];
+      if (c.subtype) t.push(c.subtype);
+      if (c.role) t.push(c.role);
+      tags[c.name] = t;
+    }
+    const nextState = applyPick(brewState, picks, { routeType: brewNode.type, passed: passedNames, tags });
+    set({
+      brewState: nextState,
+      brewRoutes: nextRoutes(brewContext, nextState),
+      brewNode: null,
+      brewRerollExclusions: [],
+    });
+  },
+
+  backToBrewFork: () => set({ brewNode: null, brewRerollExclusions: [] }),
+
+  undoBrewPick: () => {
+    const { brewContext, brewState } = get();
+    if (!brewContext || !brewState) return;
+    const reverted = undoLast(brewState);
+    set({ brewState: reverted, brewRoutes: nextRoutes(brewContext, reverted), brewNode: null, brewRerollExclusions: [] });
+  },
+
+  rerollBrew: () => {
+    const { brewContext, brewState, brewNode, brewRerollExclusions } = get();
+    if (!brewContext || !brewState) return;
+    // Cap at 2 rerolls per view via rerollsUsed keyed by node/fork id.
+    const key = brewNode?.routeId ?? 'fork';
+    const used = brewState.rerollsUsed[key] ?? 0;
+    if (used >= 2) return;
+    // Exclude currently-shown cards by merging them into a transient usedNames for the next draw.
+    const shown = brewNode ? brewNode.options.flatMap(o => o.cards.map(c => c.name)) : [];
+    const exclusions = [...brewRerollExclusions, ...shown];
+    const transient: BrewState = {
+      ...brewState,
+      usedNames: [...brewState.usedNames, ...exclusions],
+      rerollsUsed: { ...brewState.rerollsUsed, [key]: used + 1 },
+    };
+    if (brewNode) {
+      const route = get().brewRoutes.find(r => r.id === brewNode.routeId);
+      const node = route ? openNode(brewContext, transient, route) : null;
+      set({ brewState: { ...brewState, rerollsUsed: transient.rerollsUsed }, brewNode: node, brewRerollExclusions: exclusions });
+    } else {
+      set({ brewState: { ...brewState, rerollsUsed: transient.rerollsUsed }, brewRoutes: nextRoutes(brewContext, transient), brewRerollExclusions: exclusions });
+    }
+  },
+
+  clearBrewSession: () => set({ brewContext: null, brewState: null, brewRoutes: [], brewNode: null, brewRerollExclusions: [] }),
 
   setLoading: (loading: boolean, message = '') => set({
     isLoading: loading,
