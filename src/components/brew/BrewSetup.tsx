@@ -1,0 +1,43 @@
+import { useStore } from '@/store';
+import { Button } from '@/components/ui/button';
+import { ArchetypeDisplay } from '@/components/archetype/ArchetypeDisplay';
+import { DeckCustomizer } from '@/components/customization/DeckCustomizer';
+import { Wand2 } from 'lucide-react';
+
+interface BrewSetupProps {
+  loadingCommander: boolean;
+  progress: { msg: string; pct: number } | null;
+  onStart: () => void;
+}
+
+export function BrewSetup({ loadingCommander, progress, onStart }: BrewSetupProps) {
+  const { commander, themesLoading } = useStore();
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center">
+        <h1 className="text-2xl font-bold">Brew {commander?.name ?? '…'}</h1>
+        <p className="text-sm text-muted-foreground">Pick your themes and constraints, then build the deck one choice at a time.</p>
+      </div>
+
+      <ArchetypeDisplay />
+      <DeckCustomizer />
+
+      <div className="text-center pt-2">
+        <Button
+          size="lg"
+          onClick={onStart}
+          disabled={loadingCommander || themesLoading || !commander || !!progress}
+          className="min-w-56 h-14 text-lg btn-shimmer hover-lift"
+        >
+          <Wand2 className="w-5 h-5 mr-2" /> {progress ? progress.msg : 'Start Brewing'}
+        </Button>
+        {progress && progress.pct > 0 && (
+          <div className="mt-3 w-64 mx-auto h-2 bg-muted rounded-full overflow-hidden">
+            <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress.pct}%` }} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
