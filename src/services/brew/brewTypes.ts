@@ -60,6 +60,8 @@ export interface BrewRoute {
   tone: RouteTone;            // drives the ribbon color
   tag?: string;               // ribbon text, e.g. "Deck needs this", "+5 cards"
   fills: number;              // expected slots filled
+  comboMissing?: string[];   // for type 'combo': the missing piece card names to draft
+  comboResults?: string[];   // for type 'combo': what the combo does (display)
 }
 
 /** A pickable option inside a node: one card (draft/lightning/gamble) or several (bundle/combo). */

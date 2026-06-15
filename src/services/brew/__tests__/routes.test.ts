@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { nextRoutes } from '../routes';
 import { makeContext, makeState, makeCandidate } from './fixtures';
 import type { BrewPick } from '../brewTypes';
+import type { EDHRECCombo } from '@/types';
 
 function pick(c: ReturnType<typeof makeCandidate>): BrewPick {
   return { name: c.name, card: c.scryfall, role: c.role, subtype: c.subtype,
@@ -61,5 +62,23 @@ describe('nextRoutes — exhaustion fallback', () => {
     const routes = nextRoutes(ctx, makeState({ usedNames: ['Lone Card'] }));
     expect(routes.length).toBeGreaterThanOrEqual(1);
     expect(routes.some(r => r.type === 'manabase')).toBe(true);
+  });
+});
+
+describe('nextRoutes — combo route', () => {
+  it('surfaces a combo route when a near-miss combo is completable', () => {
+    const combo: EDHRECCombo = { comboId: 'c1', cards: [
+      { name: 'Test Commander', id: '1' }, { name: 'Cathars Crusade', id: '2' },
+    ], results: ['Infinite tokens'], deckCount: 999, rank: 1, bracket: '3', prereqCount: 0 };
+    const ctx = makeContext({
+      candidates: [makeCandidate('Cathars Crusade', { primary_type: 'Enchantment', type_line: 'Enchantment' })],
+      combos: [combo],
+    });
+    // makeContext's commander is named 'Test Commander' (a combo piece), so this is a near-miss.
+    const routes = nextRoutes(ctx, makeState());
+    const comboRoute = routes.find(r => r.type === 'combo');
+    expect(comboRoute).toBeDefined();
+    expect(comboRoute?.comboMissing).toEqual(['Cathars Crusade']);
+    expect(comboRoute?.tone).toBe('theme');
   });
 });

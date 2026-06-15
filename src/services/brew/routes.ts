@@ -2,6 +2,7 @@ import type { RoleKey } from '@/services/tagger/client';
 import { ROLE_LABELS } from '@/services/deckBuilder/roleTargets';
 import type { BrewContext, BrewState, BrewRoute } from './brewTypes';
 import { buildHealth, isComplete, typeKey } from './health';
+import { detectNearMissCombos } from './combos';
 
 const ROLE_KEYS: RoleKey[] = ['ramp', 'removal', 'boardwipe', 'cardDraw'];
 
@@ -31,6 +32,7 @@ export function nextRoutes(ctx: BrewContext, state: BrewState): BrewRoute[] {
   }
 
   const health = buildHealth(ctx, state);
+  const nearMiss = detectNearMissCombos(ctx, state);
 
   // Collect role + type deficits.
   const deficits: Deficit[] = [];
@@ -53,6 +55,20 @@ export function nextRoutes(ctx: BrewContext, state: BrewState): BrewRoute[] {
   const preferMulti = fillRatio >= 0.5;
 
   const routes: BrewRoute[] = [];
+
+  if (nearMiss.length > 0) {
+    const top = nearMiss[0];
+    routes.push({
+      id: `combo:${top.comboId}`,
+      type: 'combo',
+      title: top.missing.length === 1 ? 'Complete a Combo' : 'Assemble a Combo',
+      description: `Add ${top.missing.join(' + ')} to enable: ${top.results.join(', ')}.`,
+      targetRole: null, targetType: null, tone: 'theme', tag: 'Combo',
+      fills: top.missing.length,
+      comboMissing: top.missing,
+      comboResults: top.results,
+    });
+  }
 
   // Top deficit becomes the primary "need" route. Bundle if room + preferMulti, else draft.
   if (deficits[0]) {
