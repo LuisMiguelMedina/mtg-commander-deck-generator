@@ -13,14 +13,15 @@ const removalPool = [
 ];
 
 describe('openNode', () => {
-  it('routes routine picks through a multi-pack round — no single-card draft', () => {
-    const ctx = makeContext({ candidates: removalPool });
-    const route: BrewRoute = { id: 'draft:removal', type: 'draft', title: 'Add Removal',
-      description: '', targetRole: 'removal', targetType: null, tone: 'need', fills: 1 };
+  it('builds a single-card 4-option draft for an elite draft route', () => {
+    const ctx = makeContext({ candidates: removalPool }); // 5 removal cards
+    const route: BrewRoute = { id: 'draft:elite', type: 'draft', title: 'Headliner',
+      description: '', targetRole: null, targetType: null, tone: 'neutral', fills: 1 };
     const node = openNode(ctx, makeState(), route);
-    expect(node.type).toBe('bundle');                          // draft routes now open packs
+    expect(node.type).toBe('draft');
     expect(node.options.length).toBeGreaterThanOrEqual(2);
-    node.options.forEach(o => expect(o.cards.length).toBeGreaterThanOrEqual(2));
+    expect(node.options.length).toBeLessThanOrEqual(4);
+    node.options.forEach(o => expect(o.cards.length).toBe(1)); // one card per option
   });
 
   it('bundle node offers 2-3 multi-card options', () => {

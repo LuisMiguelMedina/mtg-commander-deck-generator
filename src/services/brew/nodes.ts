@@ -30,6 +30,7 @@ function flagReasons(c: BrewCandidate): PickReason[] {
 }
 
 const LIGHTNING_PICKS = 5;
+const ELITE_PICKS = 4;
 const PAYOFF_MAX = 40;
 
 /** A short, single-line payoff tag for a combo (its first result, truncated). */
@@ -234,9 +235,17 @@ export function buildPackNode(ctx: BrewContext, state: BrewState): BrewNode | nu
 export function openNode(ctx: BrewContext, state: BrewState, route: BrewRoute): BrewNode {
   const finishers = comboFinishersFor(ctx, state);
 
-  // Routine picks (the fork's pack route and every auto-advance) are multi-pack rounds.
-  if (route.type === 'bundle' || route.type === 'draft') {
+  // The bundle route (and every auto-advance) opens a multi-bundle round.
+  if (route.type === 'bundle') {
     return buildPackNode(ctx, state) ?? { routeId: route.id, type: 'bundle', prompt: route.title, options: [], canPass: false };
+  }
+
+  // The elite draft: one card per option, pick exactly one, lose the rest. The high-stakes beat.
+  if (route.type === 'draft') {
+    const top = availableFor(ctx, state, route).slice(0, ELITE_PICKS);
+    return { routeId: route.id, type: 'draft', prompt: `${route.title} — take one, leave the rest`,
+      options: top.map((c, i) => toOption(ctx, state, [c], `draft:${i}`, undefined, finishers)),
+      canPass: false };
   }
 
   const pool = availableFor(ctx, state, route);

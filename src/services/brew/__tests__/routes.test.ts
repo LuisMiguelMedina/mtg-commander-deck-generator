@@ -121,6 +121,28 @@ describe('nextRoutes — combo route', () => {
   });
 });
 
+describe('nextRoutes — elite draft cadence', () => {
+  const bombPool = Array.from({ length: 6 }, (_, i) =>
+    makeCandidate(`Bomb${i}`, { role: 'removal', type_line: 'Instant', primary_type: 'Instant', inclusion: 90 - i }));
+  const histOf = (n: number) => Array.from({ length: n }, (_, i) => ({
+    pickNumber: i + 1, routeId: 'bundle:pack', routeType: 'bundle' as const, added: [`C${i}`], passed: [],
+  }));
+
+  it('offers an elite draft route on an elite fork (history length 7)', () => {
+    const ctx = makeContext({ nonLandTarget: 63, candidates: bombPool });
+    const picks = Array.from({ length: 7 }, (_, i) => pick(makeCandidate(`C${i}`, { role: null })));
+    const routes = nextRoutes(ctx, makeState({ picks, history: histOf(7) }));
+    expect(routes.some(r => r.type === 'draft')).toBe(true);
+  });
+
+  it('does NOT offer an elite draft on a non-elite fork (history length 3)', () => {
+    const ctx = makeContext({ nonLandTarget: 63, candidates: bombPool });
+    const picks = Array.from({ length: 3 }, (_, i) => pick(makeCandidate(`C${i}`, { role: null })));
+    const routes = nextRoutes(ctx, makeState({ picks, history: histOf(3) }));
+    expect(routes.some(r => r.type === 'draft')).toBe(false);
+  });
+});
+
 describe('identity-flavored route copy', () => {
   it('appends the leaning theme to the primary need route description', () => {
     // A candidate pool with a removal deficit available to draft.

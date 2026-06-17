@@ -7,6 +7,13 @@ import { leaningThemes } from './identity';
 
 const ROLE_KEYS: RoleKey[] = ['ramp', 'removal', 'boardwipe', 'cardDraw'];
 
+// An elite single-card draft surfaces on every other fork. Forks land at history lengths 3,7,11,…
+// (see flow.isSteerIndex / STEER_EVERY=4), so fork index = floor(historyLen/4); odd ones get an elite.
+const ELITE_EVERY = 2;
+export function isEliteFork(historyLen: number): boolean {
+  return Math.floor(historyLen / 4) % ELITE_EVERY === 1;
+}
+
 export interface Deficit {
   key: string;
   kind: 'role' | 'type';
@@ -136,6 +143,18 @@ export function nextRoutes(ctx: BrewContext, state: BrewState): BrewRoute[] {
       tone: 'need',
       tag: topNeed ? `${topNeed.shortLabel} ${topNeed.current}/${topNeed.target}` : '3 cards',
       fills: 3,
+    });
+  }
+
+  // Elite draft: a rarer, high-stakes "pick THE one card" beat. Only when strong cards exist and
+  // we're not near completion (so it never crowds out the converging bundle late).
+  if (isEliteFork(state.history.length) && draftableLeft && fillRatio < 0.9) {
+    routes.push({
+      id: 'draft:elite',
+      type: 'draft',
+      title: 'Headliner',
+      description: `Four standouts, one slot — commit to a single card.${leanFlavor}`,
+      targetRole: null, targetType: null, tone: 'theme', tag: 'Pick 1 of 4', fills: 1,
     });
   }
 
