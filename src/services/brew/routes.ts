@@ -134,7 +134,7 @@ export function nextRoutes(ctx: BrewContext, state: BrewState): BrewRoute[] {
       targetRole: topNeed?.kind === 'role' ? (topNeed.key as RoleKey) : null,
       targetType: topNeed?.kind === 'type' ? topNeed.key : null,
       tone: 'need',
-      tag: '3 cards',
+      tag: topNeed ? `${topNeed.shortLabel} ${topNeed.current}/${topNeed.target}` : '3 cards',
       fills: 3,
     });
   }

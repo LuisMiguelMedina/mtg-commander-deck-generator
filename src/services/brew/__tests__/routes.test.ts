@@ -84,6 +84,21 @@ describe('nextRoutes — exhaustion fallback', () => {
   });
 });
 
+describe('nextRoutes — deficit magnitude on the pack route', () => {
+  it('tags the pack route with the leading gap as current/target', () => {
+    const ctx = makeContext({
+      roleTargets: { ramp: 0, removal: 8, boardwipe: 0, cardDraw: 0 },
+      candidates: [
+        makeCandidate('Swords to Plowshares', { role: 'removal', type_line: 'Instant', primary_type: 'Instant' }),
+        makeCandidate('Beast Within', { role: 'removal', type_line: 'Instant', primary_type: 'Instant' }),
+      ],
+    });
+    const routes = nextRoutes(ctx, makeState());
+    const pack = routes.find(r => r.id === 'bundle:pack')!;
+    expect(pack.tag).toBe('Removal 0/8');
+  });
+});
+
 describe('nextRoutes — combo route', () => {
   it('surfaces a combo route when a near-miss combo is completable', () => {
     const combo: EDHRECCombo = { comboId: 'c1', cards: [
