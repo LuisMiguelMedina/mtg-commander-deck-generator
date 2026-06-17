@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useStore } from '@/store';
 import { Button } from '@/components/ui/button';
 import { Undo2, RefreshCw, Play, MapPin } from 'lucide-react';
-import { openNode, leaningThemes, type BrewRoute } from '@/services/brew/engine';
+import { openNode, leaningThemes, isLastPickLocked, type BrewRoute } from '@/services/brew/engine';
 import { symbolFor, SymbolGlyph } from '@/components/brew/brewVisuals';
 import type { ScryfallCard } from '@/types';
 
@@ -59,8 +59,9 @@ export function BrewPath({ onFinish }: { onFinish: () => void }) {
   if (!brewState) return null;
 
   const leaning = brewContext ? leaningThemes(brewContext, brewState) : [];
-  const pickNumber = brewState.history.length + 1;
-  const canUndo = brewState.history.length > 0;
+  // A committed (event-sourced) last pick locks undo — the "accept fate" beat.
+  const locked = isLastPickLocked(brewState);
+  const canUndo = brewState.history.length > 0 && !locked;
   const n = brewRoutes.length;
 
   // Keep the trail to a single, readable lane — show the most recent steps, hint at the rest.
@@ -97,22 +98,24 @@ export function BrewPath({ onFinish }: { onFinish: () => void }) {
       )}
 
       {/* ── Heading: editorial kicker + engraved title ────────────────────── */}
-      <div className="flex items-center justify-center gap-3 mb-2 text-muted-foreground/70">
-        <span className="h-px w-8 sm:w-14 bg-gradient-to-r from-transparent to-border" />
-        <span className="text-[10px] uppercase tracking-[0.32em] whitespace-nowrap">Pick {pickNumber} · Choose your route</span>
-        <span className="h-px w-8 sm:w-14 bg-gradient-to-l from-transparent to-border" />
-      </div>
       <h2 className="font-display text-3xl sm:text-4xl font-semibold text-foreground/95 mb-2 drop-shadow-[0_2px_18px_hsl(var(--primary)/0.35)]">
         Where to next?
       </h2>
       {leaning.length > 0 ? (
-        <p className="text-xs text-violet-300/80 mb-7">
-          Your deck is leaning <span className="font-semibold text-violet-200">{leaning.join(' · ')}</span>
-        </p>
+        <div className="mb-7 flex flex-col items-center gap-1">
+          <span className="text-[10px] uppercase tracking-[0.18em] text-violet-300/70">Your deck is becoming</span>
+          <span className="font-display text-xl font-semibold text-violet-100 drop-shadow-[0_2px_14px_hsl(262_83%_58%/0.45)]">
+            {leaning.join(' · ')}
+          </span>
+        </div>
       ) : (
-        <div className="mb-7" />
+        <p className="text-xs text-muted-foreground/70 mb-7">Every choice shapes what this deck becomes.</p>
       )}
 
+      {/* The fork node, its branches, and the route cards share ONE centered, n-sized container so
+          the SVG branch math (x = (i+0.5)/n) lands on each card's centre — and a 2-route fork reads
+          as centred rather than left-anchored in a fixed 3-up grid. */}
+      <div className={`mx-auto ${n <= 1 ? 'sm:max-w-xs' : n === 2 ? 'sm:max-w-2xl' : 'sm:max-w-5xl'}`}>
       {/* ── "You are here" node + the fork splaying into each route ───────── */}
       <div className="relative flex flex-col items-center">
         <span className="brew-node-pulse relative z-10 w-9 h-9 rounded-full border border-violet-300/80 bg-primary/25 grid place-items-center text-violet-100">
@@ -147,7 +150,7 @@ export function BrewPath({ onFinish }: { onFinish: () => void }) {
       </div>
 
       {/* ── The routes, dealt like a hand of cards ────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className={`grid grid-cols-1 gap-4 ${n === 1 ? 'sm:grid-cols-1' : n === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
         {brewRoutes.map((route: BrewRoute, i: number) => {
           const sym = symbolFor(route.type, route.targetRole ?? route.targetType ?? null);
           const art = repArt[route.id];
@@ -164,62 +167,73 @@ export function BrewPath({ onFinish }: { onFinish: () => void }) {
                 ['--tone' as string]: tone.color,
                 ['--tone-soft' as string]: tone.soft,
               }}
-              className="group relative flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card/70 backdrop-blur-sm text-left transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-1.5 hover:border-[color:var(--tone)] hover:shadow-[0_22px_55px_-14px_var(--tone-soft)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--tone)]"
+              className="group relative flex min-h-[284px] flex-col justify-end overflow-hidden rounded-2xl border border-border/60 bg-card text-center transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-2 hover:border-[color:var(--tone)] hover:shadow-[0_28px_64px_-16px_var(--tone-soft)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--tone)]"
             >
+              {/* Full-bleed art — the route wears the art of the card it'd deal. */}
+              {art ? (
+                <img
+                  src={art}
+                  alt=""
+                  aria-hidden="true"
+                  className="absolute inset-0 h-full w-full object-cover object-center opacity-[0.52] transition duration-[600ms] ease-out group-hover:opacity-[0.72] group-hover:scale-105"
+                />
+              ) : (
+                <div
+                  className="absolute inset-0 opacity-40"
+                  style={{ background: 'radial-gradient(120% 80% at 50% 0%, var(--tone), transparent 62%)' }}
+                />
+              )}
+              {/* Scrim: art breathes up top, the lower third reads as a solid plate for the text. */}
+              <div className="absolute inset-0 bg-gradient-to-t from-card via-card/92 to-card/5" />
+              {/* Tone glow blooms from the top on hover. */}
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                style={{ background: 'radial-gradient(95% 55% at 50% -8%, var(--tone-soft), transparent 60%)' }}
+              />
+
               {/* Top accent edge — the route's color signature. */}
               <span
                 aria-hidden="true"
-                className="h-[3px] w-full opacity-70 transition-opacity duration-200 group-hover:opacity-100"
+                className="absolute left-0 top-0 h-[3px] w-full opacity-75 transition-opacity duration-200 group-hover:opacity-100"
                 style={{ background: 'linear-gradient(90deg, transparent, var(--tone), transparent)' }}
               />
 
-              {/* Art window — MTG-card anatomy: the route wears the art of the card it'd deal. */}
-              <div className="relative h-24 overflow-hidden bg-background/60">
-                {art ? (
-                  <img
-                    src={art}
-                    alt=""
-                    aria-hidden="true"
-                    className="absolute inset-0 w-full h-full object-cover opacity-55 transition duration-500 group-hover:opacity-75 group-hover:scale-110"
-                  />
-                ) : (
-                  <div
-                    className="absolute inset-0 opacity-30"
-                    style={{ background: 'radial-gradient(120% 90% at 50% 0%, var(--tone), transparent 70%)' }}
-                  />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/55 to-card" />
-              </div>
-
-              {/* Medallion straddling the art/text seam. */}
+              {/* Medallion riding the art. */}
               <span
-                className={`absolute left-1/2 top-[72px] z-10 -translate-x-1/2 w-14 h-14 rounded-full grid place-items-center border-2 backdrop-blur-sm shadow-lg transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-6 ${tone.medallion}`}
+                className={`absolute left-1/2 top-7 z-10 -translate-x-1/2 w-16 h-16 rounded-full grid place-items-center border-2 backdrop-blur-sm shadow-lg transition-[transform,box-shadow] duration-300 group-hover:scale-110 group-hover:-rotate-6 group-hover:shadow-[0_0_30px_-2px_var(--tone-soft)] ${tone.medallion}`}
               >
                 <SymbolGlyph sym={sym} size="lg" />
               </span>
 
-              {/* Text box — engraved title, flavor-text description, route tag. */}
-              <div className="relative flex flex-1 flex-col items-center px-5 pt-10 pb-5 text-center">
+              {/* Engraved title, flavor-text description, route tag — anchored at the bottom over the scrim. */}
+              <div className="relative z-10 flex flex-col items-center px-5 pb-5 pt-4">
                 <h3 className="font-display text-lg font-semibold leading-tight text-foreground mb-1.5">{route.title}</h3>
-                <p className="font-flavor text-[15px] italic leading-snug text-muted-foreground mb-4 flex-1">{route.description}</p>
+                <p className="font-flavor text-[15px] italic leading-snug text-muted-foreground/90 mb-3.5 max-w-[26ch]">{route.description}</p>
                 {route.tag && (
-                  <span className={`mt-auto inline-block text-[10px] font-semibold uppercase tracking-[0.12em] px-3 py-1 rounded-full border ${tone.tag}`}>
+                  <span className={`inline-block text-[10px] font-semibold uppercase tracking-[0.14em] px-3 py-1 rounded-full border ${tone.tag}`}>
                     {route.tag}
                   </span>
                 )}
               </div>
 
               {/* Hairline corner ticks — a touch of card-frame craft. */}
-              <span aria-hidden className="pointer-events-none absolute top-2 left-2 w-3 h-3 border-t border-l border-foreground/15 rounded-tl transition-colors duration-200 group-hover:border-[color:var(--tone)]" />
-              <span aria-hidden className="pointer-events-none absolute bottom-2 right-2 w-3 h-3 border-b border-r border-foreground/15 rounded-br transition-colors duration-200 group-hover:border-[color:var(--tone)]" />
+              <span aria-hidden className="pointer-events-none absolute top-2.5 left-2.5 z-10 w-3.5 h-3.5 border-t border-l border-foreground/20 rounded-tl transition-colors duration-200 group-hover:border-[color:var(--tone)]" />
+              <span aria-hidden className="pointer-events-none absolute top-2.5 right-2.5 z-10 w-3.5 h-3.5 border-t border-r border-foreground/20 rounded-tr transition-colors duration-200 group-hover:border-[color:var(--tone)]" />
+              <span aria-hidden className="pointer-events-none absolute bottom-2.5 left-2.5 z-10 w-3.5 h-3.5 border-b border-l border-foreground/20 rounded-bl transition-colors duration-200 group-hover:border-[color:var(--tone)]" />
+              <span aria-hidden className="pointer-events-none absolute bottom-2.5 right-2.5 z-10 w-3.5 h-3.5 border-b border-r border-foreground/20 rounded-br transition-colors duration-200 group-hover:border-[color:var(--tone)]" />
             </button>
           );
         })}
       </div>
+      </div>
 
       {/* ── Wayfinding controls ───────────────────────────────────────────── */}
       <div className="flex items-center justify-center gap-2 mt-9 text-muted-foreground">
-        <Button variant="ghost" size="sm" disabled={!canUndo} onClick={undoBrewPick}><Undo2 className="w-4 h-4 mr-1.5" /> Undo</Button>
+        <Button variant="ghost" size="sm" disabled={!canUndo} onClick={undoBrewPick}
+          title={locked ? 'That choice is locked in — no take-backs.' : undefined}>
+          <Undo2 className="w-4 h-4 mr-1.5" /> {locked ? 'Locked in' : 'Undo'}
+        </Button>
         <span className="w-1 h-1 rotate-45 bg-border" />
         <Button variant="ghost" size="sm" onClick={rerollBrew}><RefreshCw className="w-4 h-4 mr-1.5" /> Reroll routes</Button>
         <span className="w-1 h-1 rotate-45 bg-border" />
