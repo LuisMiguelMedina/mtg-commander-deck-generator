@@ -24,7 +24,9 @@ const DEMO_BUNDLES = [
   { label: 'Tokens', tone: '152 62% 58%' },    // theme/emerald
 ];
 const PICKED = 1;            // index of the bundle that flies up to the deck
-const CYCLE_MS = 3400;       // full loop duration before the demo replays
+// The demo plays through in ~1.9s, then holds its final frame; only after a long settle does it
+// replay — so it reads as a one-shot example, not a nervous loop.
+const CYCLE_MS = 9000;
 
 export function BrewSplash({ commanderName, onContinue }: Props) {
   const reduce = typeof window !== 'undefined'
