@@ -9,6 +9,7 @@ vi.mock('@/services/edhrec/client', () => ({
 }));
 vi.mock('@/services/scryfall/client', () => ({
   getCardsByNames: vi.fn(),
+  getGameChangerNames: vi.fn(async () => new Set<string>()),
 }));
 vi.mock('@/services/tagger/client', () => ({
   loadTaggerData: vi.fn(async () => null),

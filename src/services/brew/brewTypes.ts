@@ -11,6 +11,9 @@ export interface BrewCandidate {
   inclusion: number;           // EDHREC inclusion % (mirror of edhrec.inclusion)
   isLand: boolean;             // type_line includes 'land'
   themeTags: string[];         // EDHREC theme slugs this card belongs to (∩ the deck's selected themes)
+  discoveredVia?: string;      // seed card display name this candidate was discovered through
+  coSynergy?: number;          // 0-100 co-occurrence % with the seed (display + scoring)
+  discoverySource?: 'lift' | 'coplay' | 'similar';
 }
 
 /** Immutable per-session data: the scored pool + targets. Built once by prepareBrewContext(). */
@@ -27,9 +30,11 @@ export interface BrewContext {
   nonLandTarget: number;                 // Sum of typeTargets
   combos: EDHRECCombo[];                 // Commander-source combos, for combo routes (Plan 3)
   themeNames: Record<string, string>;    // theme slug -> display name (for leaning readout + reasons)
+  themeSignatures: Record<string, string[]>; // theme slug -> card names ranked by EDHREC theme-synergy (the cards that DEFINE the theme, not staples played in it)
+  gameChangerNames?: Set<string>;        // WotC "game changer" list — surfaced as a pick reason
 }
 
-export type ReasonKind = 'synergy' | 'role' | 'theme' | 'curve' | 'combo';
+export type ReasonKind = 'synergy' | 'role' | 'theme' | 'curve' | 'combo' | 'discovery' | 'lift' | 'gameChanger' | 'tag';
 
 export interface PickReason {
   kind: ReasonKind;
@@ -66,13 +71,24 @@ export interface BrewRoute {
   comboResults?: string[];   // for type 'combo': what the combo does (display)
 }
 
+/** A combo piece the player already owns — shown for context, not added to the deck. */
+export interface ComboPiece {
+  name: string;
+  scryfall: ScryfallCard;
+}
+
 /** A pickable option inside a node: one card (draft/lightning/gamble) or several (bundle/combo). */
 export interface BrewOption {
   id: string;
   label?: string;             // bundle theme name, e.g. "Sacrifice Synergy"
-  cards: BrewCandidate[];     // 1 for draft/lightning/gamble, 3-5 for bundle, 1-3 for combo
+  cards: BrewCandidate[];     // 1 for gamble, 3-5 for a pack/lightning, 1-3 for combo
   reasons: PickReason[][];    // reasons[i] corresponds to cards[i]
   spicy?: boolean;            // a wildcard slot: underutilized / off-theme, flagged in the UI
+  comboHave?: ComboPiece[];   // for type 'combo': owned pieces this card combos with (display-only)
+  /** What this pack represents — drives its header tint in a multi-pack round. */
+  flavor?: 'need' | 'theme' | 'discovery' | 'combo' | 'value';
+  /** Subjects (theme/role names) of the OTHER bundles on screen — what taking this one walks away from. */
+  closing?: string[];
 }
 
 export interface BrewNode {
@@ -81,6 +97,23 @@ export interface BrewNode {
   prompt: string;             // node heading
   options: BrewOption[];      // pick one option; lightning/combo/bundle options can hold several cards
   canPass: boolean;           // gamble allows passing
+}
+
+/** One answer to a personality question — a playstyle that leans the named theme(s). */
+export interface BrewAnswer {
+  id: string;
+  label: string;              // playstyle phrasing, e.g. "Go wide"
+  blurb: string;              // one-line description of the playstyle
+  themeSlugs: string[];       // theme slug(s) this answer leans
+  card?: ScryfallCard;        // when present, the question screen renders this card's art
+  lean?: number;              // affinity added per slug (defaults to QUESTION_LEAN); opening commits harder
+}
+
+/** A personality round: a prompt with playstyle answers drawn from the commander's themes. */
+export interface BrewQuestion {
+  id: string;
+  prompt: string;
+  answers: BrewAnswer[];
 }
 
 export type BrewPhase = 'nonland' | 'lands' | 'done';
@@ -92,6 +125,7 @@ export interface BrewHistoryEntry {
   added: string[];            // card names added in this decision
   passed: string[];           // names shown-but-not-taken (for Plan 3 Build History)
   tags?: Record<string, string[]>; // picked card name -> synergy tags (lets undo subtract affinity precisely)
+  moment?: { kind: BrewEventKind; label: string }; // set when this pick came from an event → locked from undo
 }
 
 /** Mutable session progress. */
@@ -102,6 +136,17 @@ export interface BrewState {
   rerollsUsed: Record<string, number>;   // fork/node id -> count
   phase: BrewPhase;
   history: BrewHistoryEntry[];
+  discovered: BrewCandidate[];          // cards pulled in via card-to-card discovery (blended into the pool)
+  seededNames: string[];                // pick names already used as discovery seeds (no refetch)
+  committedTheme?: string;              // theme slug the player committed to at a Crossroads (Slice A: drives soft-remove + meter marker)
+  pinnedNames?: string[];               // cards the player pinned "for later" — boosted so they resurface in future offers
+  questionsAsked: number;               // personality questions answered/skipped so far (caps re-prompts)
+  // --- The "fun layer": events, relics & the run story ---
+  relics: BrewRelic[];                  // acquired deckbuilding modifiers (bias future offers/scoring)
+  comboWatch: string[];                 // missing combo-piece names to bias toward (set by "Investigate")
+  firedEventIds: string[];              // event ids already surfaced this run (dedupe)
+  lastMomentPick: number;               // picks.length at the last event/relic — enforces a min gap
+  moments: BrewMoment[];                // story log for the end-of-run recap (decoupled from undo history)
 }
 
 export interface BrewHealth {
@@ -115,4 +160,83 @@ export interface BrewHealth {
   estCostUsd: number;         // sum of pick prices
   themeDensity: number;       // 0-100, share of picks that are theme-synergy cards
   curveVerdict: 'low' | 'healthy' | 'high';
+}
+
+// ---------------------------------------------------------------------------
+// The "fun layer": events, relics & the run story
+//
+// Events are framed, emotional decisions generated from the runtime data the engine already
+// holds (discovery / near-miss combos / theme affinity) and surfaced at steering milestones.
+// Relics are persistent modifiers that bias future offers and scoring. Moments form the
+// end-of-run story recap. None of these require new network calls.
+// ---------------------------------------------------------------------------
+
+export type BrewEventKind = 'strangeSignal' | 'comboFragment' | 'crossroads' | 'signaturePick' | 'gamble';
+
+/** One choice button on an event screen. */
+export interface BrewEventChoice {
+  id: string;
+  label: string;       // button text: "Trust it", "Investigate", "Commit to Tokens"
+  blurb: string;       // one-line consequence framing
+  tone?: RouteTone;    // optional accent (drives the button color)
+}
+
+/** A competing emerging theme presented at a Crossroads. */
+export interface BrewCrossroadsPath {
+  slug: string;                 // theme slug (the affinity key to commit)
+  name: string;                 // display name
+  sampleCards: BrewCandidate[]; // 2-3 signature cards to preview the direction
+}
+
+/** A generated "moment": a framed decision surfaced at a steering milestone. */
+export interface BrewEvent {
+  id: string;                   // stable dedupe key, e.g. "signal:Pitiless Plunderer"
+  kind: BrewEventKind;
+  title: string;                // "Strange Signal" | "Combo Fragment" | "Crossroads"
+  flavor: string;               // the intrigue line shown under the title
+  card?: BrewCandidate;         // strangeSignal: the surprising card (shown face-up, no stat badges)
+  combo?: {                     // comboFragment: the interaction this fragment belongs to
+    comboId: string;
+    results: string[];          // what the combo does
+    missing: BrewCandidate[];   // pieces still needed (in the pool)
+    have: ComboPiece[];         // pieces already owned (shown dimmed for context)
+  };
+  paths?: BrewCrossroadsPath[]; // crossroads: the competing directions
+  choices: BrewEventChoice[];
+  canPass: boolean;             // a non-committal "stay open" / "ignore" exit
+  passLabel?: string;           // wording for the pass button ("Not this time", "Abandon", "Stay open")
+}
+
+/** A relic's mechanical effect. All are small, additive reads consumed where offers are generated. */
+export type BrewRelicEffect =
+  | { type: 'themeWeight'; slug: string; mult: number }   // boost a theme's scoring contribution
+  | { type: 'discoveryRate'; mult: number }               // seed more card-to-card discoveries
+  | { type: 'spiceRate'; mult: number }                   // (legacy) more wildcard appearances — unused
+  | { type: 'efficiency'; mult: number }                  // favor proven staples, dampen speculative discovery
+  | { type: 'comboBias'; mult: number }                   // combo-watch pieces float up harder
+  | { type: 'packBonus'; role: RoleKey; extra: number }   // +N cards in that role's packs
+  | { type: 'budgetCap'; maxUsd: number };                // cards over this price stop appearing
+
+/** A persistent deckbuilding modifier acquired mid-run. */
+export interface BrewRelic {
+  id: string;
+  name: string;
+  description: string; // player-facing effect line
+  glyph?: string;      // lucide icon key for the relic tray
+  effect: BrewRelicEffect;
+}
+
+/** Transient banner shown right after a Crossroads commit: how the run just changed. */
+export interface BrewCommitFlash {
+  theme: string;      // display name of the committed theme
+  injected: number;   // new on-theme cards pulled into the pool (0 until the async fetch resolves)
+  suppressed: number; // off-theme, non-urgent cards now set aside
+}
+
+/** Story-log entry for the end-of-run recap (decoupled from pick history/undo). */
+export interface BrewMoment {
+  atPick: number;                              // picks.length when it happened
+  kind: BrewEventKind | 'relic' | 'opening';
+  label: string;                               // short headline
+  detail?: string;                             // optional secondary line
 }

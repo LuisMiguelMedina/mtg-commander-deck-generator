@@ -35,7 +35,9 @@ export function makeCandidate(
   name: string,
   opts: { role?: RoleKey | null; subtype?: string | null; inclusion?: number; cmc?: number;
           type_line?: string; primary_type?: string; price?: string; isLand?: boolean;
-          isThemeSynergyCard?: boolean; themeTags?: string[] } = {},
+          isThemeSynergyCard?: boolean; themeTags?: string[];
+          discoveredVia?: string; coSynergy?: number;
+          discoverySource?: 'lift' | 'coplay' | 'similar' } = {},
 ): BrewCandidate {
   const inclusion = opts.inclusion ?? 50;
   return {
@@ -49,6 +51,9 @@ export function makeCandidate(
     inclusion,
     isLand: opts.isLand ?? false,
     themeTags: opts.themeTags ?? [],
+    discoveredVia: opts.discoveredVia,
+    coSynergy: opts.coSynergy,
+    discoverySource: opts.discoverySource,
   };
 }
 
@@ -66,6 +71,7 @@ export function makeContext(over: Partial<BrewContext> = {}): BrewContext {
     nonLandTarget: over.nonLandTarget ?? 63,
     combos: over.combos ?? [],
     themeNames: over.themeNames ?? {},
+    themeSignatures: over.themeSignatures ?? {},
     ...over,
   };
 }
@@ -78,6 +84,14 @@ export function makeState(over: Partial<BrewState> = {}): BrewState {
     rerollsUsed: {},
     phase: 'nonland',
     history: [],
+    discovered: [],
+    seededNames: [],
+    questionsAsked: 0,
+    relics: [],
+    comboWatch: [],
+    firedEventIds: [],
+    lastMomentPick: 0,
+    moments: [],
     ...over,
   };
 }

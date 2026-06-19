@@ -1,4 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+vi.mock('@/services/brew/discovery', () => ({
+  discoverFrom: vi.fn(async () => [
+    { name: 'Discovered Card', edhrec: { name: 'Discovered Card', sanitized: 'discovered-card', primary_type: 'Instant', inclusion: 40, num_decks: 0 },
+      scryfall: { id: 'd', name: 'Discovered Card', cmc: 2, type_line: 'Instant', color_identity: ['W'], prices: { usd: '1' } },
+      role: 'removal', subtype: null, inclusion: 40, isLand: false, themeTags: [],
+      discoveredVia: 'Sol Ring', coSynergy: 40, discoverySource: 'lift' },
+  ]),
+}));
 import { useStore } from '@/store';
 import type { BrewContext, BrewCandidate } from '@/services/brew/engine';
 import type { ScryfallCard, EDHRECCard } from '@/types';
@@ -20,7 +28,7 @@ function ctx(): BrewContext {
     customization: {} as BrewContext['customization'], candidates,
     roleTargets: { ramp: 10, removal: 8, boardwipe: 3, cardDraw: 10 },
     typeTargets: { creature: 0, instant: 8, artifact: 6 }, curveTargets: { 2: 14 },
-    landTarget: 36, nonLandTarget: 14, combos: [], themeNames: {},
+    landTarget: 36, nonLandTarget: 14, combos: [], themeNames: {}, themeSignatures: {},
   };
 }
 
@@ -33,6 +41,16 @@ describe('brewSession slice', () => {
     useStore.getState().startBrewSession(ctx());
     expect(useStore.getState().brewState?.picks).toHaveLength(0);
     expect(useStore.getState().brewRoutes.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('expandBrewDiscoveries merges discovered cards into state', async () => {
+    const s = useStore.getState();
+    s.startBrewSession(ctx());
+    s.openBrewRoute(useStore.getState().brewRoutes.find(r => r.targetRole === 'removal') ?? useStore.getState().brewRoutes[0]);
+    s.applyBrewOption(useStore.getState().brewNode!.options[0], []);
+    await useStore.getState().expandBrewDiscoveries();
+    expect(useStore.getState().brewState!.discovered.map(c => c.name)).toContain('Discovered Card');
+    expect(useStore.getState().brewState!.seededNames.length).toBeGreaterThan(0);
   });
 
   it('opens a route and applies an option, advancing the session', () => {
@@ -49,28 +67,32 @@ describe('brewSession slice', () => {
     expect(useStore.getState().brewNode!.options.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('undo reverts the last decision', () => {
+  it('undo reverts the last decision (the whole pack)', () => {
     const s = useStore.getState();
     s.startBrewSession(ctx());
     s.openBrewRoute(useStore.getState().brewRoutes[0]);
     s.applyBrewOption(useStore.getState().brewNode!.options[0], []);
-    const before = useStore.getState().brewState!.picks.length;
+    const histBefore = useStore.getState().brewState!.history.length;
+    const picksBefore = useStore.getState().brewState!.picks.length;
     s.undoBrewPick();
-    expect(useStore.getState().brewState!.picks.length).toBe(before - 1);
+    expect(useStore.getState().brewState!.history.length).toBe(histBefore - 1);
+    expect(useStore.getState().brewState!.picks.length).toBeLessThan(picksBefore);
   });
 
   it('reroll swaps shown cards and is capped at 2', () => {
     const s = useStore.getState();
     s.startBrewSession(ctx());
-    const route = useStore.getState().brewRoutes.find(r => r.targetRole === 'removal')!;
+    const route = useStore.getState().brewRoutes.find(r => r.id === 'bundle:pack') ?? useStore.getState().brewRoutes[0];
     s.openBrewRoute(route);
-    const first = useStore.getState().brewNode!.options.flatMap(o => o.cards.map(c => c.name));
+    const node = useStore.getState().brewNode!;
+    const key = node.routeId;        // packs reroll under their own node id
+    const first = node.options.flatMap(o => o.cards.map(c => c.name));
     s.rerollBrew();
     const second = useStore.getState().brewNode!.options.flatMap(o => o.cards.map(c => c.name));
     expect(second.some(n => !first.includes(n)) || second.length < first.length).toBe(true);
     s.rerollBrew(); // 2nd reroll ok
-    const usedAfter = useStore.getState().brewState!.rerollsUsed[route.id] ?? 0;
+    const usedAfter = useStore.getState().brewState!.rerollsUsed[key] ?? 0;
     s.rerollBrew(); // 3rd should be capped (no further increment)
-    expect(useStore.getState().brewState!.rerollsUsed[route.id]).toBe(usedAfter);
+    expect(useStore.getState().brewState!.rerollsUsed[key]).toBe(usedAfter);
   });
 });

@@ -19,8 +19,9 @@ describe('advanceAfterPick — steering cadence', () => {
     expect(node!.options.length).toBeGreaterThan(0);
   });
 
-  it('surfaces the steering fork every STEER_EVERY decisions', () => {
-    const node = advanceAfterPick(makeContext({ candidates: creaturePool }), makeState({ history: history(STEER_EVERY) }));
+  it('surfaces the steering fork on the last node of each cycle', () => {
+    // The moment lands on the STEER_EVERY-th node (index STEER_EVERY - 1).
+    const node = advanceAfterPick(makeContext({ candidates: creaturePool }), makeState({ history: history(STEER_EVERY - 1) }));
     expect(node).toBeNull();
   });
 

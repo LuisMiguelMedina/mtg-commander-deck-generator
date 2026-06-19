@@ -138,6 +138,33 @@ const BUNDLE_MIN = 2;          // a bundle needs at least this many cards to "fe
 const BUNDLE_MAX = 4;          // cap so one decision doesn't fill too many slots at once
 const BUNDLE_COUNT = 3;        // packs offered per node
 
+/**
+ * Evocative names for bundles, keyed by role, card type, or theme slug. Deterministic and testable;
+ * any key without an entry falls back to the cluster's plain subject label (e.g. "Tokens").
+ */
+const BUNDLE_FLAVOR: Record<string, string> = {
+  // roles
+  ramp: 'Fuel the Engine', removal: 'Clean Sweep', boardwipe: 'Scorched Earth', cardDraw: 'Draw Deep',
+  // card types
+  creature: 'Field an Army', instant: 'Hold Up Answers', sorcery: 'Big Plays',
+  artifact: 'The Engine', enchantment: 'Lasting Power', planeswalker: 'Call in Allies',
+  // common theme slugs
+  tokens: 'Raise an Army', sacrifice: 'Feed the Machine', aristocrats: 'Feed the Machine',
+  counters: 'Grow Tall', '+1-+1-counters': 'Grow Tall', lifegain: 'Drain the Table',
+  spellslinger: 'Cast a Storm', 'spells-matter': 'Cast a Storm', reanimator: 'Raise the Dead',
+  graveyard: 'Raise the Dead', mill: 'Erode the Library', blink: 'Flicker and Flux',
+  equipment: 'Suit Up', auras: 'Suit Up', voltron: 'Suit Up', landfall: 'Grow the Land',
+  lands: 'Grow the Land', ramp_theme: 'Fuel the Engine', stax: 'Lock It Down', control: 'Take the Reins',
+};
+
+/** Cluster key like 'need:removal' | 'theme:tokens' | 'discovery' | 'pack:a' → its display title. */
+function bundleName(ctx: BrewContext, key: string, fallbackLabel: string): string {
+  const [kind, slug] = key.split(':');
+  if (kind === 'theme') return BUNDLE_FLAVOR[slug] ?? ctx.themeNames[slug] ?? fallbackLabel;
+  if (kind === 'need') return BUNDLE_FLAVOR[slug] ?? fallbackLabel;
+  return fallbackLabel;   // discovery / pack:* keep their plain labels
+}
+
 /** A candidate cluster key: a theme slug, a subtype, or a role — anything that makes a coherent group. */
 interface Cluster {
   key: string;
@@ -196,28 +223,34 @@ function clusterBundles(ctx: BrewContext, state: BrewState): BrewOption[] {
   clusters.sort((a, b) => b.priority - a.priority);
 
   const taken = new Set<string>();
-  const bundles: BrewOption[] = [];
+  // Keep each bundle's plain subject (cluster.label) alongside its option so we can fill the
+  // "Closing:" line with the OTHER bundles' subjects after the set is chosen.
+  const built: { option: BrewOption; subject: string }[] = [];
   for (const cl of clusters) {
-    if (bundles.length >= BUNDLE_COUNT) break;
+    if (built.length >= BUNDLE_COUNT) break;
     const cards = takeCards(scored, taken, BUNDLE_MAX, cl.match);
     if (cards.length < BUNDLE_MIN) continue;
     cards.forEach(c => taken.add(c.name));
-    bundles.push({ ...toOption(ctx, state, cards, cl.key, cl.label, finishers), flavor: cl.flavor });
+    const option = { ...toOption(ctx, state, cards, cl.key, bundleName(ctx, cl.key, cl.label), finishers), flavor: cl.flavor };
+    built.push({ option, subject: cl.label });
   }
 
   // Thin-pool guarantee: if fewer than two coherent clusters formed (e.g. a pool dominated by one
   // role), split the top cards into two generic bundles so the player still chooses between packages.
-  if (bundles.length < 2) {
+  if (built.length < 2) {
     const top = scored.slice(0, BUNDLE_MAX * 2);
     const half = Math.min(BUNDLE_MAX, Math.ceil(top.length / 2));
     const first = top.slice(0, half);
     const second = top.slice(half, half + BUNDLE_MAX);
     const split: BrewOption[] = [];
-    if (first.length >= BUNDLE_MIN) split.push({ ...toOption(ctx, state, first, 'pack:a', 'Top Picks', finishers), flavor: 'value' });
-    if (second.length >= BUNDLE_MIN) split.push({ ...toOption(ctx, state, second, 'pack:b', 'More Options', finishers), flavor: 'value' });
+    if (first.length >= BUNDLE_MIN) split.push({ ...toOption(ctx, state, first, 'pack:a', 'Top Picks', finishers), flavor: 'value', closing: ['More Options'] });
+    if (second.length >= BUNDLE_MIN) split.push({ ...toOption(ctx, state, second, 'pack:b', 'More Options', finishers), flavor: 'value', closing: ['Top Picks'] });
     if (split.length >= 2) return split;        // two splits beat one lonely cluster
   }
-  return bundles;
+
+  // Each bundle's "Closing:" line names the subjects of the other bundles — what you forfeit.
+  const subjects = built.map(b => b.subject);
+  return built.map((b, i) => ({ ...b.option, closing: subjects.filter((_, j) => j !== i) }));
 }
 
 /**

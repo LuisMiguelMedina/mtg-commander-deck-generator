@@ -384,6 +384,21 @@
     to   { opacity: 0; transform: scale(0.85) translateY(16px); }
   }
 
+  /* Damage-number style stat pops on the health strip: a delta rises off the counter and fades. */
+  .animate-damage-float { animation: damageFloat 1000ms cubic-bezier(0.22, 0.9, 0.32, 1) forwards; }
+  @keyframes damageFloat {
+    0%   { opacity: 0; transform: translate(-50%, 6px) scale(0.7); }
+    18%  { opacity: 1; transform: translate(-50%, -8px) scale(1.18); }
+    100% { opacity: 0; transform: translate(-50%, -34px) scale(1); }
+  }
+  /* The counter that changed gives a quick scale+brighten kick. */
+  .animate-stat-pulse { animation: statPulse 380ms cubic-bezier(0.22, 0.9, 0.32, 1); transform-origin: center; }
+  @keyframes statPulse {
+    0%   { transform: scale(1); }
+    35%  { transform: scale(1.28); filter: brightness(1.6); }
+    100% { transform: scale(1); }
+  }
+
   /* ---- Brew "fork in the road" typography + map connectors ---- */
   /* Cinzel = engraved caps, our free Beleren analog for route titles & headings.
      Cormorant Garamond = the italic "flavor text" voice for route descriptions. */
@@ -400,6 +415,11 @@
     0%, 100% { transform: translateY(0) rotate(-4deg); }
     50%      { transform: translateY(-2.5vh) rotate(3deg); }
   }
+
+  /* Lift-graph hub stars twinkle: a gentle scale pulse (transform, so it never fights the node's
+     inline opacity used for the hover spotlight). */
+  .lg-pulse { transform-box: fill-box; transform-origin: center; animation: lgPulse 3.4s ease-in-out infinite; }
+  @keyframes lgPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.13); } }
 
   /* The "you are here" node breathes while you decide. */
   .brew-node-pulse { animation: brewNodePulse 2.8s ease-in-out infinite; }
@@ -437,6 +457,18 @@
   @keyframes brewViewIn {
     from { opacity: 0; transform: translateY(10px); }
     to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* The left-docked stats rail slides in from / out toward its left edge as it opens and closes. */
+  .animate-brew-rail-in { animation: brewRailIn 280ms cubic-bezier(0.22, 0.9, 0.32, 1) both; }
+  .animate-brew-rail-out { animation: brewRailOut 200ms cubic-bezier(0.4, 0, 1, 1) both; }
+  @keyframes brewRailIn {
+    from { opacity: 0; transform: translateX(-16px) scale(0.97); }
+    to   { opacity: 1; transform: translateX(0) scale(1); }
+  }
+  @keyframes brewRailOut {
+    from { opacity: 1; transform: translateX(0) scale(1); }
+    to   { opacity: 0; transform: translateX(-16px) scale(0.97); }
   }
 
   @keyframes jiggle {

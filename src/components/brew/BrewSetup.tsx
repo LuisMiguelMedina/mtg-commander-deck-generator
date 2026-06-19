@@ -7,9 +7,10 @@ interface BrewSetupProps {
   loadingCommander: boolean;
   progress: { msg: string; pct: number } | null;
   onStart: () => void;
+  startButtonRef?: React.Ref<HTMLButtonElement>;  // measured by BrewIntro to morph from the button
 }
 
-export function BrewSetup({ loadingCommander, progress, onStart }: BrewSetupProps) {
+export function BrewSetup({ loadingCommander, progress, onStart, startButtonRef }: BrewSetupProps) {
   const { commander, themesLoading } = useStore();
 
   return (
@@ -32,6 +33,7 @@ export function BrewSetup({ loadingCommander, progress, onStart }: BrewSetupProp
 
       <div className="text-center pt-2">
         <Button
+          ref={startButtonRef}
           size="lg"
           onClick={onStart}
           disabled={loadingCommander || themesLoading || !commander || !!progress}

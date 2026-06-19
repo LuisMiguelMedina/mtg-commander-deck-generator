@@ -21,11 +21,12 @@ function makeCtx(): BrewContext {
     commander: sf('Cmd'), partnerCommander: null, colorIdentity: ['W'],
     customization: { mustIncludeCards: ['Pre-Existing'], collectionMode: false } as unknown as BrewContext['customization'],
     candidates: [], roleTargets: { ramp: 10, removal: 8, boardwipe: 3, cardDraw: 10 },
-    typeTargets: {}, curveTargets: {}, landTarget: 36, nonLandTarget: 63, combos: [], themeNames: {},
+    typeTargets: {}, curveTargets: {}, landTarget: 36, nonLandTarget: 63, combos: [], themeNames: {}, themeSignatures: {},
   };
 }
 function makeState(names: string[]): BrewState {
-  return { picks: names.map(pickOf), usedNames: names, themeAffinity: {}, rerollsUsed: {}, phase: 'nonland', history: [] };
+  return { picks: names.map(pickOf), usedNames: names, themeAffinity: {}, rerollsUsed: {}, phase: 'nonland', history: [], discovered: [], seededNames: [], questionsAsked: 0,
+    relics: [], comboWatch: [], firedEventIds: [], lastMomentPick: 0, moments: [] };
 }
 
 beforeEach(() => vi.clearAllMocks());

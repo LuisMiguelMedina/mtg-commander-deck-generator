@@ -16,6 +16,11 @@ export function typeKey(typeLine: string): string {
   return 'other';
 }
 
+/** The full candidate pool: the setup pool plus any cards discovered mid-session. */
+export function pool(ctx: BrewContext, state: BrewState): BrewContext['candidates'] {
+  return state.discovered.length > 0 ? [...ctx.candidates, ...state.discovered] : ctx.candidates;
+}
+
 function priceUsd(card: { prices: { usd?: string | null } }): number {
   const p = card.prices?.usd;
   return p ? parseFloat(p) || 0 : 0;

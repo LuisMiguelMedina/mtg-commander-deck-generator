@@ -9,6 +9,7 @@ import { BuilderPage } from '@/pages/BuilderPage';
 import { OptimizePage } from '@/pages/OptimizePage';
 import { AnalyzePage } from '@/pages/AnalyzePage';
 import { BrewPage } from '@/pages/BrewPage';
+import { BrewLandingPage } from '@/pages/BrewLandingPage';
 import { CollectionPage } from '@/pages/CollectionPage';
 import { ListsPage } from '@/pages/ListsPage';
 import { MigratePage } from '@/pages/MigratePage';
@@ -233,7 +234,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   // build session), so we must explicitly suppress the commander-art backdrop
   // on the hub rather than keying off generatedDeck.
   const isAnalyzeHub = location.pathname === '/analyze' || location.pathname === '/analyze/';
-  const isCreatePage = location.pathname === '/' || location.pathname.startsWith('/build/') || location.pathname.startsWith('/build-from-deck/') || location.pathname.startsWith('/brew/');
+  const isCreatePage = location.pathname === '/' || location.pathname.startsWith('/build/') || location.pathname.startsWith('/build-from-deck/') || location.pathname === '/brew' || location.pathname.startsWith('/brew/');
 
   // True while the one-time Community-Poll nudge is visible — drives a gentle
   // ring on the version button it points at, so the nudge's arrow has a target.
@@ -664,6 +665,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout><HomePage /></Layout>} />
         <Route path="/build/:commanderName/:partnerName?" element={<Layout><BuilderPage /></Layout>} />
+        <Route path="/brew" element={<Layout><BrewLandingPage /></Layout>} />
         <Route path="/brew/:commanderName/:partnerName?" element={<Layout><BrewPage /></Layout>} />
         <Route path="/build-from-deck/:listId" element={<Layout><OptimizePage /></Layout>} />
         <Route path="/analyze" element={<Layout><AnalyzePage /></Layout>} />

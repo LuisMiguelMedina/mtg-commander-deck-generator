@@ -62,10 +62,11 @@ describe('buildPackNode — coherent sub-strategy bundles', () => {
     });
     const node = buildPackNode(ctx, makeState())!;
     expect(node.type).toBe('bundle');
+    // Theme bundles wear evocative flavor-map names (tokens → "Raise an Army", sacrifice → "Feed the Machine").
     const labels = node.options.map(o => o.label);
-    expect(labels).toContain('Tokens');
-    expect(labels).toContain('Sacrifice');
-    const tokenBundle = node.options.find(o => o.label === 'Tokens')!;
+    expect(labels).toContain('Raise an Army');
+    expect(labels).toContain('Feed the Machine');
+    const tokenBundle = node.options.find(o => o.label === 'Raise an Army')!;
     expect(tokenBundle.cards.every(c => c.themeTags.includes('tokens'))).toBe(true);
     expect(tokenBundle.cards.length).toBeGreaterThanOrEqual(2);
   });

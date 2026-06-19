@@ -3,6 +3,7 @@ import type { BrewContext, BrewState } from './brewTypes';
 export interface NearMissCombo {
   comboId: string;
   missing: string[];     // card names still needed (all guaranteed present in the pool)
+  have: string[];        // combo pieces already owned (commander/partner/picks) — the cards it pairs with
   results: string[];
   deckCount: number;
 }
@@ -31,12 +32,13 @@ export function detectNearMissCombos(ctx: BrewContext, state: BrewState): NearMi
   for (const combo of ctx.combos) {
     const names = combo.cards.map(c => c.name);
     const missing = names.filter(n => !owned.has(n));
-    const ownedCount = names.length - missing.length;
+    const have = names.filter(n => owned.has(n));
+    const ownedCount = have.length;
     if (missing.length === 0) continue;            // already complete
     if (missing.length > 2) continue;              // too far
     if (ownedCount < 1) continue;                  // not a near-miss yet
     if (!missing.every(n => poolNames.has(n))) continue; // can't actually complete it
-    out.push({ comboId: combo.comboId, missing, results: combo.results, deckCount: combo.deckCount });
+    out.push({ comboId: combo.comboId, missing, have, results: combo.results, deckCount: combo.deckCount });
   }
   out.sort((a, b) => (a.missing.length - b.missing.length) || (b.deckCount - a.deckCount));
   return out;

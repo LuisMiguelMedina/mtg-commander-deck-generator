@@ -28,7 +28,8 @@ export type AnalyticsEventType =
   | 'poll_nudge_dismissed'
   | 'brew_started'
   | 'brew_finished'
-  | 'brew_abandoned';
+  | 'brew_abandoned'
+  | 'rebrew_clicked';
 
 export interface AnalyticsEventMetadata {
   commander_searched: { query: string; resultCount: number };
@@ -96,6 +97,7 @@ export interface AnalyticsEventMetadata {
   brew_started: { commanderName: string; partnerName?: string; collectionMode: boolean };
   brew_finished: { commanderName: string; picks: number };
   brew_abandoned: { commanderName: string; picks: number };
+  rebrew_clicked: { commanderName: string | null };
   playtest_started: {
     /** Where the playtest was launched from. */
     source: 'list' | 'generated';

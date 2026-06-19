@@ -1,5 +1,6 @@
 import {
   Infinity as InfinityIcon, Zap, Dices, Sprout, Crosshair, Bomb, BookOpen, Package, Layers,
+  Search, Shield,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -22,6 +23,22 @@ export const CARD_TYPE_MS: Record<string, string> = {
 export const ROLE_LUCIDE: Record<string, LucideIcon> = {
   ramp: Sprout, removal: Crosshair, boardwipe: Bomb, cardDraw: BookOpen,
 };
+
+/**
+ * The six "Your deck so far" radar axes — the single source of truth for both the radar
+ * (BrewStatsPanel) and the per-card role badges (RoleBadges). Sharing this list is what keeps a
+ * card's corner badge icon/colour identical to its spoke on the chart. Ordered to match the radar's
+ * spoke order. `hue` is a bare HSL triplet so it composes with `/ opacity`.
+ */
+export interface RoleAxis { key: string; label: string; hue: string; Icon: LucideIcon; }
+export const ROLE_AXES: RoleAxis[] = [
+  { key: 'ramp', label: 'Ramp', hue: '142 68% 52%', Icon: Sprout },
+  { key: 'removal', label: 'Removal', hue: '2 80% 62%', Icon: Crosshair },
+  { key: 'boardwipe', label: 'Wipes', hue: '22 90% 58%', Icon: Bomb },
+  { key: 'cardDraw', label: 'Draw', hue: '205 82% 62%', Icon: BookOpen },
+  { key: 'tutor', label: 'Tutors', hue: '275 78% 70%', Icon: Search },
+  { key: 'protection', label: 'Protection', hue: '45 88% 64%', Icon: Shield },
+];
 
 export type RouteSymbol = { ms?: string; Icon?: LucideIcon };
 

@@ -3,7 +3,7 @@ import type { AppState, Customization, BanList, AppliedList, ScryfallCard, Gener
 import { isEuropean } from '@/lib/region';
 import { swapCard, addCard } from '@/services/deckBuilder/cardSwap';
 import { serializeBrew, deserializeBrew } from '@/services/brew/persistCodec';
-import { nextRoutes, openNode, buildPackNode, applyPick, undoLast, advanceAfterPick, isComplete, discoverFrom, nextQuestion, applyAnswer, nextEvent, applyEvent, shouldOfferRelic, offerRelics, applyRelic, relicMult, MIN_MOMENT_GAP, type BrewContext, type BrewRoute, type BrewOption, type BrewState, type BrewPick, type BrewAnswer, type BrewEvent, type BrewRelic } from '@/services/brew/engine';
+import { nextRoutes, openNode, buildPackNode, applyPick, undoLast, advanceAfterPick, isComplete, discoverFrom, nextQuestion, applyAnswer, nextEvent, applyEvent, shouldOfferRelic, offerRelics, applyRelic, relicMult, MIN_MOMENT_GAP, commitImpact, commitSeeds, type BrewContext, type BrewRoute, type BrewOption, type BrewState, type BrewPick, type BrewAnswer, type BrewEvent, type BrewRelic } from '@/services/brew/engine';
 
 /** Picks at which a mid-build personality question may replace the bare fork. */
 const SECOND_QUESTION_AT = 8;
@@ -289,6 +289,7 @@ export const useStore = create<AppState>((set, get) => ({
   brewQuestion: null,
   brewEvent: null,
   brewRelicOffer: null,
+  brewCommitFlash: null,
   brewRerollExclusions: [],
   brewStatsOpen: loadBrewStatsOpen(),
 
@@ -478,7 +479,7 @@ export const useStore = create<AppState>((set, get) => ({
     // identity emerge from what they actually pick.
     set({ brewContext: ctx, brewState: state, brewRoutes: nextRoutes(ctx, state),
       brewNode: buildPackNode(ctx, state), brewQuestion: null,
-      brewEvent: null, brewRelicOffer: null, brewRerollExclusions: [] });
+      brewEvent: null, brewRelicOffer: null, brewCommitFlash: null, brewRerollExclusions: [] });
   },
 
   openBrewRoute: (route: BrewRoute) => {
@@ -527,13 +528,80 @@ export const useStore = create<AppState>((set, get) => ({
   chooseBrewEvent: (choiceId: string) => {
     const { brewContext, brewState, brewEvent } = get();
     if (!brewContext || !brewState || !brewEvent) return;
+    const isCommit = brewEvent.kind === 'crossroads' && choiceId.startsWith('commit:');
+    // A taken gamble seeds fresh discoveries from the off-meta card — its "opens new paths" payoff.
+    const gambleSeed = brewEvent.kind === 'gamble' && choiceId === 'leap' ? brewEvent.card?.name : undefined;
     const nextState = applyEvent(brewContext, brewState, brewEvent, choiceId);
     const patch = brewAdvancePatch(brewContext, nextState);
     set(patch);
+    if (gambleSeed) void get().gambleDiscover(gambleSeed);
+    if (isCommit) {
+      // Show the consequence immediately (suppressed count is synchronous); the injected count
+      // fills in once the async theme fetch resolves.
+      const slug = choiceId.slice('commit:'.length);
+      const { suppressed } = commitImpact(brewContext, nextState, slug);
+      set({ brewCommitFlash: { theme: brewContext.themeNames[slug] ?? slug, injected: 0, suppressed } });
+      void get().injectCommitTheme(slug);
+    }
     // Keep the discovery pool growing after a moment, so the next Strange Signal has fuel.
     if (patch.brewNode === null && !isComplete(brewContext, nextState)) {
       void get().expandBrewDiscoveries();
     }
+  },
+
+  injectCommitTheme: async (slug: string) => {
+    const { brewContext, brewState } = get();
+    if (!brewContext || !brewState) return;
+    const seeds = commitSeeds(brewContext, slug).filter(n => !brewState.seededNames.includes(n));
+    if (seeds.length === 0) return;
+    const found = await discoverFrom(seeds, brewContext, brewState);
+    // Re-read; bail if the session changed under us.
+    const cur = get();
+    if (cur.brewContext !== brewContext || !cur.brewState) return;
+    const existing = new Set(cur.brewState.discovered.map(c => c.name));
+    // Stamp the committed theme tag so injected cards read as on-theme and dodge the soft-remove penalty.
+    const fresh = found
+      .filter(c => !existing.has(c.name))
+      .map(c => ({ ...c, themeTags: [...new Set([...c.themeTags, slug])] }));
+    const merged: BrewState = {
+      ...cur.brewState,
+      discovered: [...cur.brewState.discovered, ...fresh],
+      seededNames: [...cur.brewState.seededNames, ...seeds],
+    };
+    set({
+      brewState: merged,
+      brewRoutes: nextRoutes(brewContext, merged),
+      brewCommitFlash: cur.brewCommitFlash ? { ...cur.brewCommitFlash, injected: fresh.length } : null,
+    });
+  },
+
+  setBrewCommitFlash: (flash) => set({ brewCommitFlash: flash }),
+
+  pinBrewCard: (name: string) => {
+    const { brewContext, brewState } = get();
+    if (!brewContext || !brewState) return;
+    const cur = brewState.pinnedNames ?? [];
+    const pinnedNames = cur.includes(name) ? cur.filter(n => n !== name) : [...cur, name];
+    const next: BrewState = { ...brewState, pinnedNames };
+    set({ brewState: next });
+  },
+
+  gambleDiscover: async (name: string) => {
+    const { brewContext, brewState } = get();
+    if (!brewContext || !brewState) return;
+    const found = await discoverFrom([name], brewContext, brewState);
+    // Re-read; bail if the session changed under us.
+    const cur = get();
+    if (cur.brewContext !== brewContext || !cur.brewState) return;
+    const existing = new Set(cur.brewState.discovered.map(c => c.name));
+    const fresh = found.filter(c => !existing.has(c.name));
+    if (fresh.length === 0) return;
+    const merged: BrewState = {
+      ...cur.brewState,
+      discovered: [...cur.brewState.discovered, ...fresh],
+      seededNames: [...cur.brewState.seededNames, name],
+    };
+    set({ brewState: merged, brewRoutes: nextRoutes(brewContext, merged) });
   },
 
   chooseBrewRelic: (relic: BrewRelic) => {
@@ -606,7 +674,7 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  clearBrewSession: () => set({ brewContext: null, brewState: null, brewRoutes: [], brewNode: null, brewQuestion: null, brewEvent: null, brewRelicOffer: null, brewRerollExclusions: [] }),
+  clearBrewSession: () => set({ brewContext: null, brewState: null, brewRoutes: [], brewNode: null, brewQuestion: null, brewEvent: null, brewRelicOffer: null, brewCommitFlash: null, brewRerollExclusions: [] }),
 
   toggleBrewStats: (open) => set((s) => {
     const next = open ?? !s.brewStatsOpen;

@@ -20,6 +20,7 @@ describe('detectNearMissCombos', () => {
     const found = detectNearMissCombos(ctx, makeState());
     expect(found).toHaveLength(1);
     expect(found[0].missing).toEqual(['Cathars Crusade']);
+    expect(found[0].have).toEqual(['Ghave, Guru of Spores']); // the owned piece it pairs with
     expect(found[0].results).toContain('Infinite tokens');
   });
 

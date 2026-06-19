@@ -15,12 +15,16 @@ import { BrewSplash } from '@/components/brew/BrewSplash';
 import { BrewHealthStrip } from '@/components/brew/BrewHealthStrip';
 import { BrewTrack } from '@/components/brew/BrewTrack';
 import { BrewStatsPanel } from '@/components/brew/BrewStatsPanel';
+import { BrewIdentityMeter } from '@/components/brew/BrewIdentityMeter';
+import { BrewCommitFlash } from '@/components/brew/BrewCommitFlash';
 import { BrewPath } from '@/components/brew/BrewPath';
 import { BrewNode } from '@/components/brew/BrewNode';
 import { BrewQuestionScreen } from '@/components/brew/BrewQuestionScreen';
 import { BrewEventScreen } from '@/components/brew/BrewEventScreen';
 import { BrewRelicScreen } from '@/components/brew/BrewRelicScreen';
 import { BrewRunRecap } from '@/components/brew/BrewRunRecap';
+import { BrewManaCapstone } from '@/components/brew/BrewManaCapstone';
+import type { ManaPhilosophy } from '@/types';
 import { BrewIntro } from '@/components/brew/BrewIntro';
 
 export function BrewPage() {
@@ -45,6 +49,8 @@ export function BrewPage() {
   const [intro, setIntro] = useState<{ startRect: DOMRect; target: { x: number; y: number } } | null>(null);
   // The end-of-run story: once the deck is finished, hold here until the player taps through.
   const [recap, setRecap] = useState<{ listId: string } | null>(null);
+  // The mana-base capstone: the final land-style choice, shown before the deck is built.
+  const [capstone, setCapstone] = useState(false);
   // The "what is this?" splash plays before the setup form on every arrival (skippable in one tap).
   const [showSplash, setShowSplash] = useState(true);
   const startButtonRef = useRef<HTMLButtonElement>(null);
@@ -171,11 +177,12 @@ export function BrewPage() {
     }
   }
 
-  async function handleFinish() {
+  async function handleFinish(landStyle?: ManaPhilosophy) {
     if (!brewState || !brewContext) return;
+    setCapstone(false);
     setProgress({ msg: 'Finishing your deck…', pct: 0 });
     try {
-      const deck = await finishBrew(brewContext, brewState, (msg, pct) => setProgress({ msg, pct }));
+      const deck = await finishBrew(brewContext, brewState, landStyle, (msg, pct) => setProgress({ msg, pct }));
       const payload = brewDeckToList(deck, brewContext.commander, brewContext.partnerCommander, brewContext.customization);
       const list = createList(payload.name, payload.cards, '', {
         type: 'deck',
@@ -216,6 +223,10 @@ export function BrewPage() {
       {intro && <BrewIntro startRect={intro.startRect} target={intro.target} onDone={() => setIntro(null)} />}
       {/* The run recap overlays everything once the deck is finished. */}
       {recap && <BrewRunRecap onContinue={handleViewDeck} />}
+      {/* The mana-base capstone — the final land-style choice, before the deck is built. */}
+      {capstone && <BrewManaCapstone onChoose={(s) => void handleFinish(s)} onSkip={() => void handleFinish()} />}
+      {/* The commit consequence banner — overlays everything briefly after a Crossroads commit. */}
+      <BrewCommitFlash />
       {!sessionActive ? (
         showSplash ? (
           <BrewSplash commanderName={commander?.name} onContinue={() => setShowSplash(false)} />
@@ -237,9 +248,11 @@ export function BrewPage() {
               the space-y wrapper so its row-spacing margin doesn't shove the fixed panel down. */}
           <BrewStatsPanel />
           <div className="space-y-5 min-w-0">
-          {/* Health strip + the "up next" track read as one stacked unit. */}
+          {/* Health strip + the "up next" track read as one stacked unit. The identity meter rides
+              along as a compact strip on narrow screens (the wide-screen rail carries it otherwise). */}
           <div className="space-y-2">
             <BrewHealthStrip />
+            <BrewIdentityMeter variant="strip" />
             <BrewTrack />
           </div>
           {/* Key the view on the active screen so each arrival fades in as one cohesive unit
@@ -257,7 +270,7 @@ export function BrewPage() {
                   ? <BrewQuestionScreen key={brewQuestion.id} />
                   : brewNode
                     ? <BrewNode key={brewState?.history.length ?? 0} onFinish={handleFinish} />
-                    : <BrewPath onFinish={handleFinish} />}
+                    : <BrewPath onFinish={handleFinish} onManaBase={() => setCapstone(true)} />}
           </div>
           {progress && <p className="text-center text-xs text-muted-foreground">{progress.msg}</p>}
           </div>

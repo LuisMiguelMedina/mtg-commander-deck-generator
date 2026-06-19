@@ -1,6 +1,6 @@
 import type { ScryfallCard, Customization, ThemeResult, EDHRECCommanderStats, EDHRECCombo } from '@/types';
 import { fetchCommanderData, fetchPartnerCommanderData, fetchCommanderCombos, fetchCommanderThemeData, fetchPartnerThemeData } from '@/services/edhrec/client';
-import { getCardsByNames } from '@/services/scryfall/client';
+import { getCardsByNames, getGameChangerNames } from '@/services/scryfall/client';
 import { calculateTypeTargets, calculateCurveTargets } from '@/services/deckBuilder/curveUtils';
 import { getDynamicRoleTargets, estimatePacingFromStats } from '@/services/deckBuilder/roleTargets';
 import { getCardRole, getCardSubtype, loadTaggerData } from '@/services/tagger/client';
@@ -30,11 +30,12 @@ export async function prepareBrewContext(args: PrepareBrewArgs): Promise<BrewCon
   const budgetOption = customization.budgetOption !== 'any' ? customization.budgetOption : undefined;
   const bracketLevel = customization.bracketLevel !== 'all' ? customization.bracketLevel : undefined;
 
-  const [edhrecData, combos] = await Promise.all([
+  const [edhrecData, combos, gameChangerNames] = await Promise.all([
     partnerCommander
       ? fetchPartnerCommanderData(commander.name, partnerCommander.name, budgetOption, bracketLevel)
       : fetchCommanderData(commander.name, budgetOption, bracketLevel),
     fetchCommanderCombos(commander.name).catch(() => [] as EDHRECCombo[]),
+    getGameChangerNames().catch(() => new Set<string>()),
   ]);
 
   args.onProgress?.('Resolving cards…', 45);
@@ -95,6 +96,10 @@ export async function prepareBrewContext(args: PrepareBrewArgs): Promise<BrewCon
   // many directions and let the deck's identity emerge from what they take. A card belongs to
   // "Tokens" because EDHREC's Tokens page lists it (the honest identity signal).
   const themeNames: Record<string, string> = {};
+  // Signature cards per theme: the theme page's cards ranked by EDHREC synergy (% in theme decks −
+  // % overall). High synergy = defines the theme and doesn't just get played in it, so staples
+  // (Sol Ring, Dark Ritual) — which have near-zero synergy everywhere — never become a theme's face.
+  const themeSignatures: Record<string, string[]> = {};
   const themesToTag = (edhrecData.themes ?? []).filter(t => t.slug).slice(0, THEME_TAG_LIMIT);
   if (themesToTag.length > 0) {
     args.onProgress?.('Mapping the themes…', 80);
@@ -107,6 +112,11 @@ export async function prepareBrewContext(args: PrepareBrewArgs): Promise<BrewCon
           ? await fetchPartnerThemeData(commander.name, partnerCommander.name, slug, budgetOption, bracketLevel)
           : await fetchCommanderThemeData(commander.name, slug, budgetOption, bracketLevel);
         membership.set(slug, new Set(data.cardlists.allNonLand.map(c => c.name)));
+        themeSignatures[slug] = [...data.cardlists.allNonLand]
+          .filter(c => typeof c.synergy === 'number')
+          .sort((a, b) => (b.synergy ?? 0) - (a.synergy ?? 0))
+          .slice(0, 16)
+          .map(c => c.name);
       } catch {
         membership.set(slug, new Set()); // a theme that won't load just contributes no tags
       }
@@ -130,5 +140,7 @@ export async function prepareBrewContext(args: PrepareBrewArgs): Promise<BrewCon
     nonLandTarget,
     combos,
     themeNames,
+    themeSignatures,
+    gameChangerNames,
   };
 }

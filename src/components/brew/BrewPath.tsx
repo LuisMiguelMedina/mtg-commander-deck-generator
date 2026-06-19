@@ -39,7 +39,7 @@ function artUrl(card?: ScryfallCard): string | undefined {
   return card.image_uris?.art_crop ?? card.card_faces?.[0]?.image_uris?.art_crop;
 }
 
-export function BrewPath({ onFinish }: { onFinish: () => void }) {
+export function BrewPath({ onFinish, onManaBase }: { onFinish: () => void; onManaBase: () => void }) {
   const { brewContext, brewState, brewRoutes, openBrewRoute, undoBrewPick, rerollBrew } = useStore();
   const [hovered, setHovered] = useState<number | null>(null);
 
@@ -158,7 +158,7 @@ export function BrewPath({ onFinish }: { onFinish: () => void }) {
           return (
             <button
               key={route.id}
-              onClick={() => (route.type === 'manabase' ? onFinish() : openBrewRoute(route))}
+              onClick={() => (route.type === 'manabase' ? onManaBase() : openBrewRoute(route))}
               onMouseEnter={() => setHovered(i)}
               onMouseLeave={() => setHovered((h) => (h === i ? null : h))}
               onFocus={() => setHovered(i)}

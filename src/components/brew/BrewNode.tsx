@@ -2,7 +2,7 @@ import { useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from '@/store';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, RefreshCw, Flame, Sprout, Crosshair, Bomb, BookOpen, Zap, Sparkles, Layers, Package, Infinity as InfinityIcon, Crown, Plus, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Flame, Sprout, Crosshair, Bomb, BookOpen, Zap, Sparkles, Layers, Package, Infinity as InfinityIcon, Crown, Plus, Pin, type LucideIcon } from 'lucide-react';
 import { getCardImageUrl, getCardPrice } from '@/services/scryfall/client';
 import { operationTheme, routeKey, BrewGlyph } from '@/components/brew/brewVisuals';
 import { RoleBadges } from '@/components/brew/RoleBadges';
@@ -40,7 +40,7 @@ const PACK_FLAVOR: Record<string, { color: string; Icon: LucideIcon; tag: string
 };
 
 export function BrewNode({ onFinish }: { onFinish: () => void }) {
-  const { brewNode, applyBrewOption, backToBrewFork, rerollBrew, customization } = useStore();
+  const { brewNode, applyBrewOption, backToBrewFork, rerollBrew, customization, pinBrewCard, brewState } = useStore();
   const [chosenId, setChosenId] = useState<string | null>(null);
   // Hovering a (small) card pops a full, readable preview anchored beside it.
   const [hover, setHover] = useState<{ card: ScryfallCard; rect: DOMRect } | null>(null);
@@ -148,14 +148,14 @@ export function BrewNode({ onFinish }: { onFinish: () => void }) {
                     const cardLastOdd = option.cards.length % 2 === 1 && i === option.cards.length - 1;
                     return (
                       <div key={c.name} className={`relative min-w-0 flex flex-col items-center ${cardLastOdd ? 'col-span-2 w-[calc(50%-0.25rem)]' : 'w-full'}`}>
-                        <RoleBadges cardName={c.name} size="sm" />
+                        <RoleBadges cardName={c.name} size="sm" corner="bl" />
                         {c.discoverySource === 'lift' && (
                           <span className="absolute -top-2.5 left-1/2 z-20 -translate-x-1/2 inline-flex items-center gap-0.5 rounded-full border border-fuchsia-300/70 bg-[#2a0a2e]/90 backdrop-blur-sm px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-fuchsia-100 shadow-[0_0_12px_-2px_rgba(232,121,249,0.6)]">
                             <Zap className="w-2.5 h-2.5" /> Lift
                           </span>
                         )}
                         {(finishesCombo || isGameChanger) && (
-                          <span className="absolute top-1 right-1 z-20 flex flex-col gap-1">
+                          <span className="absolute bottom-1 right-1 z-20 flex flex-col gap-1">
                             {finishesCombo && <span title="Finishes a combo" className="grid place-items-center w-4 h-4 rounded-full bg-teal-500/90 text-white shadow ring-1 ring-black/40"><InfinityIcon className="w-2.5 h-2.5" /></span>}
                             {isGameChanger && <span title="Game Changer" className="grid place-items-center w-4 h-4 rounded-full bg-amber-400/90 text-black shadow ring-1 ring-black/40"><Crown className="w-2.5 h-2.5" /></span>}
                           </span>
@@ -175,6 +175,12 @@ export function BrewNode({ onFinish }: { onFinish: () => void }) {
                 <div className="mt-auto flex items-center justify-center gap-1 px-3 pb-2.5 pt-1 text-[11px] font-semibold uppercase tracking-wide" style={{ color: `hsl(${fl.color})` }}>
                   <Plus className="w-3 h-3" /> Take all {option.cards.length}
                 </div>
+                {/* What you walk away from by taking this pack — the sacrifice, made legible. */}
+                {option.closing && option.closing.length > 0 && (
+                  <div className="px-3 pb-2 text-[10px] text-muted-foreground/70 border-t border-[color:var(--pk)]/15 pt-1.5">
+                    Closing: <span className="text-muted-foreground/90">{option.closing.join(', ')}</span>
+                  </div>
+                )}
               </button>
             );
           })}
@@ -254,6 +260,25 @@ export function BrewNode({ onFinish }: { onFinish: () => void }) {
                 return (
                   <div key={c.name} className={`${cardW} relative flex flex-col items-center`}>
                     <RoleBadges cardName={c.name} size={packaged ? 'sm' : 'md'} />
+                    {/* Pin-for-later: keep a card you're not taking now; it resurfaces in later offers. */}
+                    {brewNode.type === 'draft' && (() => {
+                      const isPinned = (brewState?.pinnedNames ?? []).includes(c.name);
+                      return (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          title={isPinned ? 'Pinned for later' : 'Pin for later'}
+                          onClick={(e) => { e.stopPropagation(); pinBrewCard(c.name); }}
+                          className={`absolute -top-2 right-1 z-20 grid place-items-center w-6 h-6 rounded-full border backdrop-blur-sm transition-colors ${
+                            isPinned
+                              ? 'border-violet-300/80 bg-violet-500/30 text-violet-100'
+                              : 'border-border/60 bg-black/55 text-muted-foreground hover:text-violet-200 hover:border-violet-400/50'
+                          }`}
+                        >
+                          <Pin className="w-3 h-3" fill={isPinned ? 'currentColor' : 'none'} />
+                        </span>
+                      );
+                    })()}
                     {/* A lift find wears an electric "⚡ Lift" ribbon — it's in the pool because of a
                         card-to-card synergy spike, not because it's a commander staple. */}
                     {c.discoverySource === 'lift' && (
