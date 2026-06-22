@@ -10,6 +10,7 @@ const ROLE_TO_CATEGORY: Record<RoleKey, DeckCategory> = {
   removal: 'singleRemoval',
   boardwipe: 'boardWipes',
   cardDraw: 'cardDraw',
+  protection: 'protection',
 };
 
 /** Find which DeckCategory a card is stored in. */
@@ -108,9 +109,9 @@ export function swapCard(
   let newBoardwipeSubtypeCounts = deck.boardwipeSubtypeCounts;
   let newCardDrawSubtypeCounts = deck.cardDrawSubtypeCounts;
   if (deck.roleCounts && deck.roleTargets) {
-    newRoleCounts = { ramp: 0, removal: 0, boardwipe: 0, cardDraw: 0 };
+    newRoleCounts = { ramp: 0, removal: 0, boardwipe: 0, cardDraw: 0, protection: 0 };
     newRampSubtypeCounts = { 'mana-producer': 0, 'mana-rock': 0, 'cost-reducer': 0, ramp: 0 };
-    newRemovalSubtypeCounts = { counterspell: 0, bounce: 0, 'spot-removal': 0, removal: 0 };
+    newRemovalSubtypeCounts = { bounce: 0, 'spot-removal': 0, removal: 0 };
     newBoardwipeSubtypeCounts = { 'bounce-wipe': 0, boardwipe: 0 };
     newCardDrawSubtypeCounts = { tutor: 0, wheel: 0, cantrip: 0, 'card-draw': 0, 'card-advantage': 0 };
     for (const cards of Object.values(newCategories)) {
@@ -286,9 +287,9 @@ export function addCard(deck: GeneratedDeck, newCard: ScryfallCard): SwapResult 
   let newBoardwipeSubtypeCounts = deck.boardwipeSubtypeCounts;
   let newCardDrawSubtypeCounts = deck.cardDrawSubtypeCounts;
   if (deck.roleCounts && deck.roleTargets) {
-    newRoleCounts = { ramp: 0, removal: 0, boardwipe: 0, cardDraw: 0 };
+    newRoleCounts = { ramp: 0, removal: 0, boardwipe: 0, cardDraw: 0, protection: 0 };
     newRampSubtypeCounts = { 'mana-producer': 0, 'mana-rock': 0, 'cost-reducer': 0, ramp: 0 };
-    newRemovalSubtypeCounts = { counterspell: 0, bounce: 0, 'spot-removal': 0, removal: 0 };
+    newRemovalSubtypeCounts = { bounce: 0, 'spot-removal': 0, removal: 0 };
     newBoardwipeSubtypeCounts = { 'bounce-wipe': 0, boardwipe: 0 };
     newCardDrawSubtypeCounts = { tutor: 0, wheel: 0, cantrip: 0, 'card-draw': 0, 'card-advantage': 0 };
     for (const cards of Object.values(newCategories)) {
@@ -442,9 +443,9 @@ export function removeCards(deck: GeneratedDeck, names: string[]): SwapResult {
   let newBoardwipeSubtypeCounts = deck.boardwipeSubtypeCounts;
   let newCardDrawSubtypeCounts = deck.cardDrawSubtypeCounts;
   if (deck.roleCounts && deck.roleTargets) {
-    newRoleCounts = { ramp: 0, removal: 0, boardwipe: 0, cardDraw: 0 };
+    newRoleCounts = { ramp: 0, removal: 0, boardwipe: 0, cardDraw: 0, protection: 0 };
     newRampSubtypeCounts = { 'mana-producer': 0, 'mana-rock': 0, 'cost-reducer': 0, ramp: 0 };
-    newRemovalSubtypeCounts = { counterspell: 0, bounce: 0, 'spot-removal': 0, removal: 0 };
+    newRemovalSubtypeCounts = { bounce: 0, 'spot-removal': 0, removal: 0 };
     newBoardwipeSubtypeCounts = { 'bounce-wipe': 0, boardwipe: 0 };
     newCardDrawSubtypeCounts = { tutor: 0, wheel: 0, cantrip: 0, 'card-draw': 0, 'card-advantage': 0 };
     for (const cards of Object.values(newCategories)) {

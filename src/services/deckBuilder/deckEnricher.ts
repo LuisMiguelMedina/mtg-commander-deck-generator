@@ -62,16 +62,16 @@ export async function stampTaggerAndGameChangers(
 
   const categories: Record<DeckCategory, ScryfallCard[]> = {
     lands: [], ramp: [], cardDraw: [], singleRemoval: [],
-    boardWipes: [], creatures: [], synergy: [], utility: [],
+    boardWipes: [], protection: [], creatures: [], synergy: [], utility: [],
   };
-  const roleCounts: Record<string, number> = { ramp: 0, removal: 0, boardwipe: 0, cardDraw: 0 };
+  const roleCounts: Record<string, number> = { ramp: 0, removal: 0, boardwipe: 0, cardDraw: 0, protection: 0 };
   const rampSubtypeCounts: Record<string, number> = { 'mana-producer': 0, 'mana-rock': 0, 'cost-reducer': 0, ramp: 0 };
-  const removalSubtypeCounts: Record<string, number> = { counterspell: 0, bounce: 0, 'spot-removal': 0, removal: 0 };
+  const removalSubtypeCounts: Record<string, number> = { bounce: 0, 'spot-removal': 0, removal: 0 };
   const boardwipeSubtypeCounts: Record<string, number> = { 'bounce-wipe': 0, boardwipe: 0 };
   const cardDrawSubtypeCounts: Record<string, number> = { tutor: 0, wheel: 0, cantrip: 0, 'card-draw': 0, 'card-advantage': 0 };
 
   const ROLE_TO_CATEGORY: Record<string, DeckCategory> = {
-    ramp: 'ramp', removal: 'singleRemoval', boardwipe: 'boardWipes', cardDraw: 'cardDraw',
+    ramp: 'ramp', removal: 'singleRemoval', boardwipe: 'boardWipes', cardDraw: 'cardDraw', protection: 'protection',
   };
 
   let cmcSum = 0;

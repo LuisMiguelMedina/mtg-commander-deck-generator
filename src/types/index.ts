@@ -18,6 +18,7 @@ export interface ScryfallCard {
   layout?: string; // Scryfall layout: "normal", "modal_dfc", "transform", etc.
   set: string;
   set_name: string;
+  released_at?: string; // ISO "YYYY-MM-DD" — distinguishes not-yet-released (legal-soon) cards from permanently-illegal ones
   edhrec_rank?: number;
   image_uris?: {
     small: string;
@@ -73,7 +74,7 @@ export interface ScryfallCard {
   deckRole?: string; // Functional role detected by tagger/oracle text (e.g., 'ramp', 'removal')
   multiRole?: boolean; // True if card matches multiple role categories
   rampSubtype?: 'mana-producer' | 'mana-rock' | 'cost-reducer' | 'ramp';
-  removalSubtype?: 'counterspell' | 'bounce' | 'spot-removal' | 'removal';
+  removalSubtype?: 'bounce' | 'spot-removal' | 'removal';
   boardwipeSubtype?: 'bounce-wipe' | 'boardwipe';
   cardDrawSubtype?: 'tutor' | 'wheel' | 'cantrip' | 'card-draw' | 'card-advantage';
   isMdfcLand?: boolean; // True if this is an MDFC with a land back face
@@ -229,6 +230,7 @@ export type DeckCategory =
   | 'cardDraw'
   | 'singleRemoval'
   | 'boardWipes'
+  | 'protection'
   | 'creatures'
   | 'synergy'
   | 'utility';
@@ -239,6 +241,7 @@ export interface DeckComposition {
   cardDraw: number;
   singleRemoval: number;
   boardWipes: number;
+  protection: number;
   creatures: number;
   synergy: number;
   utility: number;
@@ -631,6 +634,7 @@ export interface AppState {
   pinBrewCard: (name: string) => void;
   setBrewCommitFlash: (flash: import('@/services/brew/engine').BrewCommitFlash | null) => void;
   expandBrewDiscoveries: () => Promise<void>;
+  expandBrewClusters: () => Promise<void>;
   backToBrewFork: () => void;
   undoBrewPick: () => void;
   rerollBrew: () => void;

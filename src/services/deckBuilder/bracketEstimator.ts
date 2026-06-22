@@ -108,7 +108,7 @@ export function estimateBracket(
     }
   }
 
-  // ── 3. Interaction count (removal + counterspell + boardwipe) ──
+  // ── 3. Interaction count (removal + boardwipe) ──
 
   const interactionCount = roleCounts
     ? (roleCounts['removal'] ?? 0) + (roleCounts['boardwipe'] ?? 0)
