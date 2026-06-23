@@ -68,6 +68,32 @@ export class TaggerStack extends cdk.Stack {
       targets: [new targets.LambdaFunction(syncFn)],
     });
 
+    // SpellChroma tag-index builder — inverts Scryfall's oracle_tags bulk file
+    // into a dictionary + per-card index written to the same bucket.
+    const spellChromaFn = new nodejs.NodejsFunction(this, 'SpellChromaIndexHandler', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(__dirname, '..', 'lambda', 'spellchroma-index.ts'),
+      handler: 'handler',
+      timeout: cdk.Duration.minutes(5), // one 18MB download + parse + gzip + 2 puts
+      memorySize: 1024,                 // parsing the 18MB bulk file needs headroom
+      environment: {
+        BUCKET_NAME: bucket.bucketName,
+      },
+      bundling: {
+        minify: true,
+        sourceMap: true,
+      },
+    });
+
+    bucket.grantReadWrite(spellChromaFn);
+
+    // Weekly cron — Monday 6:30am UTC (30 min after the tagger sync, to avoid
+    // two simultaneous Scryfall fetches).
+    new events.Rule(this, 'WeeklySpellChromaIndex', {
+      schedule: events.Schedule.cron({ minute: '30', hour: '6', weekDay: 'MON' }),
+      targets: [new targets.LambdaFunction(spellChromaFn)],
+    });
+
     // Outputs
     new cdk.CfnOutput(this, 'TaggerBucketUrl', {
       value: `https://${bucket.bucketName}.s3.amazonaws.com/tagger-tags.json`,
@@ -76,6 +102,19 @@ export class TaggerStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'TaggerSyncFunctionName', {
       value: syncFn.functionName,
+      description: 'Lambda function name — invoke manually to seed initial data',
+    });
+
+    new cdk.CfnOutput(this, 'SpellChromaIndexUrl', {
+      value: `https://${bucket.bucketName}.s3.amazonaws.com/spellchroma-tag-index.json`,
+      description: 'Public URL for the SpellChroma tag index — set as VITE_SPELLCHROMA_INDEX_URL',
+    });
+    new cdk.CfnOutput(this, 'SpellChromaDictUrl', {
+      value: `https://${bucket.bucketName}.s3.amazonaws.com/spellchroma-tag-dictionary.json`,
+      description: 'Public URL for the SpellChroma tag dictionary — set as VITE_SPELLCHROMA_DICT_URL',
+    });
+    new cdk.CfnOutput(this, 'SpellChromaIndexFunctionName', {
+      value: spellChromaFn.functionName,
       description: 'Lambda function name — invoke manually to seed initial data',
     });
   }
