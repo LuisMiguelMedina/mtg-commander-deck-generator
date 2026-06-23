@@ -8,7 +8,7 @@ import type { ScryfallCard } from '@/types';
 
 // Parse a pasted decklist: strip leading counts ("3x", "1 ", "2") and set/collector
 // suffixes in parens; keep the card name. One name per line, blanks ignored.
-function parseDecklist(text: string): string[] {
+export function parseDecklist(text: string): string[] {
   const names: string[] = [];
   for (const raw of text.split('\n')) {
     const line = raw.trim();

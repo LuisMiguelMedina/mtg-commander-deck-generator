@@ -7,6 +7,7 @@ import { ExplorerGrid } from '@/components/spellchroma/ExplorerGrid';
 import { DeckInput } from '@/components/spellchroma/DeckInput';
 import { TopTagsStrip } from '@/components/spellchroma/TopTagsStrip';
 import { SpellChromaSplit } from '@/components/spellchroma/SpellChromaSplit';
+import { SpellChromaLanding } from '@/components/spellchroma/SpellChromaLanding';
 import { DeckBuildingArea } from '@/components/analyze/DeckBuildingArea';
 import type { ScryfallCard } from '@/types';
 
@@ -17,6 +18,7 @@ export function SpellChromaPage() {
   const [textFilter, setTextFilter] = useState('');
   const [deck, setDeck] = useState<ScryfallCard[] | null>(null);
   const [indexReady, setIndexReady] = useState(false);
+  const [startedExploring, setStartedExploring] = useState(false);
 
   useEffect(() => { void loadTagDictionary(); }, []);
 
@@ -39,6 +41,22 @@ export function SpellChromaPage() {
     () => (deck && indexReady ? aggregateDeckTags(deck) : []),
     [deck, indexReady],
   );
+
+  // The landing splash shows until the user loads a deck, picks a starter tag,
+  // or explicitly chooses to explore without one.
+  const showLanding = !deck && selectedTags.length === 0 && !startedExploring;
+
+  if (showLanding) {
+    return (
+      <div className="container mx-auto px-4 max-w-[1600px]">
+        <SpellChromaLanding
+          onLoad={handleDeckLoaded}
+          onExplore={() => setStartedExploring(true)}
+          onStarterTag={addTag}
+        />
+      </div>
+    );
+  }
 
   const explorer = (
     <div className="flex flex-col gap-3">
