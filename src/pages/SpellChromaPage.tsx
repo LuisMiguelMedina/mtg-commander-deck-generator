@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { TopTagsStrip } from '@/components/spellchroma/TopTagsStrip';
 import { SpellChromaSplit } from '@/components/spellchroma/SpellChromaSplit';
 import { SpellChromaLanding } from '@/components/spellchroma/SpellChromaLanding';
+import { SpellChromaBackdrop } from '@/components/spellchroma/SpellChromaBackdrop';
 import { DeckBuildingArea } from '@/components/analyze/DeckBuildingArea';
 import type { ScryfallCard } from '@/types';
 
@@ -53,6 +54,7 @@ export function SpellChromaPage() {
   if (showLanding) {
     return (
       <div className="container mx-auto px-4 max-w-[1600px]">
+        <SpellChromaBackdrop colorIdentity={colorIdentity} />
         <SpellChromaLanding
           onLoad={handleDeckLoaded}
           onExplore={() => setStartedExploring(true)}
@@ -97,15 +99,19 @@ export function SpellChromaPage() {
   // viewport under the nav and the panes carry their own padding).
   if (deck) {
     return (
-      <SpellChromaSplit
-        deck={<DeckBuildingArea currentCards={deck} headerExtra={<DeckInput onLoad={handleDeckLoaded} label="Change deck" />} />}
-        explorer={explorer}
-      />
+      <>
+        <SpellChromaBackdrop colorIdentity={colorIdentity} />
+        <SpellChromaSplit
+          deck={<DeckBuildingArea currentCards={deck} headerExtra={<DeckInput onLoad={handleDeckLoaded} label="Change deck" />} />}
+          explorer={explorer}
+        />
+      </>
     );
   }
 
   return (
     <div className="px-3 sm:px-4 py-3">
+      <SpellChromaBackdrop colorIdentity={colorIdentity} />
       <div className="mb-3 flex items-center justify-between gap-3">
         <h1 className="text-lg font-bold whitespace-nowrap">
           SpellChroma <span className="text-xs font-normal text-muted-foreground align-middle">· tag-driven discovery</span>

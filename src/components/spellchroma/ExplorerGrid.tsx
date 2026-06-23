@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ScryfallCard } from '@/types';
 import { getCardImageUrl } from '@/services/scryfall/client';
 import { CardPreviewModal } from '@/components/ui/CardPreviewModal';
 import { Button } from '@/components/ui/button';
+import { randomLoadingPhrase } from '@/services/spellchroma/loadingPhrases';
 
 interface ExplorerGridProps {
   cards: ScryfallCard[];
@@ -22,6 +23,15 @@ export function ExplorerGrid({
 }: ExplorerGridProps) {
   const [preview, setPreview] = useState<ScryfallCard | null>(null);
 
+  // Rotating flavor while a search is in flight.
+  const [phrase, setPhrase] = useState(randomLoadingPhrase);
+  useEffect(() => {
+    if (!loading) return;
+    setPhrase(randomLoadingPhrase());
+    const id = setInterval(() => setPhrase(randomLoadingPhrase()), 2500);
+    return () => clearInterval(id);
+  }, [loading]);
+
   const filtered = useMemo(() => {
     const q = textFilter.trim().toLowerCase();
     if (!q) return cards;
@@ -40,7 +50,7 @@ export function ExplorerGrid({
     return <Empty title="Search failed" sub="Scryfall didn’t respond. Try again or change tags." />;
   }
   if (loading && cards.length === 0) {
-    return <Empty title="Searching…" sub="Pulling matching cards from Scryfall." />;
+    return <Empty title={`${phrase}…`} sub="Pulling matching cards from Scryfall." />;
   }
   if (cards.length === 0) {
     return <Empty title="No cards match those tags" sub="Try fewer tags or a wider color identity." />;
