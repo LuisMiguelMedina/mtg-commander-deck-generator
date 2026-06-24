@@ -104,8 +104,8 @@ export function SpellChromaPage() {
 
   if (showLanding) {
     return (
-      <>
-        <div className="container mx-auto px-4 max-w-[1600px]">
+      <div className="min-h-[calc(100vh-77px)] flex flex-col">
+        <div className="container mx-auto px-4 max-w-[1600px] flex-1">
           <SpellChromaBackdrop colorIdentity={colorIdentity} />
           <SpellChromaLanding
             onLoad={handleDeckLoaded}
@@ -114,7 +114,7 @@ export function SpellChromaPage() {
           />
         </div>
         <SiteFooter />
-      </>
+      </div>
     );
   }
 
@@ -179,8 +179,8 @@ export function SpellChromaPage() {
   }
 
   return (
-    <>
-      <div className="px-3 sm:px-4 py-3">
+    <div className="min-h-[calc(100vh-77px)] flex flex-col">
+      <div className="px-3 sm:px-4 py-3 flex-1">
         <SpellChromaBackdrop colorIdentity={colorIdentity} />
         <div className="mb-3 flex items-center justify-between gap-3">
           <h1 className="text-lg font-bold whitespace-nowrap">
@@ -194,6 +194,6 @@ export function SpellChromaPage() {
         {explorer}
       </div>
       <SiteFooter />
-    </>
+    </div>
   );
 }
