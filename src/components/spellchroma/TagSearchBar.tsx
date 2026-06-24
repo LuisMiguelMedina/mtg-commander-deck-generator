@@ -57,7 +57,7 @@ export function TagSearchBar({
   }, [query, selectedTags]);
 
   return (
-    <div className="flex flex-wrap items-center gap-2 p-3 rounded-lg bg-card/60 border border-border/50">
+    <div className="flex flex-wrap items-center gap-2 px-3 py-2 min-h-[52px] bg-card/95 backdrop-blur-sm border-b border-border/50">
       {/* Selected tags + Add-tag trigger share one auto-animated group so chips
           pop in/out and the button slides along with them. */}
       <div ref={tagsRef} className="flex flex-wrap items-center gap-2">
