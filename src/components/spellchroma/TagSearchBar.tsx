@@ -59,8 +59,13 @@ export function TagSearchBar({
       {/* Add-tag autocomplete */}
       <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="gap-1">
-            <Plus className="w-3.5 h-3.5" /> Add tag
+          <Button
+            size="sm"
+            className={`gap-1.5 font-semibold bg-violet-600 hover:bg-violet-500 text-white border border-violet-400/50 shadow-[0_0_16px_rgba(139,92,246,0.4)] hover:shadow-[0_0_22px_rgba(139,92,246,0.55)] transition-shadow ${
+              selectedTags.length === 0 ? 'animate-pulse-subtle' : ''
+            }`}
+          >
+            <Plus className="w-4 h-4" /> Add tag
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72 p-2">

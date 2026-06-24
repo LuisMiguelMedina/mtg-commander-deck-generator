@@ -124,6 +124,17 @@
     100% { background-position: 200% 0; }
   }
 
+  /* Gentle attention glow — used on the SpellChroma "Add tag" CTA when no tag
+     is selected yet, to pull the eye to the page's primary action. */
+  .animate-pulse-subtle {
+    animation: pulseSubtle 2.2s ease-in-out infinite;
+  }
+
+  @keyframes pulseSubtle {
+    0%, 100% { box-shadow: 0 0 14px rgba(139, 92, 246, 0.35); }
+    50%      { box-shadow: 0 0 24px rgba(139, 92, 246, 0.65); }
+  }
+
   /* Gradient text */
   .gradient-text {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400;
