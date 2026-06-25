@@ -142,6 +142,16 @@ async function withRateLimit(
   throw new Error('Scryfall rate-limit retries exhausted');
 }
 
+/** Error carrying the HTTP status so callers can special-case (e.g. 404 = no results). */
+class ScryfallHttpError extends Error {
+  status: number;
+  constructor(status: number, statusText: string) {
+    super(`Scryfall API error: ${status} ${statusText}`);
+    this.name = 'ScryfallHttpError';
+    this.status = status;
+  }
+}
+
 async function scryfallFetch<T>(endpoint: string): Promise<T> {
   const response = await withRateLimit(() =>
     fetch(`${BASE_URL}${endpoint}`, {
@@ -150,7 +160,7 @@ async function scryfallFetch<T>(endpoint: string): Promise<T> {
   );
 
   if (!response.ok) {
-    throw new Error(`Scryfall API error: ${response.status} ${response.statusText}`);
+    throw new ScryfallHttpError(response.status, response.statusText);
   }
 
   return response.json();
@@ -247,11 +257,12 @@ export async function searchCards(
   colorIdentity: string[],
   options: {
     order?: 'edhrec' | 'cmc' | 'name';
+    dir?: 'asc' | 'desc';
     page?: number;
     skipFormatFilter?: boolean;
   } = {}
 ): Promise<ScryfallSearchResponse> {
-  const { order = 'edhrec', page = 1, skipFormatFilter = false } = options;
+  const { order = 'edhrec', dir, page = 1, skipFormatFilter = false } = options;
   const colorFilter = colorIdentity.length > 0 ? `id<=${colorIdentity.join('')}` : '';
   const formatFilter = skipFormatFilter ? '' : 'f:commander';
   // Wrap query in parentheses so color filter applies to entire query (including OR clauses)
@@ -259,15 +270,27 @@ export async function searchCards(
   const encodedQuery = encodeURIComponent(fullQuery.trim());
 
   // Check search cache first
-  const cacheKey = `${encodedQuery}|${order}|${page}`;
+  const cacheKey = `${encodedQuery}|${order}|${dir ?? ''}|${page}`;
   const cached = searchCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < SEARCH_CACHE_TTL) {
     return cached.data;
   }
 
-  const result = await scryfallFetch<ScryfallSearchResponse>(
-    `/cards/search?q=${encodedQuery}&order=${order}&page=${page}`
-  );
+  let result: ScryfallSearchResponse;
+  try {
+    result = await scryfallFetch<ScryfallSearchResponse>(
+      `/cards/search?q=${encodedQuery}&order=${order}${dir ? `&dir=${dir}` : ''}&page=${page}`
+    );
+  } catch (e) {
+    // Scryfall returns 404 when a search matches zero cards — that's an empty
+    // result, not a failure. Cache + return an empty list so callers render
+    // "no matches" instead of an error state.
+    if (e instanceof ScryfallHttpError && e.status === 404) {
+      result = { object: 'list', total_cards: 0, has_more: false, data: [] };
+    } else {
+      throw e;
+    }
+  }
 
   searchCache.set(cacheKey, { data: result, timestamp: Date.now() });
   return result;

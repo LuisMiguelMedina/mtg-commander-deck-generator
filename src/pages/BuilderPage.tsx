@@ -4,6 +4,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArchetypeDisplay } from '@/components/archetype/ArchetypeDisplay';
 import { DeckCustomizer } from '@/components/customization/DeckCustomizer';
 import { DeckDisplay } from '@/components/deck/DeckDisplay';
+import { SpellChromaIcon } from '@/components/spellchroma/SpellChromaIcon';
 import { GapAnalysisDisplay } from '@/components/deck/GapAnalysisDisplay';
 import { ComboDisplay } from '@/components/deck/ComboDisplay';
 import { PartnerSelector } from '@/components/commander/PartnerSelector';
@@ -690,7 +691,7 @@ export function BuilderPage() {
   return (
     <main className="flex-1 container mx-auto px-4 py-8">
       {/* Back Button + Playtest Row */}
-      <div className="flex items-center justify-between gap-2 mb-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <Button
           variant="ghost"
           onClick={handleBack}
@@ -700,7 +701,7 @@ export function BuilderPage() {
           {showDeck ? 'Back to Settings' : 'Back to Search'}
         </Button>
         {showDeck && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => {
                 trackEvent('analyze_cta_clicked', { from: 'builder' });
@@ -710,6 +711,17 @@ export function BuilderPage() {
             >
               <Microscope className="w-3.5 h-3.5" />
               Inspect (Beta)
+            </button>
+            <button
+              onClick={() => {
+                trackEvent('spellchroma_open_clicked', { from: 'builder' });
+                navigate('/spellchroma?deck=generated');
+              }}
+              title="Explore new cards for this deck in SpellChroma"
+              className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-card/50 border border-border/50 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              <SpellChromaIcon className="w-3.5 h-3.5" />
+              SpellChroma
             </button>
             <button
               onClick={() => setListsPanelOpen(v => !v)}
@@ -1004,7 +1016,7 @@ export function BuilderPage() {
                     aria-hidden="true"
                     className="w-5 h-5 brightness-0 invert"
                   />
-                  Create a Deck
+                  Assemble a Deck
                 </>
               )}
             </Button>
