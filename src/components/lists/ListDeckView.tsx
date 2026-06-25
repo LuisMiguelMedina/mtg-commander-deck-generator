@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, List, Pencil, CopyPlus, X, Plus, MoreHorizontal, ChevronDown, ChevronRight, ClipboardPaste, Bold, Italic, Heading2, ListOrdered, Minus, Swords, Microscope, Scissors, Sparkles, RotateCw, Redo2, Library } from 'lucide-react';
+import { ArrowLeft, Loader2, List, Pencil, CopyPlus, X, Plus, MoreHorizontal, ChevronDown, ChevronRight, ClipboardPaste, Bold, Italic, Heading2, ListOrdered, Minus, Image as ImageIcon, Swords, Microscope, Scissors, Sparkles, RotateCw, Redo2, Library } from 'lucide-react';
 import { FloatingListPanel } from '@/components/lists/FloatingListPanel';
+import { SpellChromaIcon } from '@/components/spellchroma/SpellChromaIcon';
 import { useStore } from '@/store';
 import { getCardsByNames, getCardByName, getFrontFaceTypeLine, searchCards, getCardImageUrl, getCardPrice, getCardBackFaceUrl, isDoubleFacedCard } from '@/services/scryfall/client';
-import { ManaCost } from '@/components/ui/mtg-icons';
+import { ManaCost, CardTypeIcon } from '@/components/ui/mtg-icons';
 import { fetchCommanderCombos, fetchColorIdentityCombos, formatCommanderNameForUrl } from '@/services/edhrec/client';
 import { applyCommanderTheme, resetTheme } from '@/lib/commanderTheme';
 import { DeckDisplay, CardContextMenu, type CardAction } from '@/components/deck/DeckDisplay';
@@ -124,6 +125,14 @@ function renderSimpleMarkdown(md: string): string {
 
   const inlineFormat = (text: string) =>
     escape(text)
+      // ![alt](url) — only http(s) URLs render; anything else falls back to the alt text
+      .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_m, alt: string, url: string) => {
+        const clean = url.trim();
+        if (!/^https?:\/\//i.test(clean)) return alt;
+        const safeUrl = clean.replace(/"/g, '%22');
+        const safeAlt = alt.replace(/"/g, '');
+        return `<img src="${safeUrl}" alt="${safeAlt}" class="max-w-full h-auto rounded-md my-2" loading="lazy" />`;
+      })
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>');
 
@@ -589,6 +598,15 @@ function BoardsCollapsible({ sideboardCards, maybeboardCards, onBoardCardAction,
 
 // --- Main Component ---
 
+// Derive the primary card type (for CardTypeIcon) from a Scryfall type_line.
+// "Legendary Artifact Creature — Golem" → "creature". Creature wins so the
+// claw shows for artifact/enchantment creatures.
+function primaryTypeFromLine(typeLine: string | undefined): string {
+  const tl = (typeLine || '').split('//')[0].split('—')[0].toLowerCase();
+  const order = ['creature', 'planeswalker', 'land', 'battle', 'artifact', 'enchantment', 'instant', 'sorcery', 'tribal'];
+  return order.find(t => tl.includes(t)) || 'creature';
+}
+
 export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, onRemoveCards, onAddCards, onMoveToSideboard, onMoveToMaybeboard, onMoveToDeck, onRemoveFromBoard, onMoveBetweenBoards, onUpdatePrimer, onChangeQuantity, onRename, onUpdateDeckSize, onSetSideboard, onSetMaybeboard }: ListDeckViewProps) {
   const navigate = useNavigate();
   const generatedDeck = useStore(s => s.generatedDeck);
@@ -740,7 +758,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
   const priceSym = customization.currency === 'EUR' ? '€' : '$';
 
   // Action toast with undo (for add/remove cards)
-  const [actionToast, setActionToast] = useState<{ message: string; onUndo?: () => void; kind?: 'success' | 'error' } | null>(null);
+  const [actionToast, setActionToast] = useState<{ message: string; onUndo?: () => void; kind?: 'success' | 'error'; cardType?: string } | null>(null);
   const [deckSizeNoticeDismissedAt, setDeckSizeNoticeDismissedAt] = useState<number | null>(null);
   // Split open / mounted so the drawer can play its CSS slide-out before unmounting.
   const [trimDialogOpen, setTrimDialogOpen] = useState(false);
@@ -766,6 +784,22 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
     setFillDialogOpen(false);
     setTimeout(() => setFillDialogMounted(false), 320);
   }, []);
+
+  // Makes the "Cards" stat in the deck-stats sidebar a one-click entry to the
+  // fill/trim drawer. delta < 0 → short (Fill); delta >= 0 → over or at target
+  // (Trim; at exactly target the Trim drawer opens in fine-tune/swap mode).
+  const cardCountAction = useMemo(() => {
+    if (!list.deckSize) return undefined;
+    const delta = list.cards.length - list.deckSize;
+    const ready = delta < 0
+      ? fillReady && !!onAddCards
+      : trimReady && !!list.commanderName && !!onMoveToMaybeboard;
+    return {
+      delta,
+      ready,
+      onClick: () => { if (delta < 0) openFillDialog(); else openTrimDialog(); },
+    };
+  }, [list.deckSize, list.cards.length, list.commanderName, fillReady, trimReady, onAddCards, onMoveToMaybeboard, openFillDialog, openTrimDialog]);
   const [mustIncludeDrawerOpen, setMustIncludeDrawerOpen] = useState(false);
   const [mustIncludeDrawerMounted, setMustIncludeDrawerMounted] = useState(false);
   const openMustIncludeDrawer = useCallback(() => {
@@ -783,9 +817,9 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
   onAddCardsRef.current = onAddCards;
   const onRemoveFromBoardRef = useRef(onRemoveFromBoard);
   onRemoveFromBoardRef.current = onRemoveFromBoard;
-  const showActionToast = useCallback((message: string, onUndo: () => void) => {
+  const showActionToast = useCallback((message: string, onUndo: () => void, cardType?: string) => {
     clearTimeout(actionToastTimer.current);
-    setActionToast({ message, onUndo, kind: 'success' });
+    setActionToast({ message, onUndo, kind: 'success', cardType });
     actionToastTimer.current = setTimeout(() => setActionToast(null), 4000);
   }, []);
   const showErrorToast = useCallback((message: string) => {
@@ -1152,6 +1186,13 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
         const fallbackEdhrec: EdhrecMapsResult = {
           roleTargets: getBaseRoleTargets(list.deckSize || list.cards.length),
         };
+        // Roles render off roleTargets — push it to the store so no-commander
+        // decks show the role breakdown (roleCounts came from the tagger phase).
+        useStore.setState(state => ({
+          generatedDeck: state.generatedDeck
+            ? { ...state.generatedDeck, roleTargets: fallbackEdhrec.roleTargets }
+            : null,
+        }));
         await persistCache({
           commanderCard, partnerCard, deckCards, sbCards, mbCards, stats,
           taggerResult, edhrecResult: fallbackEdhrec, swapsResult: {},
@@ -1267,9 +1308,12 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
         let swapsResult: SwapCandidatesResult = {};
         let detectedCombos: DetectedCombo[] | undefined;
 
-        if (commanderCard) {
+        // Combos run regardless of commander — no-commander decks still pull
+        // color-identity combos for their colors. (Gating this on commander used
+        // to wipe the cached combos coldLoad had written.)
+        {
           const allDeckNames = new Set<string>();
-          allDeckNames.add(commanderCard.name);
+          if (commanderCard) allDeckNames.add(commanderCard.name);
           if (partnerCard) allDeckNames.add(partnerCard.name);
           for (const c of deckCards) allDeckNames.add(c.name);
           const listColors = new Set<string>();
@@ -1277,7 +1321,9 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
           const listColorArray = ['W', 'U', 'B', 'R', 'G'].filter(c => listColors.has(c));
           try {
             const [a, b] = await Promise.all([
-              fetchCommanderCombos(commanderCard.name).catch(() => [] as EDHRECCombo[]),
+              commanderCard
+                ? fetchCommanderCombos(commanderCard.name).catch(() => [] as EDHRECCombo[])
+                : Promise.resolve([] as EDHRECCombo[]),
               fetchColorIdentityCombos(listColorArray).catch(() => [] as EDHRECCombo[]),
             ]);
             const merged: EDHRECCombo[] = [
@@ -1287,8 +1333,10 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
             rawCombosRef.current = merged;
             detectedCombos = detectCombosInDeck(merged, allDeckNames, commanderCard, partnerCard);
           } catch { /* non-critical */ }
-
           if (cancelled) return;
+        }
+
+        if (commanderCard) {
           edhrecResult = await buildEdhrecMaps(
             taggerResult,
             list.deckSize || list.cards.length,
@@ -1597,7 +1645,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
     setSearchQuery('');
     setSearchResults([]);
     setShowSearchResults(false);
-    showActionToast(`Added ${card.name}`, () => onRemoveCardsRef.current?.([card.name]));
+    showActionToast(`Added ${card.name}`, () => onRemoveCardsRef.current?.([card.name]), primaryTypeFromLine(card.type_line));
   }, [onAddCards, pushDeckHistory, showActionToast]);
 
   // Enter-to-add: skip the dropdown and try to resolve+add the typed name directly.
@@ -1649,7 +1697,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
     showActionToast(`Added ${cardName}${label}`, () => {
       if (destination === 'deck') onRemoveCardsRef.current?.([cardName]);
       else onRemoveFromBoardRef.current?.(cardName, destination);
-    });
+    }, primaryTypeFromLine(pendingCard.type_line));
   }, [pendingCard, onAddCards, pushDeckHistory, showActionToast]);
 
   const handleCancelPicker = useCallback(() => {
@@ -1875,6 +1923,17 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
             >
               <Microscope className="w-4 h-4" />
               <span>Inspect (Beta)</span>
+            </button>
+            <button
+              onClick={() => {
+                trackEvent('spellchroma_open_clicked', { from: 'list-deck' });
+                navigate(`/spellchroma?deck=${list.id}`);
+              }}
+              title="Explore new cards for this deck in SpellChroma"
+              className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-card/50 hover:bg-accent text-muted-foreground hover:text-foreground text-sm transition-colors"
+            >
+              <SpellChromaIcon className="w-4 h-4" />
+              <span>SpellChroma</span>
             </button>
             <button
               onClick={() => setListsPanelOpen(v => !v)}
@@ -2262,12 +2321,14 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
         ) : (
         <DeckDisplay
           phasesDone={phasesDone}
+          spellChromaDeckRef={list.id}
           onRemoveCards={handleRemoveCardsWithToast}
           onAddCards={onAddCards ? (names, _dest) => onAddCards(names, 'deck') : undefined}
           onMoveToSideboard={onMoveToSideboard}
           onMoveToMaybeboard={onMoveToMaybeboard}
           onChangeQuantity={onChangeQuantity}
           boardCounts={{ sideboard: sideboardCards.length, maybeboard: maybeboardCards.length }}
+          cardCountAction={cardCountAction}
           sideboardNames={list.sideboard}
           maybeboardNames={list.maybeboard}
           onSetSideboard={onSetSideboard}
@@ -2442,6 +2503,7 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
                         { icon: Heading2, action: () => insertLinePrefix('## '), title: 'Heading' },
                         { icon: List, action: () => insertLinePrefix('- '), title: 'Bullet list' },
                         { icon: ListOrdered, action: () => insertLinePrefix('1. '), title: 'Numbered list' },
+                        { icon: ImageIcon, action: () => insertFormat('![', '](image url)'), title: 'Image — ![alt](https://…)' },
                         { icon: Minus, action: () => insertFormat('\n---\n'), title: 'Divider' },
                       ].map(({ icon: Icon, action, title }) => (
                         <button
@@ -2519,7 +2581,8 @@ export function ListDeckView({ list, onBack, onViewAsList, onEdit, onDuplicate, 
 
       {/* Action toast with undo */}
       {actionToast && createPortal(
-        <div className={`fixed bottom-6 right-6 z-[999] px-4 py-2 ${actionToast.kind === 'error' ? 'bg-rose-500/90' : 'bg-emerald-500/90'} text-white text-sm rounded-lg shadow-lg animate-fade-in flex items-center gap-3`}>
+        <div className={`fixed bottom-6 right-6 z-[999] px-4 py-2 ${actionToast.kind === 'error' ? 'bg-rose-500/90' : 'bg-emerald-500/90'} text-white text-sm rounded-lg shadow-lg animate-fade-in flex items-center gap-2`}>
+          {actionToast.cardType && <CardTypeIcon type={actionToast.cardType} size="sm" className="shrink-0" />}
           {actionToast.message}
           {actionToast.onUndo && (
             <button
