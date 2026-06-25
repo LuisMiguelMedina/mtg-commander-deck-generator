@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { BrowserRouter, Routes, Route, useLocation, Link } from 'react-router-dom';
-import { Settings, Sparkles, Wand2, ListChecks, Library, BarChart3, Microscope, MessageSquare } from 'lucide-react';
+import { Settings, Sparkles, ListChecks, Library, BarChart3, Microscope, MessageSquare, Wrench } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import patchNotes from '@/data/patchNotes.json';
 import { HomePage } from '@/pages/HomePage';
@@ -10,6 +10,7 @@ import { OptimizePage } from '@/pages/OptimizePage';
 import { AnalyzePage } from '@/pages/AnalyzePage';
 import { BrewPage } from '@/pages/BrewPage';
 import { BrewLandingPage } from '@/pages/BrewLandingPage';
+import { SpellChromaPage } from '@/pages/SpellChromaPage';
 import { CollectionPage } from '@/pages/CollectionPage';
 import { ListsPage } from '@/pages/ListsPage';
 import { MigratePage } from '@/pages/MigratePage';
@@ -24,6 +25,7 @@ import { getBanList } from '@/services/scryfall/client';
 import { AuroraThemed } from '@/components/ui/AuroraThemed';
 import { BrewBackdrop } from '@/components/brew/BrewBackdrop';
 import { PollNudge } from '@/components/ui/PollNudge';
+import { SiteFooter } from '@/components/SiteFooter';
 import { getAuroraColors } from '@/lib/commanderTheme';
 import type { ScryfallCard } from '@/types';
 
@@ -235,6 +237,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   // on the hub rather than keying off generatedDeck.
   const isAnalyzeHub = location.pathname === '/analyze' || location.pathname === '/analyze/';
   const isCreatePage = location.pathname === '/' || location.pathname.startsWith('/build/') || location.pathname.startsWith('/build-from-deck/') || location.pathname === '/brew' || location.pathname.startsWith('/brew/');
+  const isSpellChromaPage = location.pathname === '/spellchroma';
 
   // True while the one-time Community-Poll nudge is visible — drives a gentle
   // ring on the version button it points at, so the nudge's arrow has a target.
@@ -407,6 +410,16 @@ function Layout({ children }: { children: React.ReactNode }) {
                     </span>
                   </Link>
                   <Link
+                    to="/spellchroma"
+                    aria-current={isSpellChromaPage ? 'page' : undefined}
+                    className={`text-sm transition-colors px-2 py-1 rounded-md flex items-center gap-1.5 ${
+                      isSpellChromaPage ? 'text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                    }`}
+                  >
+                    SpellChroma
+                  </Link>
+                  <div className="h-5 w-px bg-border/70 mx-1" aria-hidden="true" />
+                  <Link
                     to="/decks"
                     aria-current={location.pathname.startsWith('/decks') ? 'page' : undefined}
                     className={`text-sm transition-colors px-2 py-1 rounded-md flex items-center gap-1.5 ${
@@ -515,63 +528,10 @@ function Layout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
 
-        {/* Footer — hidden on /analyze once a deck is loaded to give the optimizer more vertical room */}
-        {(!isAnalyzePage || !generatedDeck) && (
-        <footer className="border-t border-border/50 bg-card/50 backdrop-blur-sm">
-          <div className="container mx-auto px-4 py-6 text-center text-sm text-muted-foreground">
-            <p>
-              Card data from{' '}
-              <a
-                href="https://scryfall.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                Scryfall
-              </a>
-              {' · '}
-              Inspired by{' '}
-              <a
-                href="https://edhrec.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                EDHREC
-              </a>
-              {' · '}
-              <a
-                href="https://github.com/20q2/mtg-commander-deck-generator"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                GitHub
-              </a>
-              {' · '}
-              Support me on{' '}
-              <a
-                href="https://www.patreon.com/c/ShadowMonk598"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                Patreon
-              </a>
-              {' · '}
-              Send{' '}
-              <a
-                href="https://forms.gle/H3eKtDh52muFm7d56"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                Feedback
-              </a>
-            </p>
-          </div>
-        </footer>
-        )}
+        {/* Footer — hidden on /analyze once a deck is loaded to give the optimizer more vertical room.
+            On /spellchroma the page renders its own footer in non-workbench states (the full-bleed
+            workbench fills the viewport, like the optimizer). */}
+        {(!isAnalyzePage || !generatedDeck) && !isSpellChromaPage && <SiteFooter />}
       </div>
 
       {/* One-time Community-Poll nudge after 5 sessions (portals itself to body) */}
@@ -591,28 +551,78 @@ function Layout({ children }: { children: React.ReactNode }) {
             className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${
               isCreatePage ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
-            aria-label="Generate"
+            aria-label="Foundry"
           >
-            <Wand2 className={`w-5 h-5 ${isCreatePage ? 'text-primary' : ''}`} />
-            <span className="text-[10px] font-medium">Generate</span>
+            <span
+              className={`w-5 h-5 bg-current ${isCreatePage ? 'text-primary' : ''}`}
+              style={{
+                WebkitMaskImage: `url(${import.meta.env.BASE_URL}logo.png)`,
+                maskImage: `url(${import.meta.env.BASE_URL}logo.png)`,
+                WebkitMaskSize: 'contain',
+                maskSize: 'contain',
+                WebkitMaskRepeat: 'no-repeat',
+                maskRepeat: 'no-repeat',
+                WebkitMaskPosition: 'center',
+                maskPosition: 'center',
+              }}
+              aria-hidden="true"
+            />
+            <span className="text-[10px] font-medium">Foundry</span>
           </Link>
-          <Link
-            to="/analyze"
-            onClick={() => window.scrollTo(0, 0)}
-            aria-current={isAnalyzePage ? 'page' : undefined}
-            className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${
-              isAnalyzePage ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
-            }`}
-            aria-label="Inspector"
-          >
-            <div className="relative">
-              <Microscope className={`w-5 h-5 ${isAnalyzePage ? 'text-primary' : ''}`} />
-              <span className="absolute -top-0 -right-3.5 text-[6px] font-medium tracking-wider text-muted-foreground/60 uppercase leading-[1.1]">
-                Beta
-              </span>
-            </div>
-            <span className="text-[10px] font-medium">Inspector</span>
-          </Link>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label="Tools"
+                className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${
+                  isAnalyzePage || isSpellChromaPage ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Wrench className={`w-5 h-5 ${isAnalyzePage || isSpellChromaPage ? 'text-primary' : ''}`} />
+                <span className="text-[10px] font-medium">Tools</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent side="top" align="center" className="w-44 p-1.5">
+              <Link
+                to="/analyze"
+                onClick={() => window.scrollTo(0, 0)}
+                aria-current={isAnalyzePage ? 'page' : undefined}
+                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md hover:bg-accent transition-colors ${
+                  isAnalyzePage ? 'text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                <Microscope className={`w-4 h-4 ${isAnalyzePage ? 'text-primary' : ''}`} />
+                <span className="text-sm font-medium">Inspector</span>
+                <span className="ml-auto text-[8px] font-medium tracking-wider text-muted-foreground/60 uppercase">
+                  Beta
+                </span>
+              </Link>
+              <Link
+                to="/spellchroma"
+                onClick={() => window.scrollTo(0, 0)}
+                aria-current={isSpellChromaPage ? 'page' : undefined}
+                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md hover:bg-accent transition-colors ${
+                  isSpellChromaPage ? 'text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                <span
+                  className={`w-4 h-4 bg-current ${isSpellChromaPage ? 'text-primary' : ''}`}
+                  style={{
+                    WebkitMaskImage: `url(${import.meta.env.BASE_URL}spellchroma-logo.png)`,
+                    maskImage: `url(${import.meta.env.BASE_URL}spellchroma-logo.png)`,
+                    WebkitMaskSize: 'contain',
+                    maskSize: 'contain',
+                    WebkitMaskRepeat: 'no-repeat',
+                    maskRepeat: 'no-repeat',
+                    WebkitMaskPosition: 'center',
+                    maskPosition: 'center',
+                  }}
+                  aria-hidden="true"
+                />
+                <span className="text-sm font-medium">SpellChroma</span>
+              </Link>
+            </PopoverContent>
+          </Popover>
           <Link
             to="/decks"
             onClick={() => window.scrollTo(0, 0)}
@@ -671,6 +681,7 @@ function App() {
         <Route path="/analyze" element={<Layout><AnalyzePage /></Layout>} />
         <Route path="/analyze/:param1" element={<Layout><AnalyzePage /></Layout>} />
         <Route path="/analyze/:param1/:param2" element={<Layout><AnalyzePage /></Layout>} />
+        <Route path="/spellchroma" element={<Layout><SpellChromaPage /></Layout>} />
         <Route path="/collection" element={<Layout><CollectionPage /></Layout>} />
         <Route path="/decks/*" element={<Layout><ListsPage /></Layout>} />
         <Route path="/lists/*" element={<Layout><ListsPage /></Layout>} />
