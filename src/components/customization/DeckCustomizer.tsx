@@ -113,7 +113,7 @@ function CollectionTypeBar({
 }
 
 export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast, brewMode = false }: { advancedOpen?: boolean; onAdvancedClose?: () => void; onToast?: (msg: string) => void; brewMode?: boolean } = {}) {
-  const { customization, updateCustomization, commander, partnerCommander, edhrecLandSuggestion, edhrecStats } = useStore();
+  const { customization, updateCustomization, commander, edhrecLandSuggestion, edhrecStats } = useStore();
   const { count: collectionCount } = useCollection();
   const { binders } = useBinders();
   const selectedBinderIds = customization.collectionBinderIds;

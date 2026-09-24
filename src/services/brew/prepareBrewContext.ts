@@ -21,6 +21,24 @@ import type { EDHRECCommanderData } from '@/types';
 // theme is one EDHREC fetch at brew start, so this is a deliberate breadth-vs-latency trade.
 const THEME_TAG_LIMIT = 8;
 
+const emptyEdhrecStats = (): EDHRECCommanderStats => ({
+  avgPrice: 0,
+  numDecks: 0,
+  deckSize: 81,
+  manaCurve: {},
+  typeDistribution: {
+    creature: 0,
+    instant: 0,
+    sorcery: 0,
+    artifact: 0,
+    enchantment: 0,
+    land: 0,
+    planeswalker: 0,
+    battle: 0,
+  },
+  landDistribution: { basic: 0, nonbasic: 0, total: 0 },
+});
+
 export interface PrepareBrewArgs {
   commander: ScryfallCard;
   partnerCommander: ScryfallCard | null;
@@ -82,6 +100,7 @@ export async function prepareBrewContext(args: PrepareBrewArgs): Promise<BrewCon
     edhrecData = {
       themes: [],
       similarCommanders: [],
+      stats: emptyEdhrecStats(),
       cardlists: {
         allNonLand: [],
         creatures: [],
@@ -98,8 +117,10 @@ export async function prepareBrewContext(args: PrepareBrewArgs): Promise<BrewCon
   if (formatMode === 'brawl100' && brewPlan.candidateNames) {
     edhrecData.cardlists.allNonLand = brewPlan.candidateNames.map((name) => ({
       name,
+      sanitized: name,
       inclusion: 0,
       primary_type: 'Unknown',
+      num_decks: 0,
     }));
   }
 

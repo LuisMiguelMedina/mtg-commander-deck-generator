@@ -4190,6 +4190,7 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
       'base+bracket': 'general commander data with bracket filtering',
       'base': 'general commander data',
       'scryfall': 'Scryfall card search (no EDHREC data)',
+      'moxfield': 'Moxfield Brawl 100 popularity deck lists',
     };
 
     if (requested.length === 0) return null; // nothing was requested, nothing to fall back from
