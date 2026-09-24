@@ -49,19 +49,6 @@ function landCount(cards: CardLike[]): number {
   return cards.filter(isLand).length;
 }
 
-function buildMaindeck(formatMode: string, extras: CardLike[]): CardLike[] {
-  const size = getFormatRules(formatMode)?.deckSize ?? 99;
-  const spells: CardLike[] = Array.from({ length: size - extras.filter(isLand).length }, (_, i) => ({
-    name: `Spell ${i + 1}`,
-    type_line: 'Instant',
-    color_identity: ['U'],
-  }));
-  // Keep deck at deckSize non-commander cards: replace trailing spells with lands in extras
-  const landExtras = extras.filter(isLand);
-  const spellCount = size - landExtras.length;
-  return [...spells.slice(0, spellCount), ...landExtras];
-}
-
 async function loadFix(): Promise<((input: FixInput) => Promise<FixResult> | FixResult) | undefined> {
   const mod = await tryLoadSeam(FIX_MODULE);
   return mod?.fixManaPool as ((input: FixInput) => Promise<FixResult> | FixResult) | undefined;
@@ -77,11 +64,6 @@ describe('PBI-MANA-51 Fix Mana: deficit/excess + size 1+99 + dual formatMode', (
     expect(typeof fn, `${FIX_MODULE} fixManaPool`).toBe('function');
     if (typeof fn !== 'function') return;
 
-    const deckCards = buildMaindeck('commander', [
-      { name: 'Island', type_line: 'Basic Land — Island', produced_mana: ['U'] },
-      { name: 'Island', type_line: 'Basic Land — Island', produced_mana: ['U'] },
-    ]);
-    // Unique names for basics in test fixture — rebuild with distinct land rows
     const lands: CardLike[] = [
       { name: 'Island', type_line: 'Basic Land — Island', produced_mana: ['U'] },
       { name: 'Mountain', type_line: 'Basic Land — Mountain', produced_mana: ['R'] },
