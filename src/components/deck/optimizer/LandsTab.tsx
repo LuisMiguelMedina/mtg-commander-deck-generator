@@ -19,6 +19,7 @@ import {
 import { AnalyzedCardRow, AnimatedCollapse, CollapsibleCardGroups, type CardAction, type CardRowMenuProps } from './shared';
 import { SuggestionCardGrid, CutCardGrid } from './OverviewTab';
 import { selectLandCuts, type LandCut } from '@/services/deckBuilder/landCutSelection';
+import { manaSourceDemandBarPercent } from '@/services/deckBuilder/manaSourceDemand';
 
 // ═══════════════════════════════════════════════════════════════════════
 // LANDS TAB Components
@@ -980,7 +981,7 @@ export function FixingDetail({
                       </div>
                       <p className="text-[9px] text-muted-foreground/50 text-center tabular-nums mb-0.5">{demandPct}% of demand</p>
                       <div className="h-1 rounded-full bg-accent/40 overflow-hidden mb-0.5">
-                        <div className={`h-full rounded-full transition-all ${COLOR_BARS[color] || 'bg-foreground'}`} style={{ width: `${Math.min(100, Math.round(((cf.sourcesPerColor?.[color] || 0) / Math.max(pips, 1)) * 50))}%` }} />
+                        <div className={`h-full rounded-full transition-all ${COLOR_BARS[color] || 'bg-foreground'}`} style={{ width: `${manaSourceDemandBarPercent(cf.sourcesPerColor?.[color] || 0, pips)}%` }} />
                       </div>
                       <p className="text-[9px] text-muted-foreground/50 text-center tabular-nums">{cf.sourcesPerColor?.[color] || 0} sources</p>
                     </button>

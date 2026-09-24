@@ -689,6 +689,20 @@ export function getPhaseRoleTargets(
   return result;
 }
 
+/**
+ * Commander budget for the tempo strip's main targets (early / mid / late).
+ * `getCurvePhases` accepts this so the 99-card total can be named in one place.
+ * It is not applied yet: phase targets still normalize to the live non-land count.
+ */
+export interface MainTargetDeckBudget {
+  /** Non-commander deck size. Standard Commander is 99. */
+  deckSize: number;
+  /** Lands already in the deck, including spell/land MDFCs. */
+  landsAlreadyAdded: number;
+  /** Spell/land MDFCs. Each is one deck entry and also sits on the non-land curve. */
+  mdfcCount: number;
+}
+
 /** Build curve phase analysis for early (0-2), mid (3-4), late (5+) game. */
 export function getCurvePhases(
   curveBreakdowns: CurveBreakdown[],
@@ -696,7 +710,11 @@ export function getCurvePhases(
   totalNonLand: number,
   pacing?: Pacing,
   roleTargets?: Record<string, number>,
+  deckBudget?: MainTargetDeckBudget,
 ): CurvePhaseAnalysis[] {
+  // PBI-13: budget is part of the signature and intentionally unused.
+  // Targets below still sum to `totalNonLand` (MDFCs counted as spells).
+  void deckBudget;
   const phaseDefs: { phase: CurvePhase; label: string; range: [number, number] }[] = [
     { phase: 'early', label: 'Early Game', range: [0, 2] },
     { phase: 'mid',   label: 'Mid Game',   range: [3, 4] },
