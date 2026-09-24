@@ -2,8 +2,11 @@ import { create } from 'zustand';
 import type { DetectedCombo, ScryfallCard } from '@/types';
 import { buildLibrary } from '@/services/playtest/libraryBuilder';
 import { resolveCombos } from '@/services/playtest/combos';
+import { applyTrialPins } from '@/services/playtest/trialPins';
 import {
   type BattlefieldCard,
+  type CardEdit,
+  type CardSticker,
   type CounterColor,
   type DieSides,
   type FreeCounter,
@@ -15,11 +18,17 @@ import {
   type PlaytestSnapshot,
   type SourceInput,
   type SourceMeta,
+  type TrialPin,
   type Zones,
   type ZoneKey,
 } from '@/components/playtest/types';
 import { fisherYates, isLand as _isLand, makeInstanceId, snapArrival, findArrivalSlot } from '@/components/playtest/utils';
 import { usePlaytestSettings, CARD_SIZES } from '@/store/playtestSettingsStore';
+import { floatDelta, useFloatingText } from '@/store/floatingTextStore';
+import { playCue, playCounterCue } from '@/services/playtest/playtestSound';
+import { useDamageFlash } from '@/store/damageFlashStore';
+import { describeEdit } from '@/services/playtest/powerToughness';
+import { captureAll, restoreAll } from '@/store/undoBridge';
 
 const HISTORY_CAP = 20;
 const STARTING_LIFE = 40;
@@ -38,12 +47,64 @@ interface PlaytestState {
   battlefield: BattlefieldCard[];
   life: number;
   turn: number;
+  /**
+   * Commander tax, in mana — the +2 per previous cast you have to remember and
+   * nothing else on the table tracks. Nudged by hand from the command pile:
+   * the app can see a card leave the command zone but not whether that was a
+   * cast, so guessing it would be wrong exactly when it mattered.
+   */
+  commanderTax: number;
+  /**
+   * Future Sight / Oracle of Mul Daya: play with the top card of your library
+   * turned face up. A mode rather than a one-off action, so it lives in game
+   * state and the library pile renders its top card face up for as long as
+   * it's on. Left out of snapshotOf() on purpose — undoing a draw shouldn't
+   * also un-reveal the deck, since nothing you undo turned it on.
+   */
+  libraryRevealed: boolean;
   log: LogEntry[];
   history: PlaytestSnapshot[];
   modal: Modal;
   hovered: string | null;
   hoveredPile: Exclude<ZoneKey, 'hand'> | null;
+  // Digits typed over a pile buffer for a moment so "2" can still become "20".
+  // Purely transient feedback — the pile shows the number building up. Not in
+  // snapshotOf(), so it never lands in undo history.
+  pileDrawPending: { zone: Exclude<ZoneKey, 'hand'>; n: number } | null;
+  // Free counters, dice and hand cards track their own hover so Delete knows
+  // what's under the cursor — battlefield cards use `hovered` above. Hand is an
+  // index rather than an id because a hand holds duplicate cards.
+  hoveredCounter: string | null;
+  hoveredDie: string | null;
+  hoveredHandIndex: number | null;
+  /**
+   * Hand cards turned over with F — the back face of a double-faced card, the
+   * card back for anything else. Keyed by card id rather than hand index
+   * because every draw, discard and re-sort shifts the indices; the price is
+   * that two copies of one printing turn over together, which shows the same
+   * face twice either way.
+   */
+  flippedHandIds: string[];
+  // New Card Trial: force chosen cards to show up so they can actually be tested.
+  // Pins only ever name cards already in the deck, so no card data is stored here.
+  trialPins: TrialPin[];
   battlefieldRect: { width: number; height: number };     // updated by Battlefield component on mount/resize
+  // Measured height of the opponent seats overlaying the top of the canvas.
+  // Arriving cards snap below it so nothing lands underneath them. 0 when no
+  // bots are seated.
+  seatBandHeight: number;
+  /**
+   * While a card is being dragged over the hand, the row position it would
+   * land at. The hand fan parts around it so you can see where the card is
+   * going before you let go. Null whenever nothing is hovering the hand.
+   */
+  handDropFanPos: number | null;
+  /**
+   * Set for one commit when a card lands in the hand: the hand index it landed
+   * at, and the viewport point it was released from. The hand replays that as
+   * a short flight into the slot, so a drop settles instead of snapping.
+   */
+  handLanding: { index: number; x: number; y: number } | null;
   // Mulligan state machine
   mulliganCount: number;
   // Increments any time the library is shuffled — UI hooks observe this for animations
@@ -51,6 +112,10 @@ interface PlaytestState {
   // Increments any time a card is placed on TOP of the library — UI hooks
   // observe this to play a slide-up animation of the card-back on the pile.
   libraryTopPushTick: number;
+  // Increments any time cards are drawn off the top of the library — the
+  // mirror of libraryTopPushTick. The pile plays a card-back sliding *down*
+  // off the deck while the drawn card deals into the hand.
+  libraryDrawTick: number;
   // Increments any time a card is added to the graveyard / exile pile —
   // the sidebar Pile uses this to play an overlay animation of the new card.
   graveyardPushTick: number;
@@ -86,6 +151,21 @@ interface PlaytestState {
     dice: FreeDie[];
     pasteOffset: { x: number; y: number };
   } | null;
+  /**
+   * Set when stackSelection has just rewritten a group's positions, so each
+   * card can be animated in from where it came from instead of appearing in
+   * its new spot. Offsets are old-minus-new — where the flight starts — and
+   * the tick is what tells a card this is a fresh stack and not the one it
+   * already played. Ephemeral; never snapshotted.
+   */
+  stackFlight: { tick: number; offsets: Record<string, StackFlightOffset> } | null;
+  /**
+   * True while a drag that has already stacked its selection is still holding
+   * it. From that moment the pile — not the one card — is the thing in your
+   * hand, so the dragged card drops its floating ghost and takes its place in
+   * the stack instead of hovering above it.
+   */
+  stackedDrag: boolean;
   // Ephemeral feedback toast — incrementing tick triggers a fresh display in
   // the UI. Cleared automatically after the toast fades.
   toast: { text: string; tick: number } | null;
@@ -96,6 +176,9 @@ interface PlaytestActions {
   reset: () => void;
   exit: () => void;                                        // clears all state (for unmount)
   setBattlefieldRect: (w: number, h: number) => void;
+  setSeatBandHeight: (h: number) => void;
+  setHandDropFanPos: (pos: number | null) => void;
+  setHandLanding: (landing: { index: number; x: number; y: number } | null) => void;
 
   dealOpeningHand: () => void;
   draw: (n?: number) => void;
@@ -105,9 +188,28 @@ interface PlaytestActions {
   keepHandSendToBottom: (handIndices: number[]) => void;   // resolves the bottom-N step
   keepHand: () => void;                                    // confirms current 7
 
+  /**
+   * Whole hand to the graveyard. Returns the hand indices that left, so the
+   * caller can fly them there — it cannot work that out afterwards, because
+   * by then they are gone.
+   */
+  discardHand: () => number[];
+  /** Wheel of Fortune: discard your hand, then draw seven. Returns what went. */
+  wheel: () => number[];
+  /** Hymn-style: `n` cards chosen at random go to the graveyard. Returns which. */
+  discardAtRandom: (n: number) => number[];
+  /** Timetwister-style: hand back into the library, shuffle, redraw that many. */
+  shuffleHandIntoLibrary: () => void;
+  /** Discard specific hand indices — the cleanup step's picker resolves here. */
+  discardFromHand: (handIndices: number[]) => void;
+
   untapAll: () => void;
   setLife: (n: number) => void;
   adjustLife: (delta: number) => void;
+  /** Step commander tax by `delta` mana. Clamped at zero. */
+  adjustCommanderTax: (delta: number) => void;
+  /** Turn the top card of the library face up (and back down again). */
+  toggleLibraryRevealed: () => void;
   nextTurn: () => void;
 
   moveCard: (args: MoveArgs) => void;
@@ -118,13 +220,56 @@ interface PlaytestActions {
   rotateCards: (instanceIds: string[], delta: number) => void;
   toggleTapMany: (instanceIds: string[]) => void;
   toggleFaceDownMany: (instanceIds: string[]) => void;
+  toggleHandFlipped: (cardId: string) => void;
   shufflePile: (zone: Exclude<ZoneKey, 'hand'>) => void;
+  takeFromPile: (zone: Exclude<ZoneKey, 'hand'>, n?: number) => void;
+  /**
+   * Empty one zone into another in a single step — Elixir of Immortality,
+   * Tormod's Crypt, Riftsweeper. One action rather than one per pairing,
+   * because every combination is the same move with different labels.
+   */
+  emptyZoneInto: (
+    from: Exclude<ZoneKey, 'hand'>,
+    to: ZoneKey,
+    opts?: { shuffle?: boolean },
+  ) => void;
   setCounter: (instanceId: string, type: string, value: number) => void;
-  adjustCounter: (instanceId: string, type: string, delta: number) => void;
+  /** Rewrite one of your creatures — Lignify and friends. `null` clears it. */
+  setCardEdit: (instanceId: string, edit: CardEdit | null) => void;
+  /**
+   * `anchor` is viewport coords for the floating "+1" to pop from. Pass the
+   * badge's own rect when the click came from a badge; without it the text
+   * comes off the middle of the card.
+   */
+  adjustCounter: (instanceId: string, type: string, delta: number, anchor?: { x: number; y: number }) => void;
+  moveCounterBadge: (instanceId: string, type: string, x: number, y: number) => void;
+  addSticker: (instanceId: string, text: string, position?: { x: number; y: number }) => void;
+  setStickerText: (instanceId: string, stickerId: string, text: string) => void;
+  moveSticker: (instanceId: string, stickerId: string, x: number, y: number) => void;
+  removeSticker: (instanceId: string, stickerId: string) => void;
   copyCard: (instanceId: string) => void;
   attach: (childId: string, parentId: string) => void;
   unattach: (instanceId: string) => void;
   spawnToken: (card: ScryfallCard, position?: { x: number; y: number }) => void;
+  /**
+   * `arrival` carries state the card is bringing with it. Stealing a bot's
+   * permanent used to drop its counters on the floor — a Krenko with three
+   * +1/+1 counters arrived on your side as a vanilla copy.
+   */
+  addPermanent: (
+    card: ScryfallCard,
+    position?: { x: number; y: number },
+    logText?: string,
+    arrival?: { tapped?: boolean; counters?: Record<string, number>; edit?: CardEdit },
+  ) => void;
+  /** Hands back the whole entry, so a donated permanent keeps its counters. */
+  releasePermanent: (instanceId: string) => BattlefieldCard | null;
+  /**
+   * Put a card into your hand from outside the game's own zones — a card
+   * plucked out of an opponent's library, say. `addPermanent`'s counterpart for
+   * the one zone that had no way in.
+   */
+  addToHand: (card: ScryfallCard, logText?: string) => void;
 
   scryConfirm: (topOrder: number[], bottomOrder: number[]) => void;
   surveilConfirm: (topOrder: number[], graveyardOrder: number[]) => void;
@@ -136,9 +281,35 @@ interface PlaytestActions {
   closeModal: () => void;
   setHovered: (id: string | null) => void;
   setHoveredPile: (zone: Exclude<ZoneKey, 'hand'> | null) => void;
+  setPileDrawPending: (pending: { zone: Exclude<ZoneKey, 'hand'>; n: number } | null) => void;
+  setHoveredCounter: (id: string | null) => void;
+  setHoveredDie: (id: string | null) => void;
+  setHoveredHandIndex: (index: number | null) => void;
+  setTrialPins: (pins: TrialPin[]) => void;
 
-  appendLog: (text: string) => void;
+  /** `seats` names the opponent seats the line is about — see LogEntry.seats. */
+  appendLog: (text: string, category?: LogCategory, seats?: string[]) => void;
   clearLog: () => void;
+  /**
+   * Flash a short message at the top of the table. For the moments where an
+   * action simply does not happen — a card dropped somewhere it cannot go —
+   * and silence reads as the app being broken rather than as a refusal.
+   */
+  showToast: (text: string) => void;
+
+  /**
+   * Push one history entry capturing the current state, without mutating
+   * anything. Lets a multi-step sequence — declare attackers, confirm, resolve
+   * — collapse into a single Undo rather than unwinding one card at a time.
+   */
+  pushCheckpoint: () => void;
+  /**
+   * Set tapped on many cards without pushing history or logging. For steps
+   * that sit inside a sequence already covered by a pushCheckpoint, where
+   * `toggleTap` would fragment the undo and spam the log with one line per
+   * attacker.
+   */
+  setTappedQuiet: (instanceIds: string[], tapped: boolean) => void;
 
   addFreeCounter: (color?: CounterColor, position?: { x: number; y: number }) => void;
   adjustFreeCounter: (id: string, delta: number) => void;
@@ -152,14 +323,29 @@ interface PlaytestActions {
   setFreeDieColor: (id: string, color: CounterColor) => void;
   removeFreeDie: (id: string) => void;
   moveFreeDie: (id: string, x: number, y: number) => void;
+  /**
+   * Throw a loose counter or die away — what the battlefield's trash corner
+   * does. Takes the whole selection of that kind when the dragged one is part
+   * of it, so binning a marquee'd handful is one gesture and one undo.
+   */
+  trashLoose: (active: { kind: 'counter' | 'die'; id: string }) => void;
 
   setSelectedIds: (ids: string[]) => void;
   setMarqueeSelection: (sel: { cards: string[]; counters: string[]; dice: string[] }) => void;
+  toggleSelect: (kind: 'card' | 'counter' | 'die', id: string) => void;
   clearSelection: () => void;
 
   setDragActive: (active: { kind: 'card' | 'counter' | 'die'; id: string } | null) => void;
   setDragDelta: (delta: { x: number; y: number } | null) => void;
   applyGroupMove: (active: { kind: 'card' | 'counter' | 'die'; id: string }, dx: number, dy: number) => void;
+  /**
+   * Tidy the selected cards into one staggered pile, Tabletop-Simulator style:
+   * every card shares an x, each one sits a title-row below the last, so you
+   * read the pile as a list of names. `anchorInstanceId` (the card being
+   * dragged, when a shake triggered this) leads the pile and keeps its own
+   * position, since mid-drag it's the one under the cursor and can't be moved.
+   */
+  stackSelection: (anchorInstanceId?: string) => void;
 
   copyToClipboard: () => void;
   pasteClipboard: (target?: { x: number; y: number }) => void;
@@ -177,15 +363,29 @@ const initial: PlaytestState = {
   battlefield: [],
   life: STARTING_LIFE,
   turn: 1,
+  commanderTax: 0,
+  libraryRevealed: false,
   log: [],
   history: [],
   modal: null,
   hovered: null,
   hoveredPile: null,
+  pileDrawPending: null,
+  hoveredCounter: null,
+  hoveredDie: null,
+  hoveredHandIndex: null,
+  flippedHandIds: [],
+  trialPins: [],
   battlefieldRect: { width: 0, height: 0 },
+  stackFlight: null,
+  stackedDrag: false,
+  seatBandHeight: 0,
+  handDropFanPos: null,
+  handLanding: null,
   mulliganCount: 0,
   shuffleTick: 0,
   libraryTopPushTick: 0,
+  libraryDrawTick: 0,
   graveyardPushTick: 0,
   exilePushTick: 0,
   lastDrawRange: { start: -1, end: -1 },
@@ -211,10 +411,55 @@ function snapshotOf(s: PlaytestState): PlaytestSnapshot {
       exile: [...s.zones.exile],
       command: [...s.zones.command],
     },
-    battlefield: s.battlefield.map(b => ({ ...b, counters: { ...b.counters } })),
+    battlefield: s.battlefield.map(b => ({
+      ...b,
+      counters: { ...b.counters },
+      counterPositions: b.counterPositions ? { ...b.counterPositions } : undefined,
+      stickers: b.stickers?.map(st => ({ ...st })),
+    })),
     life: s.life,
     turn: s.turn,
+    commanderTax: s.commanderTax,
+    participants: captureAll(),
   };
+}
+
+/** How far back to start a card's flight into a pile. */
+export interface StackFlightOffset {
+  dx: number;
+  dy: number;
+}
+
+/** How long a card takes to fly into its slot. They all leave together. */
+export const STACK_FLIGHT_MS = 240;
+
+/**
+ * Vertical gap between cards in a tidy pile. A card's title row is about 13% of
+ * its height, so that's all a pile shows of every card but the bottom one.
+ * Tall piles tighten the step rather than run off the table: names go from
+ * readable to merely countable, which beats vanishing under the hand row.
+ */
+const PILE_STEP_RATIO = 0.13;
+
+function pileStep(cardHeight: number, count: number, tableHeight: number): number {
+  const ideal = Math.round(cardHeight * PILE_STEP_RATIO);
+  // Fit-check against the whole table, not the pile's actual y — a pile you
+  // deliberately parked near the bottom edge is your business, the same as any
+  // card dragged down there.
+  const room = tableHeight - cardHeight - 16;
+  if (count < 2 || room <= 0) return ideal;
+  return Math.max(6, Math.min(ideal, Math.floor(room / (count - 1))));
+}
+
+/**
+ * Checkpoint the current state onto the undo stack. Exported because the drag
+ * layer in PlaytestPage checkpoints mid-gesture: it used to hand-roll the
+ * snapshot literal and the cap, which silently went stale every time a new
+ * field joined `snapshotOf` — undoing a drop would then restore the board with
+ * a field left at its post-drop value.
+ */
+export function checkpoint(): void {
+  usePlaytestStore.setState(s => ({ history: pushHistory(s.history, snapshotOf(s)) }));
 }
 
 function pushHistory(history: PlaytestSnapshot[], snap: PlaytestSnapshot): PlaytestSnapshot[] {
@@ -223,8 +468,27 @@ function pushHistory(history: PlaytestSnapshot[], snap: PlaytestSnapshot): Playt
   return next;
 }
 
-function makeLogEntry(text: string, category: LogCategory = 'system'): LogEntry {
-  return { id: makeInstanceId(), ts: Date.now(), text, category };
+function makeLogEntry(text: string, category: LogCategory = 'system', seats?: string[]): LogEntry {
+  return { id: makeInstanceId(), ts: Date.now(), text, category, ...(seats?.length ? { seats } : {}) };
+}
+
+/**
+ * The canvas size to place an arriving card in.
+ *
+ * The store's copy is zeroed by every `set({ ...initial })` — exit, load,
+ * reset — and Battlefield's ResizeObserver only fires on a size CHANGE, so
+ * after a reload the store can sit at 0×0 for a whole game. `findArrivalSlot`
+ * then returns its start point untouched, and every card played by clicking
+ * piled onto the same spot: a Krenko landed exactly on top of a Mountain, and
+ * the creature underneath could not be grabbed to attack. Read the live
+ * element when the store's copy is unusable.
+ */
+function canvasRect(state: { battlefieldRect: { width: number; height: number } }): { width: number; height: number } {
+  const { width, height } = state.battlefieldRect;
+  if (width > 0 && height > 0) return { width, height };
+  const el = typeof document !== 'undefined' ? document.querySelector('[data-battlefield]') : null;
+  const r = el?.getBoundingClientRect();
+  return r && r.width > 0 && r.height > 0 ? { width: r.width, height: r.height } : { width, height };
 }
 
 // Snap an accumulated rotation back to its nearest upright orientation. Untapping
@@ -294,6 +558,10 @@ export const usePlaytestStore = create<Store>((set, get) => ({
         loading: false,
         source,
         colorIdentity: state.colorIdentity,
+        // Trial pins are a session rule, not game state: they must survive reset
+        // so "reset and look again" stays a one-click loop. The `...initial`
+        // above would otherwise clear them.
+        trialPins: state.trialPins,
         zones: { ...emptyZones(), library: reshuffled, command: [...state.zones.command] },
         log: [makeLogEntry('Reset', 'system')],
       };
@@ -304,16 +572,50 @@ export const usePlaytestStore = create<Store>((set, get) => ({
   exit: () => set({ ...initial }),
 
   setBattlefieldRect: (width, height) => set({ battlefieldRect: { width, height } }),
+  setSeatBandHeight: (h) => set(state => {
+    if (h === state.seatBandHeight) return {};
+    // The seats are opaque and grow as the bots develop. A card that arrived
+    // just under the old band edge is now under a seat — invisible, and
+    // ungrabbable when you want to attack with it. When the band grows, walk
+    // anything it has grown over down to the first free slot below it. Only
+    // downwards, only when it grows: shrinking leaves your layout alone.
+    if (h <= state.seatBandHeight || state.battlefield.length === 0) return { seatBandHeight: h };
+    const { width: cw, height: ch } = CARD_SIZES[usePlaytestSettings.getState().cardSize];
+    const rect = canvasRect(state);
+    const top = h + 8;
+    const battlefield = [...state.battlefield];
+    let moved = false;
+    for (let i = 0; i < battlefield.length; i++) {
+      const b = battlefield[i];
+      if (b.y >= top) continue;
+      const others = battlefield.filter((_, j) => j !== i);
+      const slot = findArrivalSlot(others, b.x, top, rect.width, rect.height, false, cw, ch);
+      battlefield[i] = { ...b, x: slot.x, y: slot.y };
+      moved = true;
+    }
+    return moved ? { seatBandHeight: h, battlefield } : { seatBandHeight: h };
+  }),
+  setHandDropFanPos: (handDropFanPos) => set(s => (
+    s.handDropFanPos === handDropFanPos ? {} : { handDropFanPos }
+  )),
+  setHandLanding: (handLanding) => set({ handLanding }),
 
   // ─────────────────────── mulligan / draw / shuffle ───────────────────────
 
   dealOpeningHand: () => set(state => {
-    const draw = state.zones.library.slice(0, 7);
-    const rest = state.zones.library.slice(7);
+    const { library, forcedHand, notes } = applyTrialPins(state.zones.library, state.trialPins);
+    // Pinned-to-hand cards are part of the seven, not extra.
+    const need = Math.max(0, 7 - forcedHand.length);
+    const drawn = library.slice(0, need);
+    const hand = [...forcedHand, ...drawn];
     return {
-      zones: { ...state.zones, hand: draw, library: rest },
-      lastDrawRange: { start: 0, end: draw.length },
-      log: [...state.log, makeLogEntry(`Drew opening hand (${draw.length})`, 'library')],
+      zones: { ...state.zones, hand, library: library.slice(need) },
+      lastDrawRange: { start: 0, end: hand.length },
+      log: [
+        ...state.log,
+        makeLogEntry(`Drew opening hand (${hand.length})`, 'library'),
+        ...notes.map(n => makeLogEntry(n, 'system')),
+      ],
     };
   }),
 
@@ -333,6 +635,7 @@ export const usePlaytestStore = create<Store>((set, get) => ({
       },
       lastDrawRange: { start: before, end: before + drawn.length },
       lastReturnRange: { start: -1, end: -1 },
+      libraryDrawTick: state.libraryDrawTick + 1,
       log: [...state.log, makeLogEntry(drawn.length === 1 ? `Drew ${drawn[0].name}` : `Drew ${drawn.length} cards`, 'library')],
     };
   }),
@@ -375,6 +678,95 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     };
   }),
 
+  discardHand: () => {
+    const state = get();
+    const n = state.zones.hand.length;
+    if (n === 0) return [];
+    set({
+      history: pushHistory(state.history, snapshotOf(state)),
+      zones: { ...state.zones, hand: [], graveyard: [...state.zones.graveyard, ...state.zones.hand] },
+      graveyardPushTick: state.graveyardPushTick + 1,
+      log: [...state.log, makeLogEntry(`Discarded hand (${n})`, 'move')],
+    });
+    return state.zones.hand.map((_, i) => i);
+  },
+
+  wheel: () => {
+    const state = get();
+    const history = pushHistory(state.history, snapshotOf(state));
+    const discarded = state.zones.hand;
+    const hand = state.zones.library.slice(0, 7);
+    const library = state.zones.library.slice(hand.length);
+    set({
+      history,
+      zones: { ...state.zones, hand, library, graveyard: [...state.zones.graveyard, ...discarded] },
+      graveyardPushTick: discarded.length > 0 ? state.graveyardPushTick + 1 : state.graveyardPushTick,
+      // Deal-in covers the whole new hand, the same as an opening draw.
+      lastDrawRange: { start: 0, end: hand.length },
+      lastReturnRange: { start: -1, end: -1 },
+      libraryDrawTick: state.libraryDrawTick + 1,
+      log: [...state.log, makeLogEntry(`Wheel: discarded ${discarded.length}, drew ${hand.length}`, 'library')],
+    });
+    return discarded.map((_, i) => i);
+  },
+
+  discardAtRandom: (n) => {
+    const state = get();
+    const take = Math.min(n, state.zones.hand.length);
+    if (take <= 0) return [];
+    const history = pushHistory(state.history, snapshotOf(state));
+    // Shuffle the indices rather than the cards, so the survivors keep their
+    // order in hand — a random discard shouldn't quietly reorder your hand.
+    const picked = new Set(fisherYates(state.zones.hand.map((_, i) => i)).slice(0, take));
+    const discarded = state.zones.hand.filter((_, i) => picked.has(i));
+    set({
+      history,
+      zones: {
+        ...state.zones,
+        hand: state.zones.hand.filter((_, i) => !picked.has(i)),
+        graveyard: [...state.zones.graveyard, ...discarded],
+      },
+      graveyardPushTick: state.graveyardPushTick + 1,
+      log: [...state.log, makeLogEntry(
+        `Discarded ${take} at random: ${discarded.map(c => c.name).join(', ')}`, 'move',
+      )],
+    });
+    return [...picked];
+  },
+
+  shuffleHandIntoLibrary: () => set(state => {
+    const n = state.zones.hand.length;
+    if (n === 0) return {};
+    const history = pushHistory(state.history, snapshotOf(state));
+    const shuffled = fisherYates([...state.zones.hand, ...state.zones.library]);
+    return {
+      history,
+      zones: { ...state.zones, hand: shuffled.slice(0, n), library: shuffled.slice(n) },
+      shuffleTick: state.shuffleTick + 1,
+      lastDrawRange: { start: 0, end: n },
+      lastReturnRange: { start: -1, end: -1 },
+      log: [...state.log, makeLogEntry(`Shuffled ${n} back and redrew ${n}`, 'library')],
+    };
+  }),
+
+  discardFromHand: (handIndices) => set(state => {
+    const picked = new Set(handIndices);
+    if (picked.size === 0) return { modal: null };
+    const history = pushHistory(state.history, snapshotOf(state));
+    const discarded = state.zones.hand.filter((_, i) => picked.has(i));
+    return {
+      history,
+      modal: null,
+      zones: {
+        ...state.zones,
+        hand: state.zones.hand.filter((_, i) => !picked.has(i)),
+        graveyard: [...state.zones.graveyard, ...discarded],
+      },
+      graveyardPushTick: state.graveyardPushTick + 1,
+      log: [...state.log, makeLogEntry(`Discarded ${discarded.length} to hand size`, 'move')],
+    };
+  }),
+
   keepHandSendToBottom: (handIndices) => set(state => {
     const indices = new Set(handIndices);
     const sentDown: ScryfallCard[] = [];
@@ -410,11 +802,55 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     log: [...state.log, makeLogEntry(`Life set to ${n}`, 'life')],
   })),
 
-  adjustLife: (delta) => set(state => ({
-    history: pushHistory(state.history, snapshotOf(state)),
-    life: state.life + delta,
-    log: [...state.log, makeLogEntry(`${delta >= 0 ? '+' : ''}${delta} life (now ${state.life + delta})`, 'life')],
-  })),
+  adjustLife: (delta) => {
+    // Pops "−4" off the life counter. Fired here rather than at the call sites so
+    // combat, drain and the toolbar buttons all get it for free.
+    floatDelta(delta, 'player-life');
+    // Same reasoning for the "ouch" glow: every way you can lose life — a bot's
+    // combat damage, a drain, your own Phyrexian mana — funnels through here.
+    if (delta < 0) useDamageFlash.getState().hit(-delta, get().life);
+    set(state => {
+      const life = state.life + delta;
+      // A bot crossing zero has always been announced; yours never was, so a
+      // game could run to −260 with nobody saying anything. Announced on the
+      // crossing only, so nudging the counter afterwards stays quiet.
+      const died = state.life > 0 && life <= 0;
+      return {
+        history: pushHistory(state.history, snapshotOf(state)),
+        life,
+        log: [
+          ...state.log,
+          makeLogEntry(`${delta >= 0 ? '+' : ''}${delta} life (now ${life})`, 'life'),
+          ...(died ? [makeLogEntry('You have been defeated', 'life')] : []),
+        ],
+      };
+    });
+  },
+
+  adjustCommanderTax: (delta) => set(state => {
+    const commanderTax = Math.max(0, state.commanderTax + delta);
+    if (commanderTax === state.commanderTax) return {};
+    return {
+      history: pushHistory(state.history, snapshotOf(state)),
+      commanderTax,
+      log: [...state.log, makeLogEntry(`Commander tax is +${commanderTax}`, 'system')],
+    };
+  }),
+
+  // No history push: this changes what you can see, not what's on the table,
+  // and an undo that flipped the deck back over would look like a bug.
+  toggleLibraryRevealed: () => set(state => {
+    const libraryRevealed = !state.libraryRevealed;
+    return {
+      libraryRevealed,
+      log: [...state.log, makeLogEntry(
+        libraryRevealed
+          ? 'Playing with the top card of your library revealed'
+          : 'The top card of your library is face down again',
+        'system',
+      )],
+    };
+  }),
 
   nextTurn: () => set(state => {
     const history = pushHistory(state.history, snapshotOf(state));
@@ -523,13 +959,14 @@ export const usePlaytestStore = create<Store>((set, get) => ({
       let { x, y } = target;
       if (target.arrived) {
         const { width: cw, height: ch } = CARD_SIZES[usePlaytestSettings.getState().cardSize];
-        const snapped = snapArrival(card, x, y, state.battlefieldRect.height, ch);
+        const rect = canvasRect(state);
+        const snapped = snapArrival(card, x, y, rect.height, ch, state.seatBandHeight);
         const slot = findArrivalSlot(
           next.battlefield,
           snapped.x,
           snapped.y,
-          state.battlefieldRect.width,
-          state.battlefieldRect.height,
+          rect.width,
+          rect.height,
           _isLand(card),
           cw,
           ch,
@@ -557,6 +994,7 @@ export const usePlaytestStore = create<Store>((set, get) => ({
         faceDown: false,
         flipped: false,
         counters,
+        arrivedTurn: state.turn,
       });
       targetLabel = 'battlefield';
     }
@@ -608,7 +1046,21 @@ export const usePlaytestStore = create<Store>((set, get) => ({
 
   // ─────────────────────── battlefield card actions ───────────────────────
 
+  pushCheckpoint: () => set(state => ({
+    history: pushHistory(state.history, snapshotOf(state)),
+  })),
+
+  setTappedQuiet: (instanceIds, tapped) => set(state => {
+    const ids = new Set(instanceIds);
+    return {
+      battlefield: state.battlefield.map(b =>
+        ids.has(b.instanceId) ? { ...b, tapped } : b,
+      ),
+    };
+  }),
+
   toggleTap: (instanceId) => set(state => {
+    playCue('tap');
     const history = pushHistory(state.history, snapshotOf(state));
     const battlefield = state.battlefield.map(b =>
       b.instanceId === instanceId ? { ...b, tapped: !b.tapped } : b
@@ -648,6 +1100,18 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     };
   }),
 
+  // Turning a card over in hand is a look at the card, not a play: it changes
+  // nothing about the game, so it stays out of the history and the log.
+  //
+  // Ids whose card has since left the hand are dropped on the next toggle, so a
+  // card discarded while flipped doesn't come back turned over later.
+  toggleHandFlipped: (cardId) => set(state => {
+    const flipped = state.flippedHandIds.includes(cardId)
+      ? state.flippedHandIds.filter(id => id !== cardId)
+      : [...state.flippedHandIds, cardId];
+    return { flippedHandIds: flipped.filter(id => state.zones.hand.some(c => c.id === id)) };
+  }),
+
   rotateCard: (instanceId, delta) => set(state => {
     // Accumulate without modulo so CSS transition spins the short way the user
     // intended (e.g. 270 → 360 spins clockwise, not 270 → 0 counter-clockwise).
@@ -670,6 +1134,7 @@ export const usePlaytestStore = create<Store>((set, get) => ({
   toggleTapMany: (instanceIds) => set(state => {
     const ids = new Set(instanceIds);
     if (ids.size === 0) return {};
+    playCue('tap');
     const history = pushHistory(state.history, snapshotOf(state));
     return {
       history,
@@ -693,6 +1158,35 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     };
   }),
 
+  emptyZoneInto: (from, to, opts) => set(state => {
+    const moving = state.zones[from];
+    if (moving.length === 0) return {};
+    const history = pushHistory(state.history, snapshotOf(state));
+    const merged = [...state.zones[to], ...moving];
+    const zones = {
+      ...state.zones,
+      [from]: [],
+      [to]: opts?.shuffle ? fisherYates(merged) : merged,
+    };
+    const n = moving.length;
+    return {
+      history,
+      zones,
+      shuffleTick: opts?.shuffle ? state.shuffleTick + 1 : state.shuffleTick,
+      graveyardPushTick: to === 'graveyard' ? state.graveyardPushTick + 1 : state.graveyardPushTick,
+      exilePushTick: to === 'exile' ? state.exilePushTick + 1 : state.exilePushTick,
+      // Cards arriving in hand deal in, the same as a draw would.
+      lastDrawRange: to === 'hand'
+        ? { start: state.zones.hand.length, end: state.zones.hand.length + n }
+        : { start: -1, end: -1 },
+      lastReturnRange: { start: -1, end: -1 },
+      log: [...state.log, makeLogEntry(
+        `${n} card${n === 1 ? '' : 's'}: ${from} → ${to}${opts?.shuffle ? ' (shuffled)' : ''}`,
+        'move',
+      )],
+    };
+  }),
+
   shufflePile: (zone) => set(state => {
     const history = pushHistory(state.history, snapshotOf(state));
     const next = fisherYates(state.zones[zone]);
@@ -703,6 +1197,39 @@ export const usePlaytestStore = create<Store>((set, get) => ({
       log: [...state.log, makeLogEntry(`Shuffled ${zone}`, 'library')],
     };
   }),
+
+  // Pull the top n cards off a pile into your hand — "drawing" from whichever
+  // pile the cursor is on. The library routes through draw() so it keeps the
+  // flight animation and the empty-library message; the other piles take one
+  // history entry for the whole batch, so a mis-typed digit is a single undo.
+  takeFromPile: (zone, n = 1) => {
+    if (zone === 'library') { get().draw(n); return; }
+    set(state => {
+      const pile = state.zones[zone];
+      const taken = pile.slice(0, n);
+      if (taken.length === 0) {
+        return { log: [...state.log, makeLogEntry(`${zone} is empty`, 'move')] };
+      }
+      const history = pushHistory(state.history, snapshotOf(state));
+      const before = state.zones.hand.length;
+      const zones = { ...state.zones, hand: [...state.zones.hand, ...taken] };
+      zones[zone] = pile.slice(taken.length);
+      return {
+        history,
+        zones,
+        // Cards arriving from a face-up pile slide in from the top, same as a
+        // card returned from the battlefield — they were never in the library.
+        lastReturnRange: { start: before, end: before + taken.length },
+        lastDrawRange: { start: -1, end: -1 },
+        log: [...state.log, makeLogEntry(
+          taken.length === 1
+            ? `${taken[0].name}: ${zone} → hand`
+            : `Took ${taken.length} cards: ${zone} → hand`,
+          'move',
+        )],
+      };
+    });
+  },
 
   setCounter: (instanceId, type, value) => set(state => {
     const history = pushHistory(state.history, snapshotOf(state));
@@ -726,15 +1253,104 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     return { history, battlefield };
   }),
 
-  adjustCounter: (instanceId, type, delta) => {
+  setCardEdit: (instanceId, edit) => set(state => {
+    const hit = state.battlefield.find(b => b.instanceId === instanceId);
+    if (!hit) return {};
+    return {
+      history: pushHistory(state.history, snapshotOf(state)),
+      battlefield: state.battlefield.map(b =>
+        b.instanceId === instanceId
+          // Dropped rather than set to undefined, so a cleared edit leaves no
+          // trace in the snapshots the undo stack keeps.
+          ? (edit ? { ...b, edit } : (({ edit: _drop, ...rest }) => rest)(b))
+          : b,
+      ),
+      log: [...state.log, makeLogEntry(describeEdit(hit.card.name, edit), 'counter')],
+    };
+  }),
+
+  adjustCounter: (instanceId, type, delta, anchor) => {
     const card = get().battlefield.find(b => b.instanceId === instanceId);
     if (!card) return;
+    playCounterCue(delta);
+    useFloatingText.getState().float(
+      `${delta > 0 ? '+' : '−'}${Math.abs(delta)} ${type}`,
+      delta > 0 ? 'buff' : 'debuff',
+      anchor ?? instanceId,
+    );
     const current = card.counters[type] ?? 0;
     get().setCounter(instanceId, type, current + delta);
     set(state => ({
       log: [...state.log, makeLogEntry(`${delta >= 0 ? '+' : ''}${delta} ${type} on ${card.card.name}`, 'counter')],
     }));
   },
+
+  // No history push: a drag fires this many times per second and would flood undo.
+  moveCounterBadge: (instanceId, type, x, y) => set(state => ({
+    battlefield: state.battlefield.map(b =>
+      b.instanceId === instanceId
+        ? { ...b, counterPositions: { ...(b.counterPositions ?? {}), [type]: { x, y } } }
+        : b,
+    ),
+  })),
+
+  addSticker: (instanceId, text, position) => set(state => {
+    const trimmed = text.trim();
+    if (!trimmed) return {};
+    const history = pushHistory(state.history, snapshotOf(state));
+    const sticker: CardSticker = {
+      id: makeInstanceId(),
+      text: trimmed,
+      x: position?.x ?? 8,
+      y: position?.y ?? 8,
+    };
+    const card = state.battlefield.find(b => b.instanceId === instanceId);
+    return {
+      history,
+      battlefield: state.battlefield.map(b =>
+        b.instanceId === instanceId ? { ...b, stickers: [...(b.stickers ?? []), sticker] } : b,
+      ),
+      log: [...state.log, makeLogEntry(`Stickered ${card?.card.name ?? 'card'} "${trimmed}"`, 'counter')],
+    };
+  }),
+
+  setStickerText: (instanceId, stickerId, text) => set(state => {
+    const trimmed = text.trim();
+    // An emptied sticker is a deleted sticker — no separate confirm step.
+    if (!trimmed) {
+      return {
+        battlefield: state.battlefield.map(b =>
+          b.instanceId === instanceId
+            ? { ...b, stickers: (b.stickers ?? []).filter(st => st.id !== stickerId) }
+            : b,
+        ),
+      };
+    }
+    return {
+      battlefield: state.battlefield.map(b =>
+        b.instanceId === instanceId
+          ? { ...b, stickers: (b.stickers ?? []).map(st => (st.id === stickerId ? { ...st, text: trimmed } : st)) }
+          : b,
+      ),
+    };
+  }),
+
+  // No history push: a drag fires this many times per second and would flood undo.
+  moveSticker: (instanceId, stickerId, x, y) => set(state => ({
+    battlefield: state.battlefield.map(b =>
+      b.instanceId === instanceId
+        ? { ...b, stickers: (b.stickers ?? []).map(st => (st.id === stickerId ? { ...st, x, y } : st)) }
+        : b,
+    ),
+  })),
+
+  removeSticker: (instanceId, stickerId) => set(state => ({
+    battlefield: state.battlefield.map(b =>
+      b.instanceId === instanceId
+        ? { ...b, stickers: (b.stickers ?? []).filter(st => st.id !== stickerId) }
+        : b,
+    ),
+  })),
 
   copyCard: (instanceId) => set(state => {
     const original = state.battlefield.find(b => b.instanceId === instanceId);
@@ -785,17 +1401,77 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     };
   }),
 
+  // Theft's landing point: put an arbitrary card onto the battlefield without it
+  // having come from one of your zones. Same arrival maths as spawnToken.
+  addToHand: (card, logText) => set(state => {
+    const history = pushHistory(state.history, snapshotOf(state));
+    const before = state.zones.hand.length;
+    return {
+      history,
+      zones: { ...state.zones, hand: [...state.zones.hand, card] },
+      // Same arrival range a draw sets, so the card deals into the fan rather
+      // than appearing in it.
+      lastDrawRange: { start: before, end: before + 1 },
+      lastReturnRange: { start: -1, end: -1 },
+      log: [...state.log, makeLogEntry(logText ?? `${card.name} went to your hand`, 'move')],
+    };
+  }),
+
+  addPermanent: (card, position, logText, arrival) => set(state => {
+    const history = pushHistory(state.history, snapshotOf(state));
+    const rect = canvasRect(state);
+    const cx = position?.x ?? Math.floor(rect.width / 2 - 50);
+    const cy = position?.y ?? Math.floor(rect.height / 2 - 70);
+    const { width: cw, height: ch } = CARD_SIZES[usePlaytestSettings.getState().cardSize];
+    const slot = findArrivalSlot(
+      state.battlefield, cx, cy,
+      rect.width, rect.height,
+      false, cw, ch,
+    );
+    const entry: BattlefieldCard = {
+      instanceId: makeInstanceId(),
+      card,
+      x: slot.x,
+      y: slot.y,
+      tapped: arrival?.tapped ?? false,
+      faceDown: false,
+      flipped: false,
+      counters: { ...(arrival?.counters ?? {}) },
+      arrivedTurn: state.turn,
+      // A stolen Lignified creature is still Lignified — the aura didn't move.
+      ...(arrival?.edit ? { edit: arrival.edit } : {}),
+    };
+    return {
+      history,
+      battlefield: [...state.battlefield, entry],
+      log: [...state.log, makeLogEntry(logText ?? `${card.name} entered the battlefield`, 'move')],
+    };
+  }),
+
+  // The inverse: take a card off the battlefield entirely rather than routing it
+  // to a zone, because its next home is an opponent's board.
+  releasePermanent: (instanceId) => {
+    const entry = get().battlefield.find(b => b.instanceId === instanceId);
+    if (!entry) return null;
+    set(state => ({
+      history: pushHistory(state.history, snapshotOf(state)),
+      battlefield: state.battlefield.filter(b => b.instanceId !== instanceId),
+    }));
+    return entry;
+  },
+
   spawnToken: (card, position) => set(state => {
     const history = pushHistory(state.history, snapshotOf(state));
-    const cx = position?.x ?? Math.floor(state.battlefieldRect.width / 2 - 50);
-    const cy = position?.y ?? Math.floor(state.battlefieldRect.height / 2 - 70);
+    const rect = canvasRect(state);
+    const cx = position?.x ?? Math.floor(rect.width / 2 - 50);
+    const cy = position?.y ?? Math.floor(rect.height / 2 - 70);
     const { width: cw, height: ch } = CARD_SIZES[usePlaytestSettings.getState().cardSize];
     const slot = findArrivalSlot(
       state.battlefield,
       cx,
       cy,
-      state.battlefieldRect.width,
-      state.battlefieldRect.height,
+      rect.width,
+      rect.height,
       false,
       cw,
       ch,
@@ -809,6 +1485,7 @@ export const usePlaytestStore = create<Store>((set, get) => ({
       faceDown: false,
       flipped: false,
       counters: {},
+      arrivedTurn: state.turn,
     };
     return {
       history,
@@ -892,42 +1569,70 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     };
   }),
 
-  undo: () => set(state => {
-    if (state.history.length === 0) return {};
+  undo: () => {
+    const state = get();
+    if (state.history.length === 0) return;
     const prev = state.history[state.history.length - 1];
-    // Walk back through the log and mark the most recent non-undone, non-meta
-    // entry as undone. "Undo" entries themselves are skipped so re-undoing
-    // strikes out a real action each time, not a previous undo line.
-    const log = [...state.log];
-    for (let i = log.length - 1; i >= 0; i--) {
-      const e = log[i];
-      if (e.undone) continue;
-      if (e.text === 'Undo') continue;
-      log[i] = { ...e, undone: true };
-      break;
-    }
-    log.push(makeLogEntry('Undo', 'system'));
-    return {
-      history: state.history.slice(0, -1),
-      zones: prev.zones,
-      battlefield: prev.battlefield,
-      life: prev.life,
-      turn: prev.turn,
-      log,
-    };
-  }),
+
+    // Other stores first: they're independent of the log rewrite below, and
+    // doing them outside the set updater keeps that updater pure.
+    restoreAll(prev.participants);
+
+    set(s => {
+      // Walk back through the log and mark the most recent non-undone, non-meta
+      // entry as undone. "Undo" entries themselves are skipped so re-undoing
+      // strikes out a real action each time, not a previous undo line.
+      const log = [...s.log];
+      for (let i = log.length - 1; i >= 0; i--) {
+        const e = log[i];
+        if (e.undone) continue;
+        if (e.text === 'Undo') continue;
+        log[i] = { ...e, undone: true };
+        break;
+      }
+      log.push(makeLogEntry('Undo', 'system'));
+      return {
+        history: s.history.slice(0, -1),
+        zones: prev.zones,
+        battlefield: prev.battlefield,
+        life: prev.life,
+        turn: prev.turn,
+        commanderTax: prev.commanderTax,
+        log,
+      };
+    });
+  },
 
   openModal: (modal) => set({ modal }),
   closeModal: () => set({ modal: null }),
   setHovered: (id) => set({ hovered: id }),
   setHoveredPile: (zone) => set({ hoveredPile: zone }),
+  setPileDrawPending: (pending) => set({ pileDrawPending: pending }),
+  setHoveredCounter: (id) => set({ hoveredCounter: id }),
+  setHoveredDie: (id) => set({ hoveredDie: id }),
+  setHoveredHandIndex: (index) => set({ hoveredHandIndex: index }),
 
-  appendLog: (text) => set(state => ({ log: [...state.log, makeLogEntry(text)] })),
+  setTrialPins: (trialPins) => set(state => ({
+    trialPins,
+    log: [...state.log, makeLogEntry(
+      trialPins.length === 0
+        ? 'Cleared New Card Trial'
+        : `New Card Trial set for ${trialPins.map(p => p.cardName).join(', ')}`,
+      'system',
+    )],
+  })),
+
+  appendLog: (text, category = 'system', seats) => set(state => ({ log: [...state.log, makeLogEntry(text, category, seats)] })),
   clearLog: () => set({ log: [] }),
+  showToast: (text) => set(state => ({
+    // The tick is what re-triggers the display, so a repeated message still shows.
+    toast: { text, tick: (state.toast?.tick ?? 0) + 1 },
+  })),
 
   addFreeCounter: (color = 'emerald', position) => set(state => {
-    const cx = position ? Math.round(position.x - 22) : Math.floor(state.battlefieldRect.width / 2 - 22);
-    const cy = position ? Math.round(position.y - 22) : Math.floor(state.battlefieldRect.height / 2 - 22);
+    const canvas = canvasRect(state);
+    const cx = position ? Math.round(position.x - 22) : Math.floor(canvas.width / 2 - 22);
+    const cy = position ? Math.round(position.y - 22) : Math.floor(canvas.height / 2 - 22);
     return {
       freeCounters: [
         ...state.freeCounters,
@@ -937,11 +1642,14 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     };
   }),
 
-  adjustFreeCounter: (id, delta) => set(state => ({
-    freeCounters: state.freeCounters.map(c =>
-      c.id === id ? { ...c, value: c.value + delta } : c
-    ),
-  })),
+  adjustFreeCounter: (id, delta) => {
+    playCounterCue(delta);
+    set(state => ({
+      freeCounters: state.freeCounters.map(c =>
+        c.id === id ? { ...c, value: c.value + delta } : c
+      ),
+    }));
+  },
 
   removeFreeCounter: (id) => set(state => ({
     freeCounters: state.freeCounters.filter(c => c.id !== id),
@@ -957,8 +1665,9 @@ export const usePlaytestStore = create<Store>((set, get) => ({
   })),
 
   addFreeDie: (sides, position, color = 'blue') => set(state => {
-    const cx = position?.x ?? Math.floor(state.battlefieldRect.width / 2 - 22);
-    const cy = position?.y ?? Math.floor(state.battlefieldRect.height / 2 - 22);
+    const canvas = canvasRect(state);
+    const cx = position?.x ?? Math.floor(canvas.width / 2 - 22);
+    const cy = position?.y ?? Math.floor(canvas.height / 2 - 22);
     const initial = 1 + Math.floor(Math.random() * sides);
     return {
       freeDice: [
@@ -1000,11 +1709,46 @@ export const usePlaytestStore = create<Store>((set, get) => ({
     freeDice: state.freeDice.map(d => (d.id === id ? { ...d, x, y } : d)),
   })),
 
+  trashLoose: ({ kind, id }) => set(state => {
+    const selected = kind === 'counter' ? state.selectedCounterIds : state.selectedDieIds;
+    // Only sweep the selection up if the thing being dragged is in it — dragging
+    // an unselected counter must not take a stale selection down with it.
+    const doomed = new Set(selected.includes(id) ? selected : [id]);
+    const noun = kind === 'counter' ? 'counter' : 'die';
+    return {
+      history: pushHistory(state.history, snapshotOf(state)),
+      freeCounters: kind === 'counter'
+        ? state.freeCounters.filter(c => !doomed.has(c.id))
+        : state.freeCounters,
+      freeDice: kind === 'die'
+        ? state.freeDice.filter(d => !doomed.has(d.id))
+        : state.freeDice,
+      selectedCounterIds: kind === 'counter'
+        ? state.selectedCounterIds.filter(x => !doomed.has(x))
+        : state.selectedCounterIds,
+      selectedDieIds: kind === 'die'
+        ? state.selectedDieIds.filter(x => !doomed.has(x))
+        : state.selectedDieIds,
+      log: [...state.log, makeLogEntry(
+        doomed.size > 1 ? `Removed ${doomed.size} ${noun}s` : `Removed a ${noun}`,
+        'counter',
+      )],
+    };
+  }),
+
   setSelectedIds: (ids) => set({ selectedIds: ids }),
   setMarqueeSelection: (sel) => set({
     selectedIds: sel.cards,
     selectedCounterIds: sel.counters,
     selectedDieIds: sel.dice,
+  }),
+  // Ctrl/Cmd-click on a single item: add it to — or remove it from — whatever
+  // the marquee already selected, rather than replacing the selection.
+  toggleSelect: (kind, id) => set(state => {
+    const flip = (list: string[]) => (list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
+    if (kind === 'card') return { selectedIds: flip(state.selectedIds) };
+    if (kind === 'counter') return { selectedCounterIds: flip(state.selectedCounterIds) };
+    return { selectedDieIds: flip(state.selectedDieIds) };
   }),
   clearSelection: () => set(state => (
     state.selectedIds.length === 0 && state.selectedCounterIds.length === 0 && state.selectedDieIds.length === 0
@@ -1012,7 +1756,9 @@ export const usePlaytestStore = create<Store>((set, get) => ({
       : { selectedIds: [], selectedCounterIds: [], selectedDieIds: [] }
   )),
 
-  setDragActive: (active) => set({ dragActiveId: active }),
+  // Clearing the active drag also clears stackedDrag: the flag only describes a
+  // drag in progress, and every end-of-drag path already comes through here.
+  setDragActive: (active) => set(active ? { dragActiveId: active } : { dragActiveId: null, stackedDrag: false }),
   setDragDelta: (delta) => set({ dragDelta: delta }),
 
   // Apply (dx, dy) to every selected battlefield card, free counter, and free
@@ -1139,6 +1885,53 @@ export const usePlaytestStore = create<Store>((set, get) => ({
       freeDice: state.freeDice.map(d =>
         moveDice.has(d.id) ? { ...d, x: d.x + dx, y: d.y + dy } : d
       ),
+    };
+  }),
+
+  stackSelection: (anchorInstanceId) => set(state => {
+    const ids = new Set(state.selectedIds);
+    const inPile = state.battlefield.filter(b => ids.has(b.instanceId));
+    if (inPile.length < 2) return {};
+    // Pile order follows the battlefield array, which is paint order — except
+    // the anchor, pulled to the front so the pile only ever grows downwards
+    // from the card in your hand and never off the top edge of the table.
+    const anchor = inPile.find(b => b.instanceId === anchorInstanceId) ?? inPile[0];
+    const order = [anchor, ...inPile.filter(b => b.instanceId !== anchor.instanceId)];
+
+    const { height } = CARD_SIZES[usePlaytestSettings.getState().cardSize];
+    const step = pileStep(height, order.length, state.battlefieldRect.height);
+    const offsets: Record<string, StackFlightOffset> = {};
+    const positioned = order.map((b, i) => {
+      const x = anchor.x;
+      const y = anchor.y + i * step;
+      // Where it was, relative to where it's going — the card renders at this
+      // offset for one frame, then transitions it away. See useStackFlight.
+      offsets[b.instanceId] = { dx: b.x - x, dy: b.y - y };
+      return {
+        ...b,
+        x,
+        y,
+        // A card in a pile isn't strapped to anything, and an attached card
+        // draws at its parent's offset — it would ignore the spot we just
+        // gave it.
+        attachedTo: undefined,
+      };
+    });
+
+    // The pile goes to the end of the array (later = painted on top) so it
+    // reads as one object sitting above the rest of the board, each card
+    // covering all but the title row of the one before it.
+    const rest = state.battlefield.filter(b => !ids.has(b.instanceId));
+    const text = `Stacked ${positioned.length} cards`;
+    return {
+      history: pushHistory(state.history, snapshotOf(state)),
+      battlefield: [...rest, ...positioned],
+      stackFlight: { tick: (state.stackFlight?.tick ?? 0) + 1, offsets },
+      // A drag is holding this pile if one is in progress — the menu path
+      // stacks with nothing in hand, and must not claim otherwise.
+      stackedDrag: state.dragActiveId !== null,
+      toast: { text, tick: (state.toast?.tick ?? 0) + 1 },
+      log: [...state.log, makeLogEntry(text, 'move')],
     };
   }),
 }));

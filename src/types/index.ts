@@ -588,7 +588,7 @@ export type Pacing = 'aggressive-early' | 'fast-tempo' | 'balanced' | 'midrange'
 // Per-role breakdown of how the final target count was derived.
 // Used by the optimizer UI to show an "EDHREC-typical + archetype + pacing" tooltip.
 export interface RoleTargetBreakdown {
-  edhrecCount: number | null;   // null when no EDHREC data was passed in
+  edhrecCount: number | null;   // role's average per-deck count on the EDHREC page; null when no EDHREC data was passed in
   archetypeTarget: number;      // base × archetype multiplier (before blend, before pacing)
   pacingMultiplier: number;     // pacing multiplier applied after the blend
   blended: number;              // final target after blend + pacing + clamp
@@ -807,4 +807,136 @@ export interface SerializedEnrichment {
    *  (typos, renamed cards). Lets a warm load tell "this name doesn't exist" apart
    *  from "this payload is incomplete" — the latter must be rebuilt, not displayed. */
   unresolvedNames?: string[];
+}
+
+// ─── Finisher detection (dev lab) ──────────────────────────────────────────
+
+/** The kinds of "and now I win" a card can be. Each is backed by a Scryfall oracle tag. */
+export type FinisherShape =
+  // otag:overrun — creature count → damage, SPLIT across defenders (whole attackers per kill)
+  | 'alpha-strike'
+  | 'drain-static'   // otag:lifedrain, no X — a board count → life loss, ALL opponents
+  | 'drain-x'        // otag:lifedrain + X in cost — mana → life loss, ALL opponents
+  | 'burn-x'         // otag:burn + X in cost — mana → damage, ONE target
+  | 'alt-win'        // otag:win-condition — binary
+  | 'extra-combat'   // otag:extra-combat — multiplier on the best alpha-strike
+  | 'combo';         // a complete Spellbook combo whose results win on their own
+
+/** How an alpha-strike card pumps the team. */
+export type FinisherPump =
+  | { kind: 'scales-with-bodies' }          // Craterhoof: +X/+X where X is the number of creatures
+  | { kind: 'flat'; amount: number }        // Overrun: +3/+3
+  // +X/+X off something we don't model — Blossoming Bogbeast's "life you gained this turn".
+  | { kind: 'unknown-scaling'; basis: string };
+
+/** One shape a card matched, with everything parsing found out about it. */
+export interface ShapeMatch {
+  shape: FinisherShape;
+  /** Why it matched — the classifier's reason column. */
+  basis: string;
+  /** Number of {X} symbols in the mana cost. X-shapes only. */
+  xCount?: number;
+  /** Non-X mana value: generic + colored pips. X-shapes only. */
+  fixedCost?: number;
+  /** alpha-strike only. */
+  pump?: FinisherPump;
+  /** How this attack gets through blockers. Trample and unblockable are NOT the same thing. */
+  connect?: ConnectMode;
+}
+
+/**
+ * How an attack handles blockers.
+ *
+ * The distinction is load-bearing now that blockers are modelled: an unblockable team ignores them
+ * entirely, a trampling team loses only the blockers' toughness, and an unaided team loses whole
+ * attackers. Collapsing trample and unblockable into one "connects" flag treated Craterhoof as if
+ * nothing could ever stand in front of it.
+ */
+export type ConnectMode = 'trample' | 'unblockable' | 'none';
+
+/** What the deck brings to the table. All computed client-side from card data. */
+export interface DeckFuel {
+  totalCards: number;
+  nonLandCount: number;
+  landCount: number;
+  creatureCount: number;
+  /** Mean printed power over creatures with a numeric power. */
+  avgPower: number;
+  /** Cards whose oracle text creates tokens. Scryfall has no tag for this. */
+  tokenMakers: number;
+  /** Colored pips across NON-LAND PERMANENTS, keyed 'W'|'U'|'B'|'R'|'G'. */
+  devotion: Record<string, number>;
+  /** Lands with the Swamp subtype — for Corrupt-style scaling. */
+  swampCount: number;
+  rampCount: number;
+  /**
+   * Display-only counts, and `null` when their oracle tag wasn't in the vocabulary for this run.
+   * They cost ~72% of a cold tag sweep and feed no score, so they're off by default — but "0
+   * haste granters" and "haste wasn't measured" are different claims and must render differently.
+   */
+  hasteGranters: number | null;
+  trampleGranters: number | null;
+  anthems: number | null;
+  evasionGranters: number | null;
+  /**
+   * Unbounded fuel supplied by a COMPLETE infinite combo in the deck.
+   *
+   * These are why combo detection belongs in the fuel stage rather than as a separate list:
+   * "Infinite death triggers" is the most common result in the Spellbook index and it is exactly
+   * what makes a Blood Artist lethal — the `deaths` scaling variable had a slot and no value until
+   * the combo index could supply one.
+   */
+  infiniteMana: boolean;
+  infiniteTokens: boolean;
+  infiniteDeaths: boolean;
+  /** Supplies the `lifegain-events` scaling variable — Vito and Sanguine Bond run on it. */
+  infiniteLifegain: boolean;
+  /**
+   * Evidence that an alternate win condition's setup actually exists in this deck.
+   *
+   * Alt-wins used to score a flat 1.00 on sight, so a lone Thassa's Oracle in a pile of Islands
+   * read as "wins the game". These are the checks that stop that.
+   */
+  enablers: Record<AltWinEnabler, boolean>;
+}
+
+/**
+ * Deck-level support an alternate win condition needs. `unverifiable` is terminal — a decklist
+ * cannot show whether you can empty your board for Barren Glory.
+ */
+export type AltWinEnabler =
+  | 'self-mill' | 'big-lifegain' | 'treasures' | 'five-colors' | 'gates' | 'unverifiable';
+
+/** How a kill estimate should be read and rendered. */
+export type KillKind =
+  | 'number'    // has a damage figure and a table fraction
+  | 'binary'    // wins outright or does nothing — no meaningful fraction
+  | 'modifier'  // multiplies something else; no fraction of its own
+  | 'unknown';  // shape matched but the scaling variable isn't modelled
+
+export type FinisherTier = 'LIVE' | 'WEAK' | 'DEAD' | 'UNKNOWN';
+
+export interface KillEstimate {
+  cardName: string;
+  shape: FinisherShape;
+  kind: KillKind;
+  /** Damage per target. null for binary/modifier/unknown. */
+  damage: number | null;
+  /** Fraction of the table killed, 0–1. null for modifier/unknown. */
+  tableFraction: number | null;
+  /** Damage discarded by the single-target cap — the overkill column. */
+  overkill: number;
+  /** Human-readable derivation, e.g. "14 bodies × (2 + 14), trample". */
+  workings: string;
+  tier: FinisherTier;
+}
+
+export interface DeckFinisherVerdict {
+  /** Highest single table fraction in the deck. */
+  bestSingle: number;
+  /** Sum across all finishers, capped at 1. */
+  combined: number;
+  /** How many cards clear the live threshold. */
+  density: number;
+  label: string;
 }

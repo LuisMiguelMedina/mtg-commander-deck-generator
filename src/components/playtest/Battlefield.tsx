@@ -5,8 +5,12 @@ import { usePlaytestSettings, CARD_SIZES, resolveBgLayers } from '@/store/playte
 import { BattlefieldCard } from '@/components/playtest/BattlefieldCard';
 import { FreeCounter } from '@/components/playtest/FreeCounter';
 import { FreeDie } from '@/components/playtest/FreeDie';
+import { CounterTrash } from '@/components/playtest/CounterTrash';
 import { BattlefieldContextMenu, type BattlefieldMenuTarget } from '@/components/playtest/BattlefieldContextMenu';
 import { PlaytestPile, PILES } from '@/components/playtest/PlaytestPile';
+import { OpponentSeats } from '@/components/playtest/opponents/OpponentSeats';
+import { DamageFlashLayer } from '@/components/playtest/DamageFlashLayer';
+import { UntapChip, TurnChips } from '@/components/playtest/PlaytestActionsBar';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 export function Battlefield() {
@@ -20,6 +24,12 @@ export function Battlefield() {
   const colorIdentity = usePlaytestStore(s => s.colorIdentity);
   const bgLayers = resolveBgLayers(bg, colorIdentity);
   const dotGrid = usePlaytestSettings(s => s.dotGrid);
+  // Carrying a group means cards travel with the cursor, and the table clips
+  // its children — so a pile dragged towards the hand row lost everything but
+  // the card under the cursor (which is drawn in the drag layer, above the
+  // clip). Stop clipping for the duration of a group drag: the cards ride at
+  // z-10, over the hand row, and you can see what you're putting down.
+  const groupDrag = usePlaytestStore(s => s.dragActiveId !== null && s.selectedIds.length > 1);
   // Tailwind's md breakpoint is 768px. Keep the floating piles to mobile so
   // the desktop hand-row piles don't share dnd-kit IDs with floating ones.
   const isDesktop = useMediaQuery('(min-width: 768px)');
@@ -76,6 +86,9 @@ export function Battlefield() {
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     if (e.target !== e.currentTarget) return; // only on empty battlefield
+    // Ctrl/Cmd held: add to the existing selection instead of replacing it, and
+    // don't wipe it if the click turns out to be a miss on empty space.
+    const additive = e.ctrlKey || e.metaKey;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -102,7 +115,7 @@ export function Battlefield() {
 
       if (!movedFar) {
         // Plain click on empty battlefield → clear selection.
-        clearSelection();
+        if (!additive) clearSelection();
         setMarquee(null);
         return;
       }
@@ -131,7 +144,16 @@ export function Battlefield() {
       for (const fd of diceRef.current) {
         if (l < fd.x + 44 && r > fd.x && t < fd.y + 44 && b > fd.y) dieHits.push(fd.id);
       }
-      setMarqueeSelection({ cards: cardHits, counters: counterHits, dice: dieHits });
+      if (additive) {
+        const prev = usePlaytestStore.getState();
+        setMarqueeSelection({
+          cards:    Array.from(new Set([...prev.selectedIds, ...cardHits])),
+          counters: Array.from(new Set([...prev.selectedCounterIds, ...counterHits])),
+          dice:     Array.from(new Set([...prev.selectedDieIds, ...dieHits])),
+        });
+      } else {
+        setMarqueeSelection({ cards: cardHits, counters: counterHits, dice: dieHits });
+      }
       setMarquee(null);
     };
     containerEl.addEventListener('pointermove', onMove);
@@ -145,7 +167,7 @@ export function Battlefield() {
       data-battlefield
       onContextMenu={onContextMenu}
       onPointerDown={onPointerDown}
-      className="flex-1 relative border-b border-border/50 overflow-hidden"
+      className={`flex-1 relative border-b border-border/50 ${groupDrag ? '' : 'overflow-hidden'}`}
       style={{ background: bgLayers.image ? '#0a0c10' : bgLayers.base }}
     >
       {/* Art background (auto-matched or hand-picked) with a dark scrim so cards
@@ -181,6 +203,19 @@ export function Battlefield() {
       {sorted.map(b => <BattlefieldCard key={b.instanceId} card={b} />)}
       {freeCounters.map(c => <FreeCounter key={c.id} counter={c} />)}
       {freeDice.map(d => <FreeDie key={d.id} die={d} />)}
+      <CounterTrash />
+
+      {/* Opponents sit across the top of the table. Absolutely positioned at
+          z-30: above cards, below the marquee (z-65) and the context menu,
+          which portals. Deliberately an overlay — cards carry absolute x/y, so
+          a canvas that reflowed when a seat expanded would clip the ones near
+          the top. */}
+      <OpponentSeats />
+      <UntapChip />
+      {/* Combat + Next Turn float in the opposite corner to Untap. Desktop
+          only — the top toolbar owns the pair on a phone, and rendering
+          rather than hiding keeps exactly one copy of each mounted. */}
+      {isDesktop && <TurnChips />}
 
       {/* Mobile-only: zones float at the edges of the battlefield. On desktop
           they live in the hand row below. We conditionally RENDER (not just
@@ -199,6 +234,10 @@ export function Battlefield() {
           }}
         />
       )}
+      {/* The damage bloom, clipped to the table. z-45: over the cards and the
+          seats (z-30), under the outcome banner (z-50) — losing the game is
+          not a moment to tint red. */}
+      <DamageFlashLayer />
       <BattlefieldContextMenu target={menu} onClose={() => setMenu(null)} />
     </div>
   );

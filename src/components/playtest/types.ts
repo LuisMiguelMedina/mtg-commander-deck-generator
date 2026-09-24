@@ -2,6 +2,37 @@ import type { ScryfallCard, UserCardList, GeneratedDeck } from '@/types';
 
 export type ZoneKey = 'library' | 'hand' | 'graveyard' | 'exile' | 'command';
 
+/**
+ * A free-text label pinned to a battlefield card — keyword grants ("Flying"),
+ * reminders ("Goaded"), or a P/T override written as "8/8". Coordinates are an
+ * offset from the card's top-left corner in unrotated card space, so a sticker
+ * stays put when the card is tapped or rotated.
+ */
+export interface CardSticker {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+}
+
+/**
+ * A creature's characteristics rewritten in place — Lignify, Frogify, Kenrith's
+ * Transformation. The printed values stay on the card; this is what everything
+ * that asks "what is this creature right now" reads instead.
+ *
+ * Counters and anthems still layer on top, so a Lignified creature that picks up
+ * a +1/+1 counter is a 1/5. Deliberately not tied to the aura that caused it:
+ * you clear the edit yourself, the same way you'd peel off a sticker.
+ */
+export interface CardEdit {
+  power: number;
+  toughness: number;
+  /** Replaces the printed type line for display and for subtype matching. */
+  typeLine?: string;
+  /** Suppresses printed keywords, for combat maths and for the bots' decisions. */
+  loseAbilities?: boolean;
+}
+
 export interface BattlefieldCard {
   instanceId: string;
   card: ScryfallCard;
@@ -14,10 +45,36 @@ export interface BattlefieldCard {
   /** Free rotation in degrees (multiples of 90), independent of `tapped`. */
   rotation?: number;
   counters: Record<string, number>;
+  /**
+   * Where each counter type's badge sits, in unrotated card space. Unset means
+   * "wherever the default centred row puts it" — only written once dragged.
+   */
+  counterPositions?: Record<string, { x: number; y: number }>;
+  /** Optional so the many places that construct a card don't all need updating. */
+  stickers?: CardSticker[];
+  /** Set when this creature has been rewritten — see CardEdit. */
+  edit?: CardEdit;
   attachedTo?: string;
+  /**
+   * The turn this permanent arrived on the battlefield, for the summoning-
+   * sickness nudge when it is declared as an attacker. Optional so the many
+   * places that construct a card need not all set it.
+   */
+  arrivedTurn?: number;
 }
 
-export type LogCategory = 'move' | 'tap' | 'library' | 'counter' | 'life' | 'turn' | 'system';
+/**
+ * A card's height divided by its width. Scryfall's images are 488×680 and a
+ * real card is 88mm × 63mm, which agree to within a pixel.
+ *
+ * Anywhere a card's width is chosen and its height has to be reserved — a
+ * rotated permanent's footprint, a preview box, a size that has to fit inside
+ * something — derive it from this rather than letting the image decide after
+ * layout has already happened.
+ */
+export const CARD_ASPECT = 1.396;
+
+export type LogCategory = 'move' | 'tap' | 'library' | 'counter' | 'life' | 'turn' | 'bot' | 'system';
 
 export const LOG_CATEGORIES: { key: LogCategory; label: string; chip: string }[] = [
   { key: 'move',    label: 'Movement', chip: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/40' },
@@ -26,6 +83,7 @@ export const LOG_CATEGORIES: { key: LogCategory; label: string; chip: string }[]
   { key: 'counter', label: 'Counters', chip: 'bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-400/40' },
   { key: 'life',    label: 'Life',     chip: 'bg-rose-500/15 text-rose-300 border-rose-400/40' },
   { key: 'turn',    label: 'Turn',     chip: 'bg-purple-500/15 text-purple-300 border-purple-400/40' },
+  { key: 'bot',     label: 'Bots',     chip: 'bg-violet-500/15 text-violet-300 border-violet-400/40' },
   { key: 'system',  label: 'System',   chip: 'bg-zinc-500/15 text-zinc-300 border-zinc-400/40' },
 ];
 
@@ -38,6 +96,18 @@ export const COUNTER_COLORS: { key: CounterColor; label: string; chip: string; r
   { key: 'amber',   label: 'Yellow', chip: 'bg-amber-500 text-black',   ring: 'ring-amber-200' },
   { key: 'purple',  label: 'Purple', chip: 'bg-purple-600 text-white',  ring: 'ring-purple-300' },
   { key: 'zinc',    label: 'Gray',   chip: 'bg-zinc-600 text-white',    ring: 'ring-zinc-300' },
+];
+
+/**
+ * Counters that live ON a card, as opposed to the free counters that sit loose
+ * on the table. Their look comes from `CardCounterChip` in CardOverlays, so a
+ * tile in the Create dialog matches the badge it will produce.
+ */
+export const CARD_COUNTER_TYPES: { key: string; label: string }[] = [
+  { key: '+1/+1',   label: '+1/+1' },
+  { key: '-1/-1',   label: '−1/−1' },
+  { key: 'charge',  label: 'Charge' },
+  { key: 'loyalty', label: 'Loyalty' },
 ];
 
 export interface FreeCounter {
@@ -65,6 +135,15 @@ export interface LogEntry {
   ts: number;
   text: string;
   category: LogCategory;
+  /**
+   * Which opponent seats this entry is about, by seat id. Empty or absent means
+   * the entry belongs to you or to the table as a whole — your own moves, turn
+   * markers, system notices.
+   *
+   * A line can name two seats: one bot swinging at another is news to both, and
+   * filtering the log down to either of them has to keep it.
+   */
+  seats?: string[];
   /** Marked true when undo() reverses the action that produced this entry. */
   undone?: boolean;
 }
@@ -82,6 +161,25 @@ export interface PlaytestSnapshot {
   battlefield: BattlefieldCard[];
   life: number;
   turn: number;
+  commanderTax: number;
+  /**
+   * Snapshots from stores registered with the undo bridge — currently the
+   * opponents' boards and any open combat. Opaque here on purpose: this module
+   * shouldn't know what else is in the game.
+   */
+  participants: unknown[];
+}
+
+/**
+ * A New Card Trial rule: force `cardName` into the opening hand, or into the top
+ * `topN` cards of the library, every time the deck is dealt. Persists across
+ * resets so "reset and look again" is a one-click loop.
+ */
+export interface TrialPin {
+  cardName: string;
+  where: 'hand' | 'top';
+  /** Only meaningful when `where` is 'top'. */
+  topN: number;
 }
 
 export type SourceInput =
@@ -111,7 +209,17 @@ export type Modal =
   | { kind: 'zoneViewer'; zone: Exclude<ZoneKey, 'hand'> }
   | { kind: 'tokens' }
   | { kind: 'create' }
-  | { kind: 'mulligan'; mulliganCount: number };
+  | { kind: 'newCardTrial' }
+  | { kind: 'opponents' }
+  | { kind: 'opponentZone'; opponentId: string; zone: 'graveyard' | 'exile' | 'hand' | 'library' }
+  | { kind: 'mulligan'; mulliganCount: number }
+  | { kind: 'handDiscard'; down_to: number }
+  | { kind: 'editCreature'; target: EditTarget };
+
+/** Which creature the edit dialog is pointed at — yours, or one of the bots'. */
+export type EditTarget =
+  | { side: 'player'; instanceId: string }
+  | { side: 'opponent'; opponentId: string; instanceId: string };
 
 export type MoveSource =
   | { kind: 'zone'; zone: ZoneKey; index: number }
@@ -126,3 +234,7 @@ export interface MoveArgs {
   source: MoveSource;
   target: MoveTarget;
 }
+
+/** How the hand fan is ordered. The control lives in two places — a select
+ *  on desktop, the phone's Actions menu — so the type is shared. */
+export type SortMode = 'none' | 'cmc' | 'type';

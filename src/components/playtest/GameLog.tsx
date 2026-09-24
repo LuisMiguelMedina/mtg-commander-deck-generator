@@ -1,51 +1,80 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, ChevronLeft, ListFilter, Trash2, Sparkles, Crown, X } from 'lucide-react';
+import { ChevronRight, ListFilter, Trash2, Sparkles, Crown, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePlaytestStore } from '@/store/playtestStore';
+import { useOpponentStore } from '@/store/opponentStore';
 import { usePlaytestSettings } from '@/store/playtestSettingsStore';
 import { LOG_CATEGORIES, type LogCategory } from '@/components/playtest/types';
+import { LogCardText, useCardIndex, type CardIndex } from '@/components/playtest/LogCardText';
 import type { DetectedCombo, ScryfallCard } from '@/types';
 
 type Tab = 'log' | 'combos';
 
-export function GameLog() {
+/**
+ * The seat chip standing for everything that isn't a bot — your own moves, turn
+ * markers, system notices. Those entries carry no `seats`, so they need a key of
+ * their own to be switched off by.
+ */
+const YOU = 'you';
+
+/**
+ * The log/combos half of the side panel. It no longer owns the strip: SidePanel
+ * does, because the strip now holds the stack underneath as well and folding
+ * away one half of it made no sense.
+ */
+export function GameLog({ onCollapse }: { onCollapse?: () => void }) {
   const log = usePlaytestStore(s => s.log);
   const clearLog = usePlaytestStore(s => s.clearLog);
   const combos = usePlaytestStore(s => s.combos);
   const enabled = usePlaytestSettings(s => s.logFilter);
   const setLogFilter = usePlaytestSettings(s => s.setLogFilter);
   const toggleLogCategory = usePlaytestSettings(s => s.toggleLogCategory);
-  const [open, setOpen] = useState(true);
+  const cardIndex = useCardIndex();
+  const opponents = useOpponentStore(s => s.opponents);
   const [tab, setTab] = useState<Tab>('log');
   const [showFilters, setShowFilters] = useState(false);
+  // Seats are per-game ids, so which ones you've muted is not worth persisting
+  // alongside the category filter — it would name seats that no longer exist.
+  const [hiddenSeats, setHiddenSeats] = useState<Set<string>>(() => new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const filtered = useMemo(() => log.filter(e => enabled[e.category]), [log, enabled]);
-  const allEnabled = useMemo(() => (Object.values(enabled) as boolean[]).every(Boolean), [enabled]);
+  // A seat that has left the table takes its mute with it: otherwise its
+  // parting line stays hidden behind a chip that is no longer there to unhide.
+  const hidden = useMemo(() => {
+    const live = new Set(opponents.map(o => o.id));
+    return new Set([...hiddenSeats].filter(id => id === YOU || live.has(id)));
+  }, [hiddenSeats, opponents]);
+
+  const filtered = useMemo(() => log.filter(e => {
+    if (!enabled[e.category]) return false;
+    // A line can name two seats — one bot attacking another — and stays as long
+    // as either of them is showing.
+    return e.seats?.length ? e.seats.some(id => !hidden.has(id)) : !hidden.has(YOU);
+  }), [log, enabled, hidden]);
+  const allEnabled = useMemo(
+    () => (Object.values(enabled) as boolean[]).every(Boolean) && hidden.size === 0,
+    [enabled, hidden],
+  );
 
   useEffect(() => {
     if (tab !== 'log') return;
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [tab, filtered.length]);
 
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="w-6 border-l border-border/50 bg-card/30 hover:bg-card/60 flex items-center justify-center"
-        title="Open side panel"
-      >
-        <ChevronLeft className="w-3.5 h-3.5" />
-      </button>
-    );
-  }
-
   const toggle = (key: LogCategory) => toggleLogCategory(key);
-  const setAll = (v: boolean) =>
-    setLogFilter({ move: v, tap: v, library: v, counter: v, life: v, turn: v, system: v });
+  const toggleSeat = (key: string) => setHiddenSeats(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
+  });
+  const setAll = (v: boolean) => {
+    setLogFilter({ move: v, tap: v, library: v, counter: v, life: v, turn: v, bot: v, system: v });
+    setHiddenSeats(v ? new Set() : new Set([YOU, ...opponents.map(o => o.id)]));
+  };
 
   return (
-    <aside className="w-56 border-l border-border/50 bg-card md:bg-card/30 flex flex-col">
+    <div className="flex-1 min-h-0 flex flex-col">
       {/* Tab strip */}
       <div className="flex items-stretch border-b border-border/50 text-[11px]">
         <TabButton active={tab === 'log'} onClick={() => setTab('log')}>
@@ -57,15 +86,17 @@ export function GameLog() {
             return `Combos${completeCount > 0 ? ` · ${completeCount}` : ''}`;
           })()}
         </TabButton>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 shrink-0 ml-auto self-center mr-0.5"
-          title="Collapse panel"
-          onClick={() => setOpen(false)}
-        >
-          <ChevronRight className="w-3.5 h-3.5" />
-        </Button>
+        {onCollapse && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0 ml-auto self-center mr-0.5"
+            title="Collapse panel"
+            onClick={onCollapse}
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+          </Button>
+        )}
       </div>
 
       {/* Per-tab toolbar */}
@@ -112,6 +143,28 @@ export function GameLog() {
               );
             })}
           </div>
+          {opponents.length > 0 && (
+            <div className="space-y-1 pt-1 border-t border-border/30">
+              <div className="text-[9px] uppercase tracking-wide text-muted-foreground/70">Seats</div>
+              <div className="flex flex-wrap gap-1">
+                <SeatChip
+                  label="You"
+                  on={!hidden.has(YOU)}
+                  chip="bg-sky-500/15 text-sky-300 border-sky-400/40"
+                  onClick={() => toggleSeat(YOU)}
+                />
+                {opponents.map(o => (
+                  <SeatChip
+                    key={o.id}
+                    label={o.name}
+                    on={!hidden.has(o.id)}
+                    chip="bg-violet-500/15 text-violet-300 border-violet-400/40"
+                    onClick={() => toggleSeat(o.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex gap-2 text-[10px]">
             <button onClick={() => setAll(true)} className="text-muted-foreground hover:text-foreground underline-offset-2 hover:underline">All</button>
             <span className="text-muted-foreground/50">·</span>
@@ -121,20 +174,48 @@ export function GameLog() {
       )}
 
       {/* Tab body */}
+      {/* The log is the one part of the playtest surface that reads as text you
+          might want to take away with you, so it opts out of the board's
+          `select-none`. */}
       {tab === 'log' && (
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-1 text-[11px] leading-snug">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-1 text-[11px] leading-snug select-text">
           {log.length === 0 ? (
             <div className="text-muted-foreground italic">Nothing yet.</div>
           ) : filtered.length === 0 ? (
             <div className="text-muted-foreground italic">No entries match the filters.</div>
           ) : (
-            filtered.map(e => <LogLine key={e.id} text={e.text} category={e.category} undone={e.undone} />)
+            filtered.map(e => (
+              <LogLine key={e.id} text={e.text} category={e.category} undone={e.undone} cardIndex={cardIndex} />
+            ))
           )}
         </div>
       )}
 
       {tab === 'combos' && <CombosPanel combos={combos} />}
-    </aside>
+    </div>
+  );
+}
+
+/**
+ * One seat's toggle. Same shape as the category chips above it, so the two rows
+ * read as one filter rather than as two unrelated controls.
+ */
+function SeatChip({ label, on, chip, onClick }: {
+  label: string;
+  on: boolean;
+  chip: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`text-[10px] px-1.5 py-0.5 rounded border transition-all max-w-[11rem] truncate ${
+        on ? chip : 'bg-transparent text-muted-foreground border-border/40 opacity-60 hover:opacity-100'
+      }`}
+      title={`${on ? 'Hide' : 'Show'} ${label}`}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -153,7 +234,12 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   );
 }
 
-function LogLine({ text, category, undone }: { text: string; category: LogCategory; undone?: boolean }) {
+function LogLine({ text, category, undone, cardIndex }: {
+  text: string;
+  category: LogCategory;
+  undone?: boolean;
+  cardIndex: CardIndex;
+}) {
   const cat = LOG_CATEGORIES.find(c => c.key === category);
   return (
     <div className={`flex gap-1.5 ${undone ? 'text-muted-foreground/40 line-through' : 'text-muted-foreground/90'}`}>
@@ -161,7 +247,14 @@ function LogLine({ text, category, undone }: { text: string; category: LogCatego
         className={`shrink-0 w-1 self-stretch rounded-full ${cat?.chip.split(' ').find(c => c.startsWith('bg-')) ?? 'bg-zinc-500/40'} ${undone ? 'opacity-40' : ''}`}
         aria-hidden
       />
-      <span className="flex-1">{text}</span>
+      <span className="flex-1">
+        <LogCardText
+          text={text}
+          index={cardIndex}
+          scope={category === 'bot' ? 'opponent' : 'own'}
+          dim={undone}
+        />
+      </span>
     </div>
   );
 }

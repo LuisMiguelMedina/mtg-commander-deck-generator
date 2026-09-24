@@ -14,6 +14,8 @@ export function FreeDie({ die }: Props) {
   const setFreeDieValue = usePlaytestStore(s => s.setFreeDieValue);
   const setFreeDieColor = usePlaytestStore(s => s.setFreeDieColor);
   const removeFreeDie = usePlaytestStore(s => s.removeFreeDie);
+  const setHoveredDie = usePlaytestStore(s => s.setHoveredDie);
+  const toggleSelect = usePlaytestStore(s => s.toggleSelect);
   const selected = usePlaytestStore(s => s.selectedDieIds.includes(die.id));
   const followDelta = usePlaytestStore(s => {
     const aid = s.dragActiveId;
@@ -64,6 +66,10 @@ export function FreeDie({ die }: Props) {
         onClick={(e) => {
           e.stopPropagation();
           if (dragMovedRef.current) return;
+          if (e.ctrlKey || e.metaKey) {
+            toggleSelect('die', die.id);
+            return;
+          }
           if (e.shiftKey) {
             setMenu({ x: e.clientX, y: e.clientY });
             return;
@@ -76,7 +82,9 @@ export function FreeDie({ die }: Props) {
           e.stopPropagation();
           setMenu({ x: e.clientX, y: e.clientY });
         }}
-        title={`d${die.sides} = ${die.value} · click to roll · right-click / shift-click for options`}
+        onMouseEnter={() => setHoveredDie(die.id)}
+        onMouseLeave={() => setHoveredDie(null)}
+        title={`d${die.sides} = ${die.value} · click to roll · right-click / shift-click for options · ctrl-click to select · Del to remove`}
         className={`absolute select-none touch-none flex flex-col items-center justify-center rounded-md font-bold shadow-lg ring-2 ${colorCfg.chip} ${colorCfg.ring} ${selected ? 'outline outline-2 outline-offset-2 outline-primary' : ''} ${rolling ? 'animate-jiggle' : ''}`}
         style={{
           left: die.x,
@@ -159,7 +167,7 @@ function DieContextMenu({
     <div
       ref={ref}
       onMouseDown={(e) => e.stopPropagation()}
-      className="fixed z-[200] w-[200px] bg-popover border border-border rounded-md shadow-2xl text-xs py-2"
+      className="fixed z-[210] w-[200px] bg-popover border border-border rounded-md shadow-2xl text-xs py-2"
       style={{
         left: pos ? pos.left : x,
         top: pos ? pos.top : y,

@@ -29,6 +29,13 @@
     /* Success color */
     --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
+
+    /* The bill line: one blade angle (~18°) shared by everything that cuts a
+       card in two — the brew Headliner striking a card off the lineup, and a
+       playtest permanent dying. Two cards sliced by different geometry would
+       read as two unrelated effects. */
+    --card-cut-top: polygon(0 0, 100% 0, 100% 38%, 0 62%);
+    --card-cut-bottom: polygon(0 62%, 100% 38%, 100% 100%, 0 100%);
   }
 
   * {
@@ -160,6 +167,25 @@
 }
 
 @layer utilities {
+  /* ---- Playtest: buttons never start a text selection ---- */
+
+  /*
+   * The playtest page root carries `select-none`, which covers the board and
+   * its chrome. This covers the rest: half the playtest's buttons live in
+   * portals — the card context menus, the settings modal, the zone viewers,
+   * the mulligan and scry dialogs — which attach to <body> and so sit outside
+   * that root entirely.
+   *
+   * Keyed on a body attribute the page sets while it is mounted, so it stops
+   * applying the moment you leave. Buttons only, deliberately: the same
+   * portals hold search and name inputs, and `user-select: none` inherits
+   * into an input and takes drag-to-select inside it with it.
+   */
+  body[data-playtest] button,
+  body[data-playtest] [role='button'] {
+    user-select: none;
+  }
+
   /* Explicit spin animation for loaders */
   /* Colored slider for Advanced Targets */
   .slider-colored {
@@ -472,6 +498,20 @@
     100% { opacity: 1; transform: translateY(0) rotate(0) scale(1); }
   }
 
+  /* Deal out: the reverse of dealIn, played on the library pile when a card is
+     drawn off the top. Deliberately quicker than the hand card's deal-in — the
+     card should snap off the deck and hand the motion over, not crawl. Keep
+     DEAL_OUT_MS in PlaytestPile in step with this duration. */
+  .animate-deal-out {
+    animation: dealOut 200ms cubic-bezier(0.4, 0, 0.7, 0.2) forwards;
+  }
+
+  @keyframes dealOut {
+    0%   { opacity: 1; transform: translateY(0) rotate(0) scale(1); }
+    45%  { opacity: 1; }
+    100% { opacity: 0; transform: translateY(110px) rotate(-6deg) scale(0.9); }
+  }
+
   .animate-deal-in-from-top {
     animation: dealInFromTop 380ms cubic-bezier(0.22, 0.9, 0.32, 1) backwards;
   }
@@ -480,6 +520,61 @@
     0%   { opacity: 0; transform: translateY(-110px) rotate(6deg) scale(0.9); }
     60%  { opacity: 1; }
     100% { opacity: 1; transform: translateY(0) rotate(0) scale(1); }
+  }
+
+  /* ---- Incoming combat ---- */
+
+  /* The attack zone arriving. It grows downward out of the hairline it used to
+     be, so the red band is something that OPENED between you rather than
+     something that was always there and you only just noticed. */
+  .animate-combat-open {
+    animation: combatOpen 240ms cubic-bezier(0.22, 0.9, 0.32, 1);
+    transform-origin: top center;
+  }
+
+  @keyframes combatOpen {
+    0%   { opacity: 0; transform: scaleY(0.25) translateY(-6px); }
+    100% { opacity: 1; transform: scaleY(1) translateY(0); }
+  }
+
+  /* A slow breath, for the one seat that is asking you a question.
+     Always applied to a ring LAYER, never to the element carrying the label:
+     pulsing a number's own opacity is how you make a number hard to read. */
+  .animate-threat-ring {
+    animation: threatRing 1.7s ease-in-out infinite;
+  }
+
+  @keyframes threatRing {
+    0%, 100% { opacity: 0.35; box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.0); }
+    50%      { opacity: 1;    box-shadow: 0 0 20px 3px rgba(244, 63, 94, 0.45); }
+  }
+
+  /* A seat arriving at the table. The playmat springs out from nothing with a
+     little overshoot, then sits there loading while its deck is fetched — so
+     the click lands on something immediately instead of on a two-second pause
+     with no feedback. Origin is the top edge, which is where the seat row is
+     pinned, so it grows DOWN onto the table rather than out of its own middle. */
+  .animate-seat-deal-in {
+    animation: seatDealIn 420ms cubic-bezier(0.34, 1.45, 0.5, 1) both;
+    transform-origin: top center;
+  }
+
+  @keyframes seatDealIn {
+    0%   { opacity: 0; transform: scale(0.55) translateY(-14px); }
+    62%  { opacity: 1; transform: scale(1.035) translateY(0); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  /* The skeleton rows inside a dealing seat: a slow band of light travelling
+     down the empty slots, so the wait reads as cards on the way rather than as
+     a seat that arrived broken. */
+  .animate-seat-dealing {
+    animation: seatDealing 1.25s ease-in-out infinite;
+  }
+
+  @keyframes seatDealing {
+    0%, 100% { opacity: 0.5; }
+    50%      { opacity: 0.95; }
   }
 
   /* Battlefield card flip: brief 3D rotate so a face-down/face-up
@@ -574,12 +669,12 @@
   }
   .brew-cut-piece > img { display: block; width: 100%; height: auto; }
   .brew-cut-top {
-    clip-path: polygon(0 0, 100% 0, 100% 38%, 0 62%);
+    clip-path: var(--card-cut-top);
     transform: translate(-4px, -7px) rotate(-1.1deg);
     filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.6));
   }
   .brew-cut-bottom {
-    clip-path: polygon(0 62%, 100% 38%, 100% 100%, 0 100%);
+    clip-path: var(--card-cut-bottom);
     transform: translate(4px, 7px) rotate(1.1deg);
     filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.5));
   }
@@ -594,6 +689,76 @@
   @keyframes brewSliceBottom {
     0%   { transform: translate(0, 0) rotate(0deg); }
     100% { transform: translate(4px, 7px) rotate(1.1deg); }
+  }
+
+  /* ---- Playtest death slash: a permanent that gets killed — blocked, blocking,
+     or pointed at by a bot's removal — is cut along the same bill line the brew
+     Headliner uses, then the halves flash white, kick apart and drop away as the
+     card lands in the graveyard. Drawn by CardSlashLayer over the board at the
+     card's measured box, so the permanent can leave the battlefield the instant
+     it dies and the slash plays over the gap. --slash-delay staggers a sweeper
+     so a board wipe reads as a run of kills rather than one indistinct mess. ---- */
+  .pt-slash { will-change: transform; }
+  .pt-slash-piece {
+    position: absolute; inset: 0;
+    border-radius: 4.8%;
+    overflow: hidden;
+    animation-duration: 620ms;
+    animation-delay: var(--slash-delay, 0ms);
+    animation-timing-function: cubic-bezier(0.18, 0.72, 0.3, 1);
+    animation-fill-mode: both;
+    will-change: transform, opacity;
+  }
+  .pt-slash-piece > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .pt-slash-top    { clip-path: var(--card-cut-top);    animation-name: ptSlashTop; }
+  /* The bottom half is the heavier one: it falls further and faster, which is
+     what keeps the two halves from reading as a symmetrical opening flower. */
+  .pt-slash-bottom { clip-path: var(--card-cut-bottom); animation-name: ptSlashBottom; }
+
+  /* The blade: a hot line straight down the cut, there and gone before the
+     halves have finished parting. The rotation matches the bill line's ~18°
+     (the clip path drops 24% of a card's height across its width). */
+  .pt-slash-streak {
+    position: absolute; left: -14%; right: -14%; top: 50%;
+    height: 3px; margin-top: -1.5px;
+    border-radius: 999px;
+    transform: rotate(-18.5deg) scaleX(0);
+    transform-origin: left center;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2) 10%, #fff 50%, rgba(255,255,255,0.2) 90%, transparent);
+    box-shadow: 0 0 10px 2px rgba(255, 255, 255, 0.75), 0 0 24px 6px rgba(244, 63, 94, 0.5);
+    opacity: 0;
+    animation: ptSlashStreak 300ms ease-out var(--slash-delay, 0ms) both;
+  }
+  @keyframes ptSlashStreak {
+    0%   { transform: rotate(-18.5deg) scaleX(0); opacity: 0; }
+    15%  { opacity: 1; }
+    45%  { transform: rotate(-18.5deg) scaleX(1); opacity: 1; }
+    100% { transform: rotate(-18.5deg) scaleX(1); opacity: 0; }
+  }
+  /* The drop-shadow is repeated in every keyframe because a filter list is
+     replaced wholesale, not merged — dropping it for the brightness flash would
+     make the pieces lose their depth for exactly the frames that matter. */
+  @keyframes ptSlashTop {
+    0%   { transform: translate(0, 0) rotate(0deg); opacity: 1;
+           filter: drop-shadow(0 4px 6px rgba(0,0,0,0.65)); }
+    20%  { transform: translate(0, 0) rotate(0deg); opacity: 1;
+           filter: drop-shadow(0 4px 6px rgba(0,0,0,0.65)) brightness(2.3); }
+    34%  { filter: drop-shadow(0 4px 6px rgba(0,0,0,0.65)) brightness(1); }
+    100% { transform: translate(-13%, -34%) rotate(-11deg); opacity: 0;
+           filter: drop-shadow(0 4px 6px rgba(0,0,0,0.65)); }
+  }
+  @keyframes ptSlashBottom {
+    0%   { transform: translate(0, 0) rotate(0deg); opacity: 1;
+           filter: drop-shadow(0 3px 7px rgba(0,0,0,0.6)); }
+    20%  { transform: translate(0, 0) rotate(0deg); opacity: 1;
+           filter: drop-shadow(0 3px 7px rgba(0,0,0,0.6)) brightness(2.3); }
+    34%  { filter: drop-shadow(0 3px 7px rgba(0,0,0,0.6)) brightness(1); }
+    100% { transform: translate(11%, 40%) rotate(9deg); opacity: 0;
+           filter: drop-shadow(0 3px 7px rgba(0,0,0,0.6)); }
+  }
+  /* No slash at all rather than a motionless pair of halves sitting on the board. */
+  @media (prefers-reduced-motion: reduce) {
+    .pt-slash { display: none; }
   }
 
   /* Combo Fragment entrance: a few gold treasure glints surface from behind the sigil and rise
@@ -1259,4 +1424,117 @@
   25%      { transform: translate(-32px, -14px) rotate(-12deg); }
   50%      { transform: translate(0, 0) rotate(0deg); }
   75%      { transform: translate(32px, -14px) rotate(12deg); }
+}
+
+/* dnd-kit puts role="button" tabindex="0" on every draggable, so pressing a card
+   focuses it and the browser paints a focus ring. That ring is drawn on the
+   OUTER upright box while the visible card is a rotated child, so on a tapped
+   card it never lines up — and because `outline: auto` follows ink overflow it
+   traced both boxes at once, reading as stray brackets around the card.
+
+   Both :focus and :focus-visible are suppressed on purpose: Chrome matches
+   :focus-visible on mouse-press for role="button", so a keyboard-only rule here
+   still fires on every click. There is no CSS-only way to split the two for
+   these elements. Keyboard dragging still works — the KeyboardSensor picks up
+   space/arrows once a card is focused — but the focused card is not outlined.
+   If that indicator is ever wanted back, put it on the inner rotated child so
+   it hugs the card instead of the upright bounding box. */
+[aria-roledescription='draggable']:focus,
+[aria-roledescription='draggable']:focus-visible {
+  outline: none;
+}
+
+/* Floating combat text — numbers and words popping off cards as things happen.
+   Duration must stay in step with FLOAT_MS in floatingTextStore.ts, which is
+   what actually removes the element. */
+.animate-float-up {
+  animation: floatUp 900ms cubic-bezier(0.16, 0.84, 0.44, 1) forwards;
+}
+
+@keyframes floatUp {
+  0%   { opacity: 0; transform: translate(-50%, 4px) scale(0.75); }
+  18%  { opacity: 1; transform: translate(-50%, -6px) scale(1.12); }
+  32%  { transform: translate(-50%, -10px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -38px) scale(0.95); }
+}
+
+/* "Ouch" — the red bloom at the screen edges when your life total drops. Peak opacity
+   comes from --flash-op, set per hit by DamageFlashLayer; duration must stay in step
+   with DAMAGE_FLASH_MS in damageFlashStore.ts, which is what unmounts the layer. */
+.animate-damage-flash {
+  animation: damageFlash 850ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  will-change: opacity, transform;
+}
+
+@keyframes damageFlash {
+  0%   { opacity: 0; transform: scaleX(0.7); }
+  14%  { opacity: var(--flash-op, 1); transform: scaleX(1); }
+  45%  { opacity: calc(var(--flash-op, 1) * 0.72); transform: scaleX(1); }
+  100% { opacity: 0; transform: scaleX(0.9); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The seat still has to appear — it is the feedback for the click — but it
+     fades in place instead of springing. */
+  .animate-seat-deal-in {
+    animation: fadeIn 160ms ease-out both;
+  }
+  .animate-seat-dealing {
+    animation: none;
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-damage-flash {
+    animation: damageFlashFade 850ms ease-out forwards;
+  }
+  @keyframes damageFlashFade {
+    0%   { opacity: 0; }
+    14%  { opacity: var(--flash-op, 1); }
+    100% { opacity: 0; }
+  }
+}
+
+/* The life counter flinches along with that bloom: a short shake while the pill and
+   its heart go red. Only the transform is a keyframe — the pill keeps its
+   `transition-colors`, so the fade back to green (or amber, or red at low life)
+   needs no end state here and works from whatever palette the total is in.
+
+   Two identical animations because re-applying the same animation-name does not
+   restart a running animation: consecutive hits — three bots swinging, a drain
+   during combat — alternate names so each one re-shakes. */
+.animate-life-hit,
+.animate-life-hit-alt {
+  animation-duration: 620ms;
+  animation-timing-function: ease-in-out;
+  will-change: transform;
+}
+.animate-life-hit     { animation-name: lifeHitShake; }
+.animate-life-hit-alt { animation-name: lifeHitShakeAlt; }
+
+@keyframes lifeHitShake {
+  0%   { transform: translateX(0) scale(1); }
+  14%  { transform: translateX(-3px) scale(1.09); }
+  32%  { transform: translateX(3px) scale(1.06); }
+  52%  { transform: translateX(-2px) scale(1.03); }
+  72%  { transform: translateX(2px) scale(1.01); }
+  100% { transform: translateX(0) scale(1); }
+}
+
+@keyframes lifeHitShakeAlt {
+  0%   { transform: translateX(0) scale(1); }
+  14%  { transform: translateX(-3px) scale(1.09); }
+  32%  { transform: translateX(3px) scale(1.06); }
+  52%  { transform: translateX(-2px) scale(1.03); }
+  72%  { transform: translateX(2px) scale(1.01); }
+  100% { transform: translateX(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The red is the message; the shake is the garnish. Drop the garnish. */
+  .animate-life-hit,
+  .animate-life-hit-alt {
+    animation: none;
+  }
 }
