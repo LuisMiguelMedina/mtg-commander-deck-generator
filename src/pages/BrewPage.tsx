@@ -129,19 +129,22 @@ export function BrewPage() {
         if (!card) { navigate('/'); return; }
         if (cancelled) return;
         setCommander(card);
+        const formatMode = customization.formatMode ?? 'commander';
         // setThemesLoading must come AFTER setCommander — setCommander resets themesLoading to false.
         setThemesLoading(true);
-        const bracketLevel = customization.bracketLevel !== 'all' ? customization.bracketLevel : undefined;
-        const data = await fetchCommanderData(card.name, undefined, bracketLevel);
-        if (cancelled) return;
-        setEdhrecStats(data.stats);
-        if (data.themes.length > 0) {
-          setEdhrecThemes(data.themes);
-          const results: ThemeResult[] = data.themes.map((t, i) => ({
-            name: t.name, source: 'edhrec' as const, slug: t.slug,
-            deckCount: t.count, popularityPercent: t.popularityPercent, isSelected: i < 2,
-          }));
-          setSelectedThemes(results);
+        if (formatMode === 'commander') {
+          const bracketLevel = customization.bracketLevel !== 'all' ? customization.bracketLevel : undefined;
+          const data = await fetchCommanderData(card.name, undefined, bracketLevel);
+          if (cancelled) return;
+          setEdhrecStats(data.stats);
+          if (data.themes.length > 0) {
+            setEdhrecThemes(data.themes);
+            const results: ThemeResult[] = data.themes.map((t, i) => ({
+              name: t.name, source: 'edhrec' as const, slug: t.slug,
+              deckCount: t.count, popularityPercent: t.popularityPercent, isSelected: i < 2,
+            }));
+            setSelectedThemes(results);
+          }
         }
       } catch (e) {
         console.error(e); if (!cancelled) setError('Could not load commander');

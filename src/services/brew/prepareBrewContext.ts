@@ -10,6 +10,8 @@ import { computeThemeCharTags, classifyTheme, type ThemeKind } from '@/services/
 import { payoffRank } from './combos';
 import { bannedNameSet } from './banned';
 import type { BrewContext, BrewCandidate } from './brewTypes';
+import { resolveBrewFormatPlan } from '@/services/brawl/brewFormatPipeline';
+import type { EDHRECCommanderData } from '@/types';
 
 // Tag candidates with the commander's top-N themes so the player has lots of directions to lean
 // into at the start; the deck's identity then emerges from the cards they actually pick. Each
@@ -34,27 +36,56 @@ export async function prepareBrewContext(args: PrepareBrewArgs): Promise<BrewCon
   args.onProgress?.('Loading card pool…', 10);
   await loadTaggerData();
 
+  const formatMode = customization.formatMode ?? 'commander';
   const budgetOption = customization.budgetOption !== 'any' ? customization.budgetOption : undefined;
   const bracketLevel = customization.bracketLevel !== 'all' ? customization.bracketLevel : undefined;
   // "Choose a color" commanders (Clara Oswald &c) get EDHREC's per-identity page; '' otherwise.
   const colorSeg = edhrecColorSegment(args.colorIdentity, args.chosenColor);
 
-  const [edhrecData, combos, gameChangerNames, colorCombos] = await Promise.all([
-    partnerCommander
-      ? fetchPartnerCommanderData(commander.name, partnerCommander.name, budgetOption, bracketLevel, colorSeg)
-      : fetchCommanderData(commander.name, budgetOption, bracketLevel, colorSeg),
+  let edhrecData: EDHRECCommanderData | undefined;
+  const brewPlan = await resolveBrewFormatPlan({
+    customization,
+    commanderName: commander.name,
+    search: async () => ({ status: 403 }),
+    fetchEdhrec: async () => {
+      edhrecData = partnerCommander
+        ? await fetchPartnerCommanderData(commander.name, partnerCommander.name, budgetOption, bracketLevel, colorSeg)
+        : await fetchCommanderData(commander.name, budgetOption, bracketLevel, colorSeg);
+      return edhrecData;
+    },
+  });
+  if (brewPlan.blocked) {
+    throw new Error(`${formatMode} brew is not available`);
+  }
+
+  const [combos, gameChangerNames, colorCombos] = await Promise.all([
     fetchCommanderCombos(commander.name).catch(() => [] as EDHRECCombo[]),
     getGameChangerNames().catch(() => new Set<string>()),
-    // Color-identity combos broaden combo-piece knowledge for the combo pack + tagging. Best-effort:
-    // a failure just narrows comboPieceNames to the commander's own combos.
     fetchColorIdentityCombos(args.colorIdentity).catch(() => [] as EDHRECCombo[]),
   ]);
+
+  if (!edhrecData) {
+    edhrecData = {
+      themes: [],
+      similarCommanders: [],
+      cardlists: {
+        allNonLand: [],
+        creatures: [],
+        instants: [],
+        sorceries: [],
+        artifacts: [],
+        enchantments: [],
+        planeswalkers: [],
+        lands: [],
+      },
+    };
+  }
 
   args.onProgress?.('Resolving cards…', 45);
   const stats: EDHRECCommanderStats | undefined = edhrecData.stats;
 
-  // Target math mirrors generateDeck's calculateTargetCounts inputs.
-  const format = customization.deckFormat;
+  // Target math mirrors generateDeck's calculateTargetCounts inputs (formatMode deck size, not the 60|99 chip).
+  const format = brewPlan.deckSize ?? customization.deckFormat;
   const commanderCount = partnerCommander ? 2 : 1;
   const deckCards = format === 99 ? (100 - commanderCount) : (format - commanderCount);
   const landTarget = Math.min(Math.max(1, customization.landCount), deckCards - 1);

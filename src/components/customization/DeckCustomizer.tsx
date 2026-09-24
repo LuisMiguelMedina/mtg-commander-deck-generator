@@ -18,6 +18,7 @@ import { CardTypeIcon } from '@/components/ui/mtg-icons';
 import { Folder } from 'lucide-react';
 import { calculateCurvePercentages } from '@/services/deckBuilder/curveUtils';
 import { PACING_CURVE_MULTIPLIERS } from '@/services/deckBuilder/roleTargets';
+import { FormatModeSelector } from './FormatModeSelector';
 
 const IS_EU = isEuropean() || location.hostname === 'localhost';
 
@@ -418,6 +419,7 @@ export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast,
 
   return (
     <div className="space-y-6">
+      <FormatModeSelector />
       {/* Deck Size */}
       <div>
         <label className="text-sm font-medium mb-3 block"></label>

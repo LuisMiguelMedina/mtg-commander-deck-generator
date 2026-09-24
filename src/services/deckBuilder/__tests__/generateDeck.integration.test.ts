@@ -221,6 +221,7 @@ function makeEdhrecData(): EDHRECCommanderData {
 
 function baseCustomization(overrides: Partial<Customization> = {}): Customization {
   return {
+    formatMode: 'commander',
     deckFormat: 99,
     landCount: 37,
     nonBasicLandCount: 15,

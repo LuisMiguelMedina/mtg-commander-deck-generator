@@ -15,6 +15,7 @@ import type { Customization, ScryfallCard, ThemeResult } from '@/types';
 // get overwritten with EDHREC suggestions before generation.
 function buildPristineCustomization(): Customization {
   return {
+    formatMode: 'commander',
     deckFormat: 99,
     landCount: 37,
     nonBasicLandCount: 15,

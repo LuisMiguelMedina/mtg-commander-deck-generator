@@ -37,6 +37,7 @@ import { analyzeDeck, getDeckSummaryData, scoreRecommendation, type ScoringConte
 import { getDynamicRoleTargets, estimatePacingFromStats, ROLE_LABELS } from './roleTargets';
 import type { Pacing, RoleTargetBreakdown } from '@/types';
 import { loadUserLists } from '@/hooks/useUserLists';
+import { resolveBuilderFormatPipeline } from '@/services/brawl/builderFormatPipeline';
 
 /** Lightweight owned-card metadata used to build a collection-first candidate pool
  *  without a Scryfall round-trip. Sourced from the local collection DB. */
@@ -1963,6 +1964,22 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
   // EDHREC keeps a separate page per resulting identity for "choose a color" commanders;
   // the base page blends every variant and would rank cards this deck can't legally play.
   const colorSeg = edhrecColorSegment(colorIdentity, chosenColor);
+
+  const formatMode = customization.formatMode ?? 'commander';
+  const pipeline = await resolveBuilderFormatPipeline({
+    formatMode,
+    commander: {
+      name: commander.name,
+      type_line: commander.type_line,
+      color_identity: commander.color_identity,
+    },
+    pool: [],
+    search: async () => ({ status: 403 }),
+    fetchEdhrecThemes: async () => [],
+  });
+  if (pipeline.blocked) {
+    throw new Error(`${formatMode} deck generation is not available`);
+  }
 
   const format = customization.deckFormat;
   const usedNames = new Set<string>();

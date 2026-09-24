@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import type { AppState, AdvancedTargets, Customization, BanList, AppliedList, ScryfallCard, GeneratedDeck, EDHRECTheme, ThemeResult, DeckHistoryEntry, DeckHistoryAction } from '@/types';
+import { getFormatRules } from '@/lib/format/formatMode';
+import type { FormatMode } from '@/lib/format/formatMode';
 import { isEuropean } from '@/lib/region';
 import { combineColorIdentity, needsChosenColor } from '@/lib/partnerUtils';
 import { swapCard, addCard } from '@/services/deckBuilder/cardSwap';
@@ -246,6 +248,7 @@ const freshAdvancedTargets = (): AdvancedTargets => ({
 });
 
 const defaultCustomization: Customization = {
+  formatMode: 'commander',
   deckFormat: 99,
   landCount: 37,
   nonBasicLandCount: 15, // Default to 15 non-basics, rest will be basics
@@ -477,6 +480,13 @@ export const useStore = create<AppState>((set, get) => ({
     // Persist arena-only setting to localStorage when it changes
     if (updates.arenaOnly !== undefined) {
       saveArenaOnly(newCustomization.arenaOnly);
+    }
+
+    if (updates.formatMode !== undefined) {
+      const rules = getFormatRules(updates.formatMode as FormatMode);
+      if (rules?.generation === 'implemented') {
+        newCustomization.deckFormat = rules.deckSize;
+      }
     }
 
     return { customization: newCustomization };
