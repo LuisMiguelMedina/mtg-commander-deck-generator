@@ -7,14 +7,13 @@ export type FormatModeOption = {
   selectable: boolean;
 };
 
-/** Pure model for acceptance tests and UI — commander / brawl100 selectable; standard Brawl named only. */
+/** Pure model for acceptance tests and UI — commander and brawl100 only. */
 export function formatModeSelectorModel() {
   const brawlRules = getFormatRules('brawl100');
   return {
     options: [
       { mode: 'commander' as const, label: 'Commander', selectable: true },
       { mode: 'brawl100' as const, label: 'Brawl 100', selectable: true },
-      { mode: 'standardBrawl60' as const, label: 'Standard Brawl (60)', selectable: false },
     ],
     brawl100LifeCopy: brawlRules?.lifeCopy,
   };

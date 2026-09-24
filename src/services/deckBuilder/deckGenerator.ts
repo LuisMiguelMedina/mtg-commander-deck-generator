@@ -37,7 +37,13 @@ import { analyzeDeck, getDeckSummaryData, scoreRecommendation, type ScoringConte
 import { getDynamicRoleTargets, estimatePacingFromStats, ROLE_LABELS } from './roleTargets';
 import type { Pacing, RoleTargetBreakdown } from '@/types';
 import { loadUserLists } from '@/hooks/useUserLists';
-import { resolveBuilderFormatPipeline } from '@/services/brawl/builderFormatPipeline';
+import {
+  resolveBuilderFormatPipeline,
+  buildLegalFormatPool,
+  adaptMoxfieldCardsToRanking,
+} from '@/services/brawl/builderFormatPipeline';
+import { getFormatRules } from '@/lib/format/formatMode';
+import { searchBrawl100Decks } from '@/services/moxfield/client';
 
 /** Lightweight owned-card metadata used to build a collection-first candidate pool
  *  without a Scryfall round-trip. Sourced from the local collection DB. */
@@ -1966,6 +1972,16 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
   const colorSeg = edhrecColorSegment(colorIdentity, chosenColor);
 
   const formatMode = customization.formatMode ?? 'commander';
+  const budgetOption = customization.budgetOption !== 'any' ? customization.budgetOption : undefined;
+  const bracketLevel = customization.bracketLevel !== 'all' ? customization.bracketLevel : undefined;
+
+  onProgress?.('Surveying legal cards for this format...', 2);
+  const formatCandidateResponse = await searchCards(
+    formatMode === 'brawl100' ? 'game:arena' : 'f:commander',
+    colorIdentity,
+    { order: 'edhrec', skipFormatFilter: formatMode === 'brawl100' },
+  ).catch(() => ({ data: [] as ScryfallCard[] }));
+
   const pipeline = await resolveBuilderFormatPipeline({
     formatMode,
     commander: {
@@ -1973,15 +1989,23 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
       type_line: commander.type_line,
       color_identity: commander.color_identity,
     },
-    pool: [],
-    search: async () => ({ status: 403 }),
-    fetchEdhrecThemes: async () => [],
+    pool: buildLegalFormatPool(formatCandidateResponse.data, formatMode),
+    search: () => searchBrawl100Decks(commander.name),
+    fetchEdhrecThemes: async () => {
+      const data = partnerCommander
+        ? await fetchPartnerCommanderData(commander.name, partnerCommander.name, budgetOption, bracketLevel, colorSeg)
+        : await fetchCommanderData(commander.name, budgetOption, bracketLevel, colorSeg);
+      return data.themes ?? [];
+    },
   });
   if (pipeline.blocked) {
     throw new Error(`${formatMode} deck generation is not available`);
   }
 
-  const format = customization.deckFormat;
+  const format = getFormatRules(formatMode)?.deckSize ?? 99;
+  const rankingCards = pipeline.rankingCards?.length
+    ? adaptMoxfieldCardsToRanking(pipeline.rankingCards)
+    : [];
   const usedNames = new Set<string>();
 
   // Helper: mark a card name as used, including front-face name for DFCs
@@ -2021,8 +2045,6 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
     tempBanned.forEach(markBanned);
   }
   const maxCardPrice = customization.maxCardPrice ?? null;
-  const budgetOption = customization.budgetOption !== 'any' ? customization.budgetOption : undefined;
-  const bracketLevel = customization.bracketLevel !== 'all' ? customization.bracketLevel : undefined;
   const allowedRarities = customization.allowedRarities ?? null;
   const maxCmc = customization.tinyLeaders ? 3 : null;
   const arenaOnly = !!customization.arenaOnly;
@@ -2087,7 +2109,8 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
   let combos: EDHRECCombo[] = [];                 // Commander-source — feeds boost scoring
   let colorIdentityCombos: EDHRECCombo[] = [];    // Color-identity-source — feeds detection only
   let edhrecData: EDHRECCommanderData | null = null;
-  let dataSource: DeckDataSource = 'scryfall';
+  let dataSource: DeckDataSource =
+    formatMode === 'brawl100' && pipeline.dataSource ? pipeline.dataSource : 'scryfall';
   let baseData: EDHRECCommanderData | null = null;
   let themeOverlapCounts = new Map<string, number>();
   const selectedThemesWithSlugs = context.selectedThemes?.filter(
@@ -2536,6 +2559,33 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
         console.warn('[DeckGen] FALLBACK: Base commander fetch failed — will use Scryfall-only generation');
         onProgress?.('The oracle is silent... searching the multiverse...', 12);
       }
+    }
+  }
+
+  if (formatMode === 'brawl100' && rankingCards.length > 0) {
+    const ranked = rankingCards.map((card) => ({
+      name: card.name,
+      inclusion: card.inclusion ?? 0,
+      num_decks: card.count ?? 0,
+    }));
+    const lists = edhrecData?.cardlists;
+    edhrecData = {
+      themes: edhrecData?.themes ?? [],
+      stats: edhrecData?.stats ?? { numDecks: ranked.length, typeDistribution: {}, manaCurve: {} },
+      cardlists: {
+        allNonLand: ranked,
+        creatures: ranked,
+        instants: lists?.instants ?? [],
+        sorceries: lists?.sorceries ?? [],
+        artifacts: lists?.artifacts ?? [],
+        enchantments: lists?.enchantments ?? [],
+        planeswalkers: lists?.planeswalkers ?? [],
+        lands: lists?.lands ?? [],
+      },
+      similarCommanders: edhrecData?.similarCommanders ?? [],
+    };
+    if (pipeline.dataSource === 'moxfield') {
+      dataSource = 'moxfield';
     }
   }
 

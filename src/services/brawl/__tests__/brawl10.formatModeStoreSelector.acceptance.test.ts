@@ -101,7 +101,7 @@ describe('PBI-BRAWL-10 FormatMode store + selector', () => {
     );
   });
 
-  it('FormatModeSelector offers commander and brawl100, names standardBrawl60, and is mounted', async () => {
+  it('FormatModeSelector offers only commander and brawl100 and is mounted', async () => {
     const mod = await tryLoadSeam(SELECTOR_MODULE);
     const modelFn = mod?.formatModeSelectorModel as (() => {
       options?: Array<{ mode?: string; selectable?: boolean }>;
@@ -112,15 +112,11 @@ describe('PBI-BRAWL-10 FormatMode store + selector', () => {
     if (typeof modelFn !== 'function') return;
 
     const model = modelFn();
-    const selectable = (model.options ?? [])
-      .filter((option) => option.selectable)
-      .map((option) => option.mode)
-      .sort();
-    const namedOnly = (model.options ?? []).find((option) => option.mode === 'standardBrawl60');
+    const modes = (model.options ?? []).map((option) => option.mode);
 
-    expect(selectable).toEqual(['brawl100', 'commander']);
-    expect(namedOnly).toBeDefined();
-    expect(namedOnly?.selectable).toBe(false);
+    expect(modes).toEqual(['commander', 'brawl100']);
+    expect(modes).not.toContain('standardBrawl60');
+    expect((model.options ?? []).every((option) => option.selectable === true)).toBe(true);
     expect(model.brawl100LifeCopy).toBe(formatMode.getFormatRules('brawl100')?.lifeCopy);
 
     const customizer = await readRepoText('src/components/customization/DeckCustomizer.tsx');

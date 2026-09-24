@@ -265,7 +265,7 @@ export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast,
     return `${cardCount} cards + ${commanderText}`;
   };
 
-  const isCustomFormat = ![60, 99].includes(customization.deckFormat);
+  const isCustomFormat = customization.deckFormat !== 99;
 
   const startEditingCustomFormat = () => {
     setCustomFormatValue(isCustomFormat ? String(customization.deckFormat) : '40');
@@ -423,7 +423,7 @@ export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast,
       {/* Deck Size */}
       <div>
         <label className="text-sm font-medium mb-3 block"></label>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {/* Custom size option */}
           {editingCustomFormat ? (
             <div className="p-3 rounded-lg border border-primary bg-primary/10 text-center flex flex-col items-center justify-center">
@@ -458,18 +458,6 @@ export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast,
               </div>
             </button>
           )}
-          {/* Brawl 60 */}
-          <button
-            onClick={() => handleFormatChange(60)}
-            className={`p-3 rounded-lg border text-center transition-colors ${
-              customization.deckFormat === 60
-                ? 'border-primary bg-primary/10 text-violet-200'
-                : 'border-border hover:border-primary/50'
-            }`}
-          >
-            <div className="font-medium text-sm">60 Cards</div>
-            <div className="text-xs text-muted-foreground">{getFormatDescription(60)}</div>
-          </button>
           {/* Commander 99 */}
           <button
             onClick={() => handleFormatChange(99)}

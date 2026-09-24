@@ -24,8 +24,8 @@ export async function resolveBrewFormatPlan(input: BrewFormatPlanInput): Promise
   const formatMode = input.customization.formatMode ?? 'commander';
   const rules = getFormatRules(formatMode);
 
-  if (!rules || rules.generation === 'named-only' || formatMode === 'standardBrawl60') {
-    return { blocked: true, generation: rules?.generation ?? 'named-only', formatMode };
+  if (!rules || rules.generation === 'named-only' || rules.generation === 'removed' || formatMode === 'standardBrawl60') {
+    return { blocked: true, generation: rules?.generation ?? 'removed', formatMode };
   }
 
   const popularityProviderId = popularityProviderFor(formatMode)?.id;

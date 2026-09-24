@@ -55,12 +55,20 @@ export async function getBrawl100Popularity(input: {
     if (!result.numDecks || result.numDecks <= 0) {
       return { dataSource: 'scryfall', limitedData: true };
     }
+    const normalizedCards = (result.cards ?? []).map((card) => ({
+      name: card.name,
+      inclusion: card.inclusion,
+      count: card.count,
+    }));
+    if (normalizedCards.length === 0) {
+      return { dataSource: 'scryfall', limitedData: true };
+    }
 
     return {
       dataSource: 'moxfield',
       numDecks: result.numDecks,
       fmt: MOXFIELD_BRAWL100_FMT,
-      cards: (result.cards ?? []).map((card) => ({
+      cards: normalizedCards.map((card) => ({
         name: card.name,
         inclusion: card.inclusion,
         count: card.count,

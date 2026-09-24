@@ -30,13 +30,11 @@ function face(partial: Partial<CardFace> & Pick<CardFace, 'name' | 'type_line'>)
 }
 
 describe('PBI-BRAWL-01 FormatMode + Brawl 100 rules', () => {
-  it('FormatMode includes commander and brawl100 and names standardBrawl60', async () => {
+  it('FormatMode product modes are commander and brawl100 only', async () => {
     const mod = await tryLoadSeam(FORMAT_MODULE);
     const modes = mod?.FORMAT_MODES as readonly string[] | undefined;
 
-    expect(modes, `${FORMAT_MODULE} FORMAT_MODES`).toEqual(
-      expect.arrayContaining(['commander', 'brawl100', 'standardBrawl60']),
-    );
+    expect(modes, `${FORMAT_MODULE} FORMAT_MODES`).toEqual(['commander', 'brawl100']);
   });
 
   it('brawl100 DeckFormatConfig is 99 singleton, 25 life 1v1, no commander damage', async () => {
@@ -63,14 +61,14 @@ describe('PBI-BRAWL-01 FormatMode + Brawl 100 rules', () => {
     expect(rules?.lifeCopy).toMatch(/no commander damage/i);
   });
 
-  it('standardBrawl60 is named only and has no generation path', async () => {
+  it('standardBrawl60 is removed from the product (no generation path)', async () => {
     const mod = await tryLoadSeam(FORMAT_MODULE);
     const getFormatRules = mod?.getFormatRules as ((mode: string) => { generation?: string }) | undefined;
     const generation = typeof getFormatRules === 'function'
       ? getFormatRules('standardBrawl60')?.generation
       : undefined;
 
-    expect(generation, 'standardBrawl60 generation').toBe('named-only');
+    expect(generation, 'standardBrawl60 generation').toBe('removed');
     if (mod) {
       expect(mod.generateStandardBrawl60).toBeUndefined();
     }
