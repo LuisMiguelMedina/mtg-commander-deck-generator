@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Slider } from '@/components/ui/slider';
 import { useStore } from '@/store';
-import type { DeckFormat, BudgetOption, GameChangerLimit, BracketLevel, Rarity, Pacing } from '@/types';
+import type { BudgetOption, GameChangerLimit, BracketLevel, Rarity, Pacing } from '@/types';
 import { getDeckFormatConfig } from '@/lib/constants/archetypes';
 import { BannedCards } from './BannedCards';
 import { MustIncludeCards } from './MustIncludeCards';
@@ -18,6 +18,7 @@ import { CardTypeIcon } from '@/components/ui/mtg-icons';
 import { Folder } from 'lucide-react';
 import { calculateCurvePercentages } from '@/services/deckBuilder/curveUtils';
 import { PACING_CURVE_MULTIPLIERS } from '@/services/deckBuilder/roleTargets';
+import { FormatModeSelector } from './FormatModeSelector';
 
 const IS_EU = isEuropean() || location.hostname === 'localhost';
 
@@ -135,14 +136,10 @@ export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast,
   const [budgetInputValue, setBudgetInputValue] = useState('');
   const [editingGcLimit, setEditingGcLimit] = useState(false);
   const [gcLimitInputValue, setGcLimitInputValue] = useState('');
-  const [editingCustomFormat, setEditingCustomFormat] = useState(false);
-  const [customFormatValue, setCustomFormatValue] = useState('');
   const priceInputRef = useRef<HTMLInputElement>(null);
   const budgetInputRef = useRef<HTMLInputElement>(null);
   const landInputRef = useRef<HTMLInputElement>(null);
   const gcLimitInputRef = useRef<HTMLInputElement>(null);
-  const customFormatInputRef = useRef<HTMLInputElement>(null);
-
   const collectionStats = useMemo(() => {
     if (!selectedCollectionCards) return null;
 
@@ -256,49 +253,8 @@ export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast,
 
   if (!commander) return null;
 
-  // Generate dynamic description based on partner status
-  const getFormatDescription = (size: DeckFormat): string => {
-    const commanderCount = partnerCommander ? 2 : 1;
-    const cardCount = size === 99 ? (100 - commanderCount) : (size - commanderCount);
-    const commanderText = partnerCommander ? 'commanders' : 'commander';
-    return `${cardCount} cards + ${commanderText}`;
-  };
-
-  const isCustomFormat = ![60, 99].includes(customization.deckFormat);
-
-  const startEditingCustomFormat = () => {
-    setCustomFormatValue(isCustomFormat ? String(customization.deckFormat) : '40');
-    setEditingCustomFormat(true);
-  };
-
-  const commitCustomFormat = () => {
-    setEditingCustomFormat(false);
-    const parsed = parseInt(customFormatValue, 10);
-    if (!isNaN(parsed) && parsed >= 10 && parsed <= 200) {
-      handleFormatChange(parsed);
-    }
-  };
-
   const currentFormat = getDeckFormatConfig(customization.deckFormat);
   const landRange = currentFormat.landRange;
-
-  // Handle format change - also update land counts to format defaults
-  const handleFormatChange = (format: DeckFormat) => {
-    const formatConfig = getDeckFormatConfig(format);
-    // Scale non-basic count proportionally to new format
-    const defaultNonBasic = Math.min(15, Math.floor(formatConfig.defaultLands * 0.4));
-    // Reset land counts to format defaults and clear userEditedLands
-    // so EDHREC can suggest format-appropriate values
-    useStore.setState(state => ({
-      customization: {
-        ...state.customization,
-        deckFormat: format,
-        landCount: formatConfig.defaultLands,
-        nonBasicLandCount: defaultNonBasic,
-      },
-      userEditedLands: false,
-    }));
-  };
 
   // Handle land count change - ensure non-basic doesn't exceed total
   const handleLandCountChange = (newLandCount: number) => {
@@ -338,13 +294,6 @@ export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast,
       gcLimitInputRef.current.select();
     }
   }, [editingGcLimit]);
-
-  useEffect(() => {
-    if (editingCustomFormat && customFormatInputRef.current) {
-      customFormatInputRef.current.focus();
-      customFormatInputRef.current.select();
-    }
-  }, [editingCustomFormat]);
 
   const startEditingLands = () => {
     setLandInputValue(String(customization.landCount));
@@ -418,71 +367,7 @@ export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast,
 
   return (
     <div className="space-y-6">
-      {/* Deck Size */}
-      <div>
-        <label className="text-sm font-medium mb-3 block"></label>
-        <div className="grid grid-cols-3 gap-2">
-          {/* Custom size option */}
-          {editingCustomFormat ? (
-            <div className="p-3 rounded-lg border border-primary bg-primary/10 text-center flex flex-col items-center justify-center">
-              <input
-                ref={customFormatInputRef}
-                type="number"
-                min="10"
-                max="200"
-                value={customFormatValue}
-                onChange={(e) => setCustomFormatValue(e.target.value)}
-                onBlur={commitCustomFormat}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitCustomFormat();
-                  if (e.key === 'Escape') setEditingCustomFormat(false);
-                }}
-                className="w-14 text-sm font-medium text-center bg-background border border-primary rounded px-1 py-0.5 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              />
-              <div className="text-xs text-muted-foreground mt-1">total cards</div>
-            </div>
-          ) : (
-            <button
-              onClick={startEditingCustomFormat}
-              className={`p-3 rounded-lg border text-center transition-colors ${
-                isCustomFormat
-                  ? 'border-primary bg-primary/10 text-violet-200'
-                  : 'border-border hover:border-primary/50'
-              }`}
-            >
-              <div className="font-medium text-sm">Custom</div>
-              <div className="text-xs text-muted-foreground">
-                {isCustomFormat ? getFormatDescription(customization.deckFormat) : getFormatDescription(40)}
-              </div>
-            </button>
-          )}
-          {/* Brawl 60 */}
-          <button
-            onClick={() => handleFormatChange(60)}
-            className={`p-3 rounded-lg border text-center transition-colors ${
-              customization.deckFormat === 60
-                ? 'border-primary bg-primary/10 text-violet-200'
-                : 'border-border hover:border-primary/50'
-            }`}
-          >
-            <div className="font-medium text-sm">60 Cards</div>
-            <div className="text-xs text-muted-foreground">{getFormatDescription(60)}</div>
-          </button>
-          {/* Commander 99 */}
-          <button
-            onClick={() => handleFormatChange(99)}
-            className={`p-3 rounded-lg border text-center transition-colors ${
-              customization.deckFormat === 99
-                ? 'border-primary bg-primary/10 text-violet-200'
-                : 'border-border hover:border-primary/50'
-            }`}
-          >
-            <div className="font-medium text-sm">100 Cards</div>
-            <div className="text-xs text-muted-foreground">{getFormatDescription(99)}</div>
-          </button>
-        </div>
-      </div>
-
+      <FormatModeSelector />
 
       {/* Mana base + tempo are resolved at the brew's finish (mana-base step), not chosen up front,
           so the brew setup hides these. The auto-generate flow still shows them. */}

@@ -37,6 +37,15 @@ import { analyzeDeck, getDeckSummaryData, scoreRecommendation, type ScoringConte
 import { getDynamicRoleTargets, estimatePacingFromStats, ROLE_LABELS } from './roleTargets';
 import type { Pacing, RoleTargetBreakdown } from '@/types';
 import { loadUserLists } from '@/hooks/useUserLists';
+import {
+  resolveBuilderFormatPipeline,
+  buildLegalFormatPool,
+  adaptMoxfieldCardsToRanking,
+  selectFormatFill,
+  classifyLegalFill,
+} from '@/services/brawl/builderFormatPipeline';
+import { getFormatRules } from '@/lib/format/formatMode';
+import { searchBrawl100Decks } from '@/services/moxfield/client';
 
 /** Lightweight owned-card metadata used to build a collection-first candidate pool
  *  without a Scryfall round-trip. Sourced from the local collection DB. */
@@ -140,11 +149,12 @@ function calculateTargetCounts(
   hasPartner?: boolean,
   pacing?: Pacing
 ): TargetCountsResult {
-  const format = customization.deckFormat;
+  const formatMode = customization.formatMode ?? 'commander';
+  const deckSize = getFormatRules(formatMode)?.deckSize ?? 99;
 
   // Calculate total deck cards — account for partner commanders taking an extra slot
   const commanderCount = hasPartner ? 2 : 1;
-  const deckCards = format === 99 ? (100 - commanderCount) : (format - commanderCount);
+  const deckCards = deckSize === 99 ? (100 - commanderCount) : (deckSize - commanderCount);
 
   // Respect the user's land count — clamp only to sane absolute bounds
   const landCount = Math.min(Math.max(1, customization.landCount), deckCards - 1);
@@ -179,60 +189,21 @@ function calculateTargetCounts(
     return { composition, typeTargets, curveTargets };
   }
 
-  // Fallback defaults for different formats (no usable EDHREC stats)
+  // Fallback defaults when EDHREC stats are missing (sized via getFormatRules deck size)
   console.warn('[DeckGen] FALLBACK: No EDHREC stats (numDecks=0 or missing) — using fallback type/curve targets');
-  const knownDefaults: Record<number, DeckComposition> = {
-    99: {
-      lands: landCount,
-      ramp: 10,
-      cardDraw: 10,
-      singleRemoval: 8,
-      boardWipes: 3,
-      protection: 4,
-      creatures: 25,
-      synergy: 30,
-      utility: 3,
-    },
-    60: {
-      lands: landCount,
-      ramp: 4,
-      cardDraw: 4,
-      singleRemoval: 5,
-      boardWipes: 2,
-      protection: 2,
-      creatures: 15,
-      synergy: 6,
-      utility: 0,
-    },
-    40: {
-      lands: landCount,
-      ramp: 2,
-      cardDraw: 2,
-      singleRemoval: 3,
-      boardWipes: 1,
-      protection: 1,
-      creatures: 11,
-      synergy: 4,
-      utility: 0,
-    },
+  const commanderBaselineNonLand = 62; // 99 - 37 lands
+  const ratio = nonLandCards / commanderBaselineNonLand;
+  const fallbackComposition: DeckComposition = {
+    lands: landCount,
+    ramp: Math.max(1, Math.round(10 * ratio)),
+    cardDraw: Math.max(1, Math.round(10 * ratio)),
+    singleRemoval: Math.max(1, Math.round(8 * ratio)),
+    boardWipes: Math.max(0, Math.round(3 * ratio)),
+    protection: Math.max(1, Math.round(4 * ratio)),
+    creatures: Math.max(2, Math.round(25 * ratio)),
+    synergy: Math.max(1, Math.round(30 * ratio)),
+    utility: Math.max(0, Math.round(3 * ratio)),
   };
-
-  // Fallback type targets and curve targets — interpolate for custom sizes
-  const fallbackComposition: DeckComposition = knownDefaults[format] ?? (() => {
-    // Scale proportionally based on non-land card count
-    const ratio = nonLandCards / 62; // 62 = 99 - 37 lands (Commander baseline)
-    return {
-      lands: landCount,
-      ramp: Math.max(1, Math.round(10 * ratio)),
-      cardDraw: Math.max(1, Math.round(10 * ratio)),
-      singleRemoval: Math.max(1, Math.round(8 * ratio)),
-      boardWipes: Math.max(0, Math.round(3 * ratio)),
-      protection: Math.max(1, Math.round(4 * ratio)),
-      creatures: Math.max(2, Math.round(25 * ratio)),
-      synergy: Math.max(1, Math.round(30 * ratio)),
-      utility: Math.max(0, Math.round(3 * ratio)),
-    };
-  })();
   // Fallback type targets — distribute nonLandCards across types using rough proportions
   // These MUST sum to nonLandCards; previous approach double-counted functional roles
   const rawTypeWeights = {
@@ -1964,7 +1935,41 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
   // the base page blends every variant and would rank cards this deck can't legally play.
   const colorSeg = edhrecColorSegment(colorIdentity, chosenColor);
 
-  const format = customization.deckFormat;
+  const formatMode = customization.formatMode ?? 'commander';
+  const budgetOption = customization.budgetOption !== 'any' ? customization.budgetOption : undefined;
+  const bracketLevel = customization.bracketLevel !== 'all' ? customization.bracketLevel : undefined;
+
+  onProgress?.('Surveying legal cards for this format...', 2);
+  const formatCandidateResponse = await searchCards(
+    formatMode === 'brawl100' ? 'game:arena' : 'f:commander',
+    colorIdentity,
+    { order: 'edhrec', skipFormatFilter: formatMode === 'brawl100' },
+  ).catch(() => ({ data: [] as ScryfallCard[] }));
+
+  const pipeline = await resolveBuilderFormatPipeline({
+    formatMode,
+    commander: {
+      name: commander.name,
+      type_line: commander.type_line,
+      color_identity: commander.color_identity,
+    },
+    pool: buildLegalFormatPool(formatCandidateResponse.data, formatMode),
+    search: () => searchBrawl100Decks(commander.name),
+    fetchEdhrecThemes: async () => {
+      const data = partnerCommander
+        ? await fetchPartnerCommanderData(commander.name, partnerCommander.name, budgetOption, bracketLevel, colorSeg)
+        : await fetchCommanderData(commander.name, budgetOption, bracketLevel, colorSeg);
+      return data.themes ?? [];
+    },
+  });
+  if (pipeline.blocked) {
+    throw new Error(`${formatMode} deck generation is not available`);
+  }
+
+  const format = getFormatRules(formatMode)?.deckSize ?? 99;
+  const rankingCards = pipeline.rankingCards?.length
+    ? adaptMoxfieldCardsToRanking(pipeline.rankingCards)
+    : [];
   const usedNames = new Set<string>();
 
   // Helper: mark a card name as used, including front-face name for DFCs
@@ -2004,8 +2009,6 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
     tempBanned.forEach(markBanned);
   }
   const maxCardPrice = customization.maxCardPrice ?? null;
-  const budgetOption = customization.budgetOption !== 'any' ? customization.budgetOption : undefined;
-  const bracketLevel = customization.bracketLevel !== 'all' ? customization.bracketLevel : undefined;
   const allowedRarities = customization.allowedRarities ?? null;
   const maxCmc = customization.tinyLeaders ? 3 : null;
   const arenaOnly = !!customization.arenaOnly;
@@ -2070,7 +2073,8 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
   let combos: EDHRECCombo[] = [];                 // Commander-source — feeds boost scoring
   let colorIdentityCombos: EDHRECCombo[] = [];    // Color-identity-source — feeds detection only
   let edhrecData: EDHRECCommanderData | null = null;
-  let dataSource: DeckDataSource = 'scryfall';
+  let dataSource: DeckDataSource =
+    formatMode === 'brawl100' && pipeline.dataSource ? pipeline.dataSource : 'scryfall';
   let baseData: EDHRECCommanderData | null = null;
   let themeOverlapCounts = new Map<string, number>();
   const selectedThemesWithSlugs = context.selectedThemes?.filter(
@@ -2519,6 +2523,66 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
         console.warn('[DeckGen] FALLBACK: Base commander fetch failed — will use Scryfall-only generation');
         onProgress?.('The oracle is silent... searching the multiverse...', 12);
       }
+    }
+  }
+
+  if (formatMode === 'brawl100') {
+    const legalCardNames = pipeline.legalCardNames ?? [];
+    const edhrecNames = edhrecData?.cardlists?.allNonLand?.map((card) => card.name) ?? [];
+    const { names: fillNames } = selectFormatFill({
+      legalCardNames,
+      rankingCards,
+      edhrecNames,
+    });
+    const ranked = fillNames.map((name) => {
+      const fromMoxfield = rankingCards.find((card) => card.name === name);
+      return {
+        name,
+        inclusion: fromMoxfield?.inclusion ?? 0,
+        num_decks: fromMoxfield?.count ?? 0,
+      };
+    });
+    const legalPoolCards = buildLegalFormatPool(formatCandidateResponse.data, formatMode);
+    const classified = classifyLegalFill({
+      names: fillNames,
+      cards: legalPoolCards.map((card) => ({
+        name: card.name,
+        type_line: card.type_line,
+      })),
+    });
+    const rankedByName = new Map(ranked.map((card) => [card.name, card]));
+    const toTypedList = (names: string[], primaryType: string): EDHRECCard[] =>
+      names.map((name) => {
+        const base = rankedByName.get(name);
+        return {
+          name,
+          sanitized: name,
+          primary_type: primaryType,
+          inclusion: base?.inclusion ?? 0,
+          num_decks: base?.num_decks ?? 0,
+        };
+      });
+    edhrecData = {
+      themes: edhrecData?.themes ?? [],
+      stats: edhrecData?.stats ?? { numDecks: ranked.length, typeDistribution: {}, manaCurve: {} },
+      cardlists: {
+        allNonLand: ranked.map((card) => ({
+          ...card,
+          sanitized: card.name,
+          primary_type: 'Unknown',
+        })),
+        creatures: toTypedList(classified.creatures, 'Creature'),
+        instants: toTypedList(classified.instants, 'Instant'),
+        sorceries: toTypedList(classified.sorceries, 'Sorcery'),
+        artifacts: toTypedList(classified.artifacts, 'Artifact'),
+        enchantments: toTypedList(classified.enchantments, 'Enchantment'),
+        planeswalkers: toTypedList(classified.planeswalkers, 'Planeswalker'),
+        lands: [],
+      },
+      similarCommanders: edhrecData?.similarCommanders ?? [],
+    };
+    if (pipeline.dataSource === 'moxfield') {
+      dataSource = 'moxfield';
     }
   }
 

@@ -1,4 +1,4 @@
-export const FORMAT_MODES = ['commander', 'brawl100', 'standardBrawl60'] as const;
+export const FORMAT_MODES = ['commander', 'brawl100'] as const;
 export type FormatMode = (typeof FORMAT_MODES)[number];
 
 export type FormatRules = {
@@ -6,7 +6,7 @@ export type FormatRules = {
   singleton: boolean;
   startingLife: number;
   commanderDamage: boolean;
-  generation: 'implemented' | 'named-only';
+  generation: 'implemented' | 'named-only' | 'removed';
   lifeCopy?: string;
 };
 
@@ -42,7 +42,7 @@ export function getFormatRules(mode: string): FormatRules | undefined {
       singleton: true,
       startingLife: 25,
       commanderDamage: false,
-      generation: 'named-only',
+      generation: 'removed',
     };
   }
   return undefined;

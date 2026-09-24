@@ -1,3 +1,5 @@
+import type { FormatMode } from '@/lib/format/formatMode';
+
 // Scryfall Card type
 export interface ScryfallCard {
   id: string;
@@ -395,7 +397,8 @@ export type DeckDataSource =
   | 'theme'           // Theme data but without bracket filtering
   | 'base+bracket'    // Base commander data with bracket/power level
   | 'base'            // Base commander data, no bracket
-  | 'scryfall';       // No EDHREC data at all — pure Scryfall search
+  | 'scryfall'        // No EDHREC data at all — pure Scryfall search
+  | 'moxfield';       // Moxfield Brawl 100 popularity deck lists
 
 /** Static per-card EDHREC metadata snapshot (see GeneratedDeck.cardEdhrecMetaMap). */
 export interface CardEdhrecMeta {
@@ -602,6 +605,7 @@ export interface AdvancedTargets {
 
 // User customization
 export interface Customization {
+  formatMode: FormatMode;
   deckFormat: DeckFormat;
   landCount: number;
   nonBasicLandCount: number; // How many non-basic lands to include (rest will be basics)

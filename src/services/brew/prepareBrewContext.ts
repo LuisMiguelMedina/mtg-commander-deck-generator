@@ -1,6 +1,6 @@
 import type { ScryfallCard, Customization, ThemeResult, EDHRECCommanderStats, EDHRECCombo } from '@/types';
 import { fetchCommanderData, fetchPartnerCommanderData, fetchCommanderCombos, fetchColorIdentityCombos, fetchCommanderThemeData, fetchPartnerThemeData, edhrecColorSegment } from '@/services/edhrec/client';
-import { getCardsByNames, getGameChangerNames, getArenaLegalNames, getMtgCatalogs } from '@/services/scryfall/client';
+import { getCardsByNames, getGameChangerNames, getArenaLegalNames, getMtgCatalogs, searchCards } from '@/services/scryfall/client';
 import { calculateTypeTargets, calculateCurveTargets } from '@/services/deckBuilder/curveUtils';
 import { getDynamicRoleTargets, estimatePacingFromStats } from '@/services/deckBuilder/roleTargets';
 import { getCardRole, getCardSubtype, loadTaggerData } from '@/services/tagger/client';
@@ -10,6 +10,11 @@ import { computeThemeCharTags, classifyTheme, type ThemeKind } from '@/services/
 import { payoffRank } from './combos';
 import { bannedNameSet } from './banned';
 import type { BrewContext, BrewCandidate } from './brewTypes';
+import { resolveBrewFormatPlan } from '@/services/brawl/brewFormatPipeline';
+import { buildLegalFormatPool } from '@/services/brawl/builderFormatPipeline';
+import { getFormatRules } from '@/lib/format/formatMode';
+import { searchBrawl100Decks } from '@/services/moxfield/client';
+import type { EDHRECCommanderData } from '@/types';
 
 // Tag candidates with the commander's top-N themes so the player has lots of directions to lean
 // into at the start; the deck's identity then emerges from the cards they actually pick. Each
@@ -34,29 +39,77 @@ export async function prepareBrewContext(args: PrepareBrewArgs): Promise<BrewCon
   args.onProgress?.('Loading card pool…', 10);
   await loadTaggerData();
 
+  const formatMode = customization.formatMode ?? 'commander';
   const budgetOption = customization.budgetOption !== 'any' ? customization.budgetOption : undefined;
   const bracketLevel = customization.bracketLevel !== 'all' ? customization.bracketLevel : undefined;
   // "Choose a color" commanders (Clara Oswald &c) get EDHREC's per-identity page; '' otherwise.
   const colorSeg = edhrecColorSegment(args.colorIdentity, args.chosenColor);
 
-  const [edhrecData, combos, gameChangerNames, colorCombos] = await Promise.all([
-    partnerCommander
-      ? fetchPartnerCommanderData(commander.name, partnerCommander.name, budgetOption, bracketLevel, colorSeg)
-      : fetchCommanderData(commander.name, budgetOption, bracketLevel, colorSeg),
+  let edhrecData: EDHRECCommanderData | undefined;
+  let legalCardNames: string[] | undefined;
+  if (formatMode === 'brawl100') {
+    const formatCandidateResponse = await searchCards(
+      'game:arena',
+      args.colorIdentity,
+      { order: 'edhrec', skipFormatFilter: true },
+    ).catch(() => ({ data: [] as ScryfallCard[] }));
+    legalCardNames = buildLegalFormatPool(formatCandidateResponse.data, formatMode).map((card) => card.name);
+  }
+
+  const brewPlan = await resolveBrewFormatPlan({
+    customization,
+    commanderName: commander.name,
+    legalCardNames,
+    search: () => searchBrawl100Decks(commander.name),
+    fetchEdhrec: async () => {
+      edhrecData = partnerCommander
+        ? await fetchPartnerCommanderData(commander.name, partnerCommander.name, budgetOption, bracketLevel, colorSeg)
+        : await fetchCommanderData(commander.name, budgetOption, bracketLevel, colorSeg);
+      return edhrecData;
+    },
+  });
+  if (brewPlan.blocked) {
+    throw new Error(`${formatMode} brew is not available`);
+  }
+
+  const [combos, gameChangerNames, colorCombos] = await Promise.all([
     fetchCommanderCombos(commander.name).catch(() => [] as EDHRECCombo[]),
     getGameChangerNames().catch(() => new Set<string>()),
-    // Color-identity combos broaden combo-piece knowledge for the combo pack + tagging. Best-effort:
-    // a failure just narrows comboPieceNames to the commander's own combos.
     fetchColorIdentityCombos(args.colorIdentity).catch(() => [] as EDHRECCombo[]),
   ]);
+
+  if (!edhrecData) {
+    edhrecData = {
+      themes: [],
+      similarCommanders: [],
+      cardlists: {
+        allNonLand: [],
+        creatures: [],
+        instants: [],
+        sorceries: [],
+        artifacts: [],
+        enchantments: [],
+        planeswalkers: [],
+        lands: [],
+      },
+    };
+  }
+
+  if (formatMode === 'brawl100' && brewPlan.candidateNames) {
+    edhrecData.cardlists.allNonLand = brewPlan.candidateNames.map((name) => ({
+      name,
+      inclusion: 0,
+      primary_type: 'Unknown',
+    }));
+  }
 
   args.onProgress?.('Resolving cards…', 45);
   const stats: EDHRECCommanderStats | undefined = edhrecData.stats;
 
-  // Target math mirrors generateDeck's calculateTargetCounts inputs.
-  const format = customization.deckFormat;
+  // Target math mirrors generateDeck's calculateTargetCounts inputs (formatMode deck size only).
+  const deckSize = getFormatRules(formatMode)?.deckSize ?? 99;
   const commanderCount = partnerCommander ? 2 : 1;
-  const deckCards = format === 99 ? (100 - commanderCount) : (format - commanderCount);
+  const deckCards = deckSize === 99 ? (100 - commanderCount) : (deckSize - commanderCount);
   const landTarget = Math.min(Math.max(1, customization.landCount), deckCards - 1);
   const nonLandTarget = deckCards - landTarget;
 
@@ -65,7 +118,7 @@ export async function prepareBrewContext(args: PrepareBrewArgs): Promise<BrewCon
     : { creature: Math.round(nonLandTarget * 0.5) };
   const pacing = stats?.manaCurve ? estimatePacingFromStats(stats.manaCurve) : 'balanced';
   const curveTargets = stats?.manaCurve ? calculateCurveTargets(stats.manaCurve, nonLandTarget, pacing) : {};
-  const roleTargets = getDynamicRoleTargets(format, args.selectedThemes, stats, edhrecData).targets;
+  const roleTargets = getDynamicRoleTargets(deckSize, args.selectedThemes, stats, edhrecData).targets;
 
   // Resolve Scryfall cards for the EDHREC pool (one batched, cached call).
   const poolNames = edhrecData.cardlists.allNonLand.map(c => c.name);
