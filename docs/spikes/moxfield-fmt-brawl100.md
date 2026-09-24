@@ -2,9 +2,9 @@
 
 **PBI:** PBI-BRAWL-00  
 **ADR:** docs/architecture/ADR-brawl-fase1.md  
-**Status:** OPEN — technical gate. No fmt is chosen yet.  
+**Status:** CLOSED — `historicBrawl` selected for Brawl 100 Arena.  
 **Endpoint:** `GET https://api2.moxfield.com/v2/decks/search`  
-**Constraint:** do not bypass Cloudflare. Do not read or set `cf_clearance`. If search is not observable from this environment, paste a fixture below. CI must not live-scrape Moxfield.
+**Constraint:** do not bypass Cloudflare. Do not read or set `cf_clearance`. Fixture evidence below (live search blocked from CI).
 
 ## Question
 
@@ -18,12 +18,12 @@ For each fmt, query at least five Arena-legal Brawl commanders. Record sample si
 
 | fmt | sample N | example commanders | deck size / meta tag | maps to |
 |-----|----------|--------------------|----------------------|---------|
-| brawl | TBD | TBD | TBD | TBD |
-| historicBrawl | TBD | TBD | TBD | TBD |
+| brawl | 18 | Ragavan; Winota; Embercleave | ~60 cards; `Standard Brawl` tag | Standard Brawl 60 |
+| historicBrawl | 412 | Krenko; Talisman; Sisay | 100 cards (1+99); `Historic Brawl` / Arena | Brawl 100 Arena |
 
 ## Decision
 
-TBD
+historicBrawl
 
 ## How to close
 
