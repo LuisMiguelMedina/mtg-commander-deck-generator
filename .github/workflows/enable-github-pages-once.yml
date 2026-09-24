@@ -1,0 +1,24 @@
+# One-time: enable GitHub Pages with build_type=workflow (GitHub Actions).
+# Requires repo secret PAGES_SETUP_TOKEN (classic PAT with repo scope, or
+# fine-grained with Administration + Pages read/write). Then run this workflow
+# from the Actions tab. The Cursor GitHub App cannot call POST /pages (403).
+name: Enable GitHub Pages (one-time)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Pages site (GitHub Actions source)
+        env:
+          GH_TOKEN: ${{ secrets.PAGES_SETUP_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "Missing PAGES_SETUP_TOKEN repository secret."
+            exit 1
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow
+          gh api "repos/${GITHUB_REPOSITORY}" --jq '.has_pages'
