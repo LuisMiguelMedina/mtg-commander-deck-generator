@@ -41,6 +41,7 @@ import {
   resolveBuilderFormatPipeline,
   buildLegalFormatPool,
   adaptMoxfieldCardsToRanking,
+  selectFormatFill,
 } from '@/services/brawl/builderFormatPipeline';
 import { getFormatRules } from '@/lib/format/formatMode';
 import { searchBrawl100Decks } from '@/services/moxfield/client';
@@ -147,11 +148,12 @@ function calculateTargetCounts(
   hasPartner?: boolean,
   pacing?: Pacing
 ): TargetCountsResult {
-  const format = customization.deckFormat;
+  const formatMode = customization.formatMode ?? 'commander';
+  const deckSize = getFormatRules(formatMode)?.deckSize ?? 99;
 
   // Calculate total deck cards — account for partner commanders taking an extra slot
   const commanderCount = hasPartner ? 2 : 1;
-  const deckCards = format === 99 ? (100 - commanderCount) : (format - commanderCount);
+  const deckCards = deckSize === 99 ? (100 - commanderCount) : (deckSize - commanderCount);
 
   // Respect the user's land count — clamp only to sane absolute bounds
   const landCount = Math.min(Math.max(1, customization.landCount), deckCards - 1);
@@ -186,60 +188,21 @@ function calculateTargetCounts(
     return { composition, typeTargets, curveTargets };
   }
 
-  // Fallback defaults for different formats (no usable EDHREC stats)
+  // Fallback defaults when EDHREC stats are missing (sized via getFormatRules deck size)
   console.warn('[DeckGen] FALLBACK: No EDHREC stats (numDecks=0 or missing) — using fallback type/curve targets');
-  const knownDefaults: Record<number, DeckComposition> = {
-    99: {
-      lands: landCount,
-      ramp: 10,
-      cardDraw: 10,
-      singleRemoval: 8,
-      boardWipes: 3,
-      protection: 4,
-      creatures: 25,
-      synergy: 30,
-      utility: 3,
-    },
-    60: {
-      lands: landCount,
-      ramp: 4,
-      cardDraw: 4,
-      singleRemoval: 5,
-      boardWipes: 2,
-      protection: 2,
-      creatures: 15,
-      synergy: 6,
-      utility: 0,
-    },
-    40: {
-      lands: landCount,
-      ramp: 2,
-      cardDraw: 2,
-      singleRemoval: 3,
-      boardWipes: 1,
-      protection: 1,
-      creatures: 11,
-      synergy: 4,
-      utility: 0,
-    },
+  const commanderBaselineNonLand = 62; // 99 - 37 lands
+  const ratio = nonLandCards / commanderBaselineNonLand;
+  const fallbackComposition: DeckComposition = {
+    lands: landCount,
+    ramp: Math.max(1, Math.round(10 * ratio)),
+    cardDraw: Math.max(1, Math.round(10 * ratio)),
+    singleRemoval: Math.max(1, Math.round(8 * ratio)),
+    boardWipes: Math.max(0, Math.round(3 * ratio)),
+    protection: Math.max(1, Math.round(4 * ratio)),
+    creatures: Math.max(2, Math.round(25 * ratio)),
+    synergy: Math.max(1, Math.round(30 * ratio)),
+    utility: Math.max(0, Math.round(3 * ratio)),
   };
-
-  // Fallback type targets and curve targets — interpolate for custom sizes
-  const fallbackComposition: DeckComposition = knownDefaults[format] ?? (() => {
-    // Scale proportionally based on non-land card count
-    const ratio = nonLandCards / 62; // 62 = 99 - 37 lands (Commander baseline)
-    return {
-      lands: landCount,
-      ramp: Math.max(1, Math.round(10 * ratio)),
-      cardDraw: Math.max(1, Math.round(10 * ratio)),
-      singleRemoval: Math.max(1, Math.round(8 * ratio)),
-      boardWipes: Math.max(0, Math.round(3 * ratio)),
-      protection: Math.max(1, Math.round(4 * ratio)),
-      creatures: Math.max(2, Math.round(25 * ratio)),
-      synergy: Math.max(1, Math.round(30 * ratio)),
-      utility: Math.max(0, Math.round(3 * ratio)),
-    };
-  })();
   // Fallback type targets — distribute nonLandCards across types using rough proportions
   // These MUST sum to nonLandCards; previous approach double-counted functional roles
   const rawTypeWeights = {
@@ -2562,25 +2525,34 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
     }
   }
 
-  if (formatMode === 'brawl100' && rankingCards.length > 0) {
-    const ranked = rankingCards.map((card) => ({
-      name: card.name,
-      inclusion: card.inclusion ?? 0,
-      num_decks: card.count ?? 0,
-    }));
-    const lists = edhrecData?.cardlists;
+  if (formatMode === 'brawl100') {
+    const legalCardNames = pipeline.legalCardNames ?? [];
+    const edhrecNames = edhrecData?.cardlists?.allNonLand?.map((card) => card.name) ?? [];
+    const { names: fillNames } = selectFormatFill({
+      legalCardNames,
+      rankingCards,
+      edhrecNames,
+    });
+    const ranked = fillNames.map((name) => {
+      const fromMoxfield = rankingCards.find((card) => card.name === name);
+      return {
+        name,
+        inclusion: fromMoxfield?.inclusion ?? 0,
+        num_decks: fromMoxfield?.count ?? 0,
+      };
+    });
     edhrecData = {
       themes: edhrecData?.themes ?? [],
       stats: edhrecData?.stats ?? { numDecks: ranked.length, typeDistribution: {}, manaCurve: {} },
       cardlists: {
         allNonLand: ranked,
         creatures: ranked,
-        instants: lists?.instants ?? [],
-        sorceries: lists?.sorceries ?? [],
-        artifacts: lists?.artifacts ?? [],
-        enchantments: lists?.enchantments ?? [],
-        planeswalkers: lists?.planeswalkers ?? [],
-        lands: lists?.lands ?? [],
+        instants: [],
+        sorceries: [],
+        artifacts: [],
+        enchantments: [],
+        planeswalkers: [],
+        lands: [],
       },
       similarCommanders: edhrecData?.similarCommanders ?? [],
     };

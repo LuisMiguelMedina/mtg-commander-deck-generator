@@ -56,6 +56,38 @@ export function adaptMoxfieldCardsToRanking(cards: RankingCard[]): RankingCard[]
   }));
 }
 
+export function selectFormatFill(input: {
+  legalCardNames: string[];
+  rankingCards?: Array<{ name: string; inclusion?: number }>;
+  edhrecNames?: string[];
+}): { names: string[] } {
+  const { legalCardNames, rankingCards = [], edhrecNames = [] } = input;
+  if (legalCardNames.length === 0) {
+    return { names: [] };
+  }
+
+  const legalSet = new Set(legalCardNames);
+  if (rankingCards.length === 0) {
+    return { names: [...legalCardNames] };
+  }
+
+  const names = new Set<string>();
+  for (const card of rankingCards) {
+    if (legalSet.has(card.name)) {
+      names.add(card.name);
+    }
+  }
+  for (const name of legalCardNames) {
+    names.add(name);
+  }
+  for (const name of edhrecNames) {
+    if (legalSet.has(name)) {
+      names.add(name);
+    }
+  }
+  return { names: [...names] };
+}
+
 export async function resolveBuilderFormatPipeline(
   input: BuilderFormatPipelineInput,
 ): Promise<BuilderFormatPipelineResult> {

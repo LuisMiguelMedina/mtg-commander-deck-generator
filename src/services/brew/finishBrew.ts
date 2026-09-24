@@ -76,12 +76,12 @@ export async function finishBrew(
 ): Promise<GeneratedDeck> {
   const brewedNames = state.picks.map(p => p.name);
   const formatMode = ctx.customization.formatMode ?? 'commander';
-  const brawlDeckSize = formatMode === 'brawl100' ? getFormatRules('brawl100')?.deckSize : undefined;
+  const deckFormat = getFormatRules(formatMode)?.deckSize ?? 99;
   const mixTotal = landMix ? MANA_STYLES.reduce((s, k) => s + Math.max(0, landMix[k] ?? 0), 0) : 0;
   const customization = {
     ...ctx.customization,
     formatMode,
-    ...(brawlDeckSize != null ? { deckFormat: brawlDeckSize } : {}),
+    deckFormat,
     mustIncludeCards: Array.from(new Set([...(ctx.customization.mustIncludeCards ?? []), ...brewedNames])),
     tempMustIncludeCards: [],
     // The wheel's blend steers WHICH lands fill the base (resolveManaMix in the generator reads this).

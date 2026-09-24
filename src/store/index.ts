@@ -282,6 +282,15 @@ const defaultCustomization: Customization = {
   tempoPacing: 'balanced' as const,
 };
 
+export function hydrateCustomization(input: {
+  formatMode?: string;
+  deckFormat?: number;
+}): { formatMode: FormatMode; deckFormat: number } {
+  const formatMode: FormatMode = input.formatMode === 'brawl100' ? 'brawl100' : 'commander';
+  const deckFormat = getFormatRules(formatMode)?.deckSize ?? 99;
+  return { formatMode, deckFormat };
+}
+
 export const useStore = create<AppState>((set, get) => ({
   // Commander
   commander: null,
@@ -482,11 +491,17 @@ export const useStore = create<AppState>((set, get) => ({
       saveArenaOnly(newCustomization.arenaOnly);
     }
 
+    const resolvedMode = (newCustomization.formatMode ?? 'commander') as FormatMode;
+
     if (updates.formatMode !== undefined) {
       const rules = getFormatRules(updates.formatMode as FormatMode);
       if (rules?.generation === 'implemented') {
         newCustomization.deckFormat = rules.deckSize;
       }
+    }
+
+    if (updates.deckFormat !== undefined) {
+      newCustomization.deckFormat = getFormatRules(resolvedMode)?.deckSize ?? 99;
     }
 
     return { customization: newCustomization };
