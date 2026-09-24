@@ -42,6 +42,7 @@ import {
   buildLegalFormatPool,
   adaptMoxfieldCardsToRanking,
   selectFormatFill,
+  classifyLegalFill,
 } from '@/services/brawl/builderFormatPipeline';
 import { getFormatRules } from '@/lib/format/formatMode';
 import { searchBrawl100Decks } from '@/services/moxfield/client';
@@ -2541,17 +2542,41 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
         num_decks: fromMoxfield?.count ?? 0,
       };
     });
+    const legalPoolCards = buildLegalFormatPool(formatCandidateResponse.data, formatMode);
+    const classified = classifyLegalFill({
+      names: fillNames,
+      cards: legalPoolCards.map((card) => ({
+        name: card.name,
+        type_line: card.type_line,
+      })),
+    });
+    const rankedByName = new Map(ranked.map((card) => [card.name, card]));
+    const toTypedList = (names: string[], primaryType: string): EDHRECCard[] =>
+      names.map((name) => {
+        const base = rankedByName.get(name);
+        return {
+          name,
+          sanitized: name,
+          primary_type: primaryType,
+          inclusion: base?.inclusion ?? 0,
+          num_decks: base?.num_decks ?? 0,
+        };
+      });
     edhrecData = {
       themes: edhrecData?.themes ?? [],
       stats: edhrecData?.stats ?? { numDecks: ranked.length, typeDistribution: {}, manaCurve: {} },
       cardlists: {
-        allNonLand: ranked,
-        creatures: ranked,
-        instants: [],
-        sorceries: [],
-        artifacts: [],
-        enchantments: [],
-        planeswalkers: [],
+        allNonLand: ranked.map((card) => ({
+          ...card,
+          sanitized: card.name,
+          primary_type: 'Unknown',
+        })),
+        creatures: toTypedList(classified.creatures, 'Creature'),
+        instants: toTypedList(classified.instants, 'Instant'),
+        sorceries: toTypedList(classified.sorceries, 'Sorcery'),
+        artifacts: toTypedList(classified.artifacts, 'Artifact'),
+        enchantments: toTypedList(classified.enchantments, 'Enchantment'),
+        planeswalkers: toTypedList(classified.planeswalkers, 'Planeswalker'),
         lands: [],
       },
       similarCommanders: edhrecData?.similarCommanders ?? [],

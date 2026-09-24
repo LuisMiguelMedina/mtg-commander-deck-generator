@@ -1,6 +1,6 @@
 import type { ScryfallCard, Customization, ThemeResult, EDHRECCommanderStats, EDHRECCombo } from '@/types';
 import { fetchCommanderData, fetchPartnerCommanderData, fetchCommanderCombos, fetchColorIdentityCombos, fetchCommanderThemeData, fetchPartnerThemeData, edhrecColorSegment } from '@/services/edhrec/client';
-import { getCardsByNames, getGameChangerNames, getArenaLegalNames, getMtgCatalogs } from '@/services/scryfall/client';
+import { getCardsByNames, getGameChangerNames, getArenaLegalNames, getMtgCatalogs, searchCards } from '@/services/scryfall/client';
 import { calculateTypeTargets, calculateCurveTargets } from '@/services/deckBuilder/curveUtils';
 import { getDynamicRoleTargets, estimatePacingFromStats } from '@/services/deckBuilder/roleTargets';
 import { getCardRole, getCardSubtype, loadTaggerData } from '@/services/tagger/client';
@@ -11,6 +11,7 @@ import { payoffRank } from './combos';
 import { bannedNameSet } from './banned';
 import type { BrewContext, BrewCandidate } from './brewTypes';
 import { resolveBrewFormatPlan } from '@/services/brawl/brewFormatPipeline';
+import { buildLegalFormatPool } from '@/services/brawl/builderFormatPipeline';
 import { getFormatRules } from '@/lib/format/formatMode';
 import { searchBrawl100Decks } from '@/services/moxfield/client';
 import type { EDHRECCommanderData } from '@/types';
@@ -45,9 +46,20 @@ export async function prepareBrewContext(args: PrepareBrewArgs): Promise<BrewCon
   const colorSeg = edhrecColorSegment(args.colorIdentity, args.chosenColor);
 
   let edhrecData: EDHRECCommanderData | undefined;
+  let legalCardNames: string[] | undefined;
+  if (formatMode === 'brawl100') {
+    const formatCandidateResponse = await searchCards(
+      'game:arena',
+      args.colorIdentity,
+      { order: 'edhrec', skipFormatFilter: true },
+    ).catch(() => ({ data: [] as ScryfallCard[] }));
+    legalCardNames = buildLegalFormatPool(formatCandidateResponse.data, formatMode).map((card) => card.name);
+  }
+
   const brewPlan = await resolveBrewFormatPlan({
     customization,
     commanderName: commander.name,
+    legalCardNames,
     search: () => searchBrawl100Decks(commander.name),
     fetchEdhrec: async () => {
       edhrecData = partnerCommander
@@ -81,6 +93,14 @@ export async function prepareBrewContext(args: PrepareBrewArgs): Promise<BrewCon
         lands: [],
       },
     };
+  }
+
+  if (formatMode === 'brawl100' && brewPlan.candidateNames) {
+    edhrecData.cardlists.allNonLand = brewPlan.candidateNames.map((name) => ({
+      name,
+      inclusion: 0,
+      primary_type: 'Unknown',
+    }));
   }
 
   args.onProgress?.('Resolving cards…', 45);

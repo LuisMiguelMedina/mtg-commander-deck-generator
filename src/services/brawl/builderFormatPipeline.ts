@@ -56,6 +56,88 @@ export function adaptMoxfieldCardsToRanking(cards: RankingCard[]): RankingCard[]
   }));
 }
 
+const NON_LAND_TYPES = [
+  'Creature',
+  'Instant',
+  'Sorcery',
+  'Artifact',
+  'Enchantment',
+  'Planeswalker',
+] as const;
+
+type NonLandType = (typeof NON_LAND_TYPES)[number];
+
+function primaryTypeFromTypeLine(typeLine: string): NonLandType | 'Land' | 'Unknown' {
+  const tl = typeLine.split('—')[0].split('//')[0].toLowerCase();
+  if (tl.includes('creature')) return 'Creature';
+  if (tl.includes('instant')) return 'Instant';
+  if (tl.includes('sorcery')) return 'Sorcery';
+  if (tl.includes('artifact')) return 'Artifact';
+  if (tl.includes('enchantment')) return 'Enchantment';
+  if (tl.includes('planeswalker')) return 'Planeswalker';
+  if (tl.includes('land')) return 'Land';
+  return 'Unknown';
+}
+
+function normalizePrimaryType(raw?: string): NonLandType | 'Land' | 'Unknown' {
+  if (!raw) return 'Unknown';
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === 'land') return 'Land';
+  for (const type of NON_LAND_TYPES) {
+    if (normalized === type.toLowerCase()) return type;
+  }
+  return 'Unknown';
+}
+
+function resolveFillPrimaryType(card: { primary_type?: string; type_line?: string }): NonLandType | 'Land' | 'Unknown' {
+  const fromPrimary = normalizePrimaryType(card.primary_type);
+  if (fromPrimary !== 'Unknown') return fromPrimary;
+  if (card.type_line) return primaryTypeFromTypeLine(card.type_line);
+  return 'Unknown';
+}
+
+export function classifyLegalFill(input: {
+  names: string[];
+  cards: Array<{ name: string; primary_type?: string; type_line?: string }>;
+}): {
+  creatures: string[];
+  instants: string[];
+  sorceries: string[];
+  artifacts: string[];
+  enchantments: string[];
+  planeswalkers: string[];
+  allNonLand: string[];
+} {
+  const nameSet = new Set(input.names);
+  const byName = new Map(input.cards.map((card) => [card.name, card]));
+  const lists: Record<NonLandType, string[]> = {
+    Creature: [],
+    Instant: [],
+    Sorcery: [],
+    Artifact: [],
+    Enchantment: [],
+    Planeswalker: [],
+  };
+
+  for (const name of input.names) {
+    const card = byName.get(name);
+    const primaryType = card ? resolveFillPrimaryType(card) : 'Unknown';
+    if (primaryType === 'Land' || primaryType === 'Unknown') continue;
+    lists[primaryType].push(name);
+  }
+
+  const allNonLand = NON_LAND_TYPES.flatMap((type) => lists[type]);
+  return {
+    creatures: lists.Creature,
+    instants: lists.Instant,
+    sorceries: lists.Sorcery,
+    artifacts: lists.Artifact,
+    enchantments: lists.Enchantment,
+    planeswalkers: lists.Planeswalker,
+    allNonLand,
+  };
+}
+
 export function selectFormatFill(input: {
   legalCardNames: string[];
   rankingCards?: Array<{ name: string; inclusion?: number }>;
