@@ -34,7 +34,10 @@ jobs:
         run: npm run build
         env:
           VITE_ANALYTICS_URL: ${{ vars.VITE_ANALYTICS_URL }}
-          VITE_TAG_REPO_URL: ${{ vars.VITE_TAG_REPO_URL }}
+          VITE_TAG_REPO_URL: /mtg-commander-deck-generator/data/tagger-tags.json
+          VITE_SPELLCHROMA_DICT_URL: /mtg-commander-deck-generator/data/spellchroma-tag-dictionary.json
+          VITE_SPELLCHROMA_INDEX_URL: /mtg-commander-deck-generator/data/spellchroma-tag-index.json
+          VITE_SPELLBOOK_COMBOS_URL: /mtg-commander-deck-generator/data/spellbook-combos
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
