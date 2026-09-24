@@ -8,6 +8,13 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useStore } from '@/store';
 import { getCardByName } from '@/services/scryfall/client';
 import { trackEvent } from '@/services/analytics';
+import {
+  foundryLandingModel,
+  setLandingFormatMode,
+} from '@/services/foundry/landingFormat';
+import type { FormatMode } from '@/lib/format/formatMode';
+
+export { foundryLandingModel, setLandingFormatMode };
 
 /** How step 1 starts: pick a commander, or work backwards from a group of cards. */
 type Step1Mode = 'commander' | 'cards';
@@ -25,6 +32,7 @@ export function HomePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { setCommander } = useStore();
+  const [landingFormatMode, setLandingFormatModeLocal] = useState<FormatMode | null>(null);
 
   const [mode, setMode] = useState<Step1Mode>(() => {
     if (searchParams.get('mode') === 'cards') return 'cards';
@@ -36,6 +44,14 @@ export function HomePage() {
 
   // Hidden entry, but never a dead end: the way back out shows whenever you're in card mode.
   const showModeLink = SHOW_CARD_GROUP_LINK || mode === 'cards';
+
+  const landingModel = foundryLandingModel({ formatMode: landingFormatMode });
+  void landingModel.step1?.options;
+
+  const pickFormat = (formatMode: FormatMode) => {
+    setLandingFormatMode(formatMode);
+    setLandingFormatModeLocal(formatMode);
+  };
 
   // A commander chosen from the card group. The seeds ride along on the URL as `?seeds=` so
   // the builder can lock them in as must-includes across refresh and regenerate.
@@ -104,37 +120,90 @@ export function HomePage() {
         <p className="text-lg text-muted-foreground max-w-xl mx-auto mb-8">
           {mode === 'cards'
             ? "Drop in the cards you want to build around and we'll find the commanders that play them"
-            : "Choose a commander and we'll help assemble a complete deck optimized for your strategy"}
+            : "Choose a format, then a commander — we'll help assemble a complete deck optimized for your strategy"}
         </p>
       </div>
 
-      {/* Step 1 — plain heading, with a quiet link to the other way in */}
-      <section className="mb-6">
-        <div className="mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
-              1
+      {mode === 'cards' ? (
+        <section className="mb-6">
+          <div className="mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
+                1
+              </div>
+              <h2 className="text-lg font-semibold">Add Your Cards</h2>
             </div>
-            <h2 className="text-lg font-semibold">
-              {mode === 'cards' ? 'Add Your Cards' : 'Choose Your Commander'}
-            </h2>
+            {showModeLink && (
+              <button
+                onClick={() => setMode('commander')}
+                className="ml-10 mt-1 text-xs text-muted-foreground/70 hover:text-primary underline decoration-dotted underline-offset-4 transition-colors"
+              >
+                or start from a commander →
+              </button>
+            )}
           </div>
-          {/* Names where it goes rather than "another mode" — one click, no menu. */}
-          {showModeLink && (
-            <button
-              onClick={() => setMode(mode === 'cards' ? 'commander' : 'cards')}
-              className="ml-10 mt-1 text-xs text-muted-foreground/70 hover:text-primary underline decoration-dotted underline-offset-4 transition-colors"
-            >
-              {mode === 'cards'
-                ? 'or start from a commander →'
-                : 'or start from a group of cards →'}
-            </button>
+          <CardGroupSearch onSelectCommander={handleSelectCardGroupCommander} />
+        </section>
+      ) : (
+        <>
+          <section className="mb-6">
+            <div className="mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
+                  1
+                </div>
+                <h2 className="text-lg font-semibold">Choose format</h2>
+              </div>
+              {showModeLink && (
+                <button
+                  onClick={() => setMode('cards')}
+                  className="ml-10 mt-1 text-xs text-muted-foreground/70 hover:text-primary underline decoration-dotted underline-offset-4 transition-colors"
+                >
+                  or start from a group of cards →
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap justify-center gap-3 max-w-lg mx-auto">
+              <button
+                type="button"
+                onClick={() => pickFormat('brawl100')}
+                className={`px-5 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
+                  landingFormatMode === 'brawl100'
+                    ? 'border-primary bg-primary/15 text-primary'
+                    : 'border-border/60 bg-card hover:border-primary/40'
+                }`}
+              >
+                Historic Brawl
+              </button>
+              <button
+                type="button"
+                onClick={() => pickFormat('commander')}
+                className={`px-5 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
+                  landingFormatMode === 'commander'
+                    ? 'border-primary bg-primary/15 text-primary'
+                    : 'border-border/60 bg-card hover:border-primary/40'
+                }`}
+              >
+                Commander
+              </button>
+            </div>
+          </section>
+
+          {landingModel.step2Available && (
+            <section className="mb-6" data-landing-format-mode={landingFormatMode ?? undefined}>
+              <div className="mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
+                    2
+                  </div>
+                  <h2 className="text-lg font-semibold">Choose a commander</h2>
+                </div>
+              </div>
+              <CommanderSearch key={landingFormatMode ?? 'pending'} />
+            </section>
           )}
-        </div>
-        {mode === 'cards'
-          ? <CardGroupSearch onSelectCommander={handleSelectCardGroupCommander} />
-          : <CommanderSearch />}
-      </section>
+        </>
+      )}
     </main>
   );
 }

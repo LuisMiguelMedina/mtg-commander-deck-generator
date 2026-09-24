@@ -9,6 +9,9 @@ import {
   getCardImageUrl,
 } from '@/services/scryfall/client';
 import { fetchTopCommanders, fetchAllCommanderNames, fetchCommandersIncludingColors, formatCommanderNameForUrl, isPartnerPair } from '@/services/edhrec/client';
+import { suggestionsFor, fetchMoxfieldTopCommanders } from '@/services/foundry/commanderSuggestions';
+import { MOXFIELD_POPULARITY_ENABLED_DEFAULT } from '@/services/moxfield/flags';
+import { isEligibleCommander } from '@/lib/format/formatMode';
 import { StrategyBrowser } from '@/components/commander/StrategyBrowser';
 import { ColorFilterChips } from '@/components/commander/ColorFilterChips';
 import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from '@/components/ui/popover';
@@ -85,7 +88,8 @@ export function CommanderSearch({ onSelectCommander, destination = 'build' }: Co
   const [showResults, setShowResults] = useState(false);
   const [ownedOnly, setOwnedOnly] = useState(() => localStorage.getItem('ownedCommandersOnly') === 'true');
   const navigate = useNavigate();
-  const { setCommander } = useStore();
+  const { setCommander, customization } = useStore();
+  const formatMode = customization.formatMode ?? 'commander';
   const { cards: collectionCards, count: collectionCount } = useCollection();
   // All legendary creatures in the collection
   const collectionLegends = useMemo(
@@ -138,19 +142,55 @@ export function CommanderSearch({ onSelectCommander, destination = 'build' }: Co
   // Fetch top commanders from EDHREC based on color filter
   const [edhrecCommanders, setEdhrecCommanders] = useState<import('@/types').EDHRECTopCommander[]>([]);
   const [edhrecLoading, setEdhrecLoading] = useState(false);
+  const [suggestionSource, setSuggestionSource] = useState<'edhrec' | 'moxfield' | 'search-only'>('edhrec');
+  const [limitedSuggestions, setLimitedSuggestions] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setEdhrecLoading(true);
-    fetchTopCommanders([...colorFilter]).then(data => {
-      if (!cancelled) setEdhrecCommanders(data);
-    }).catch(() => {
-      if (!cancelled) setEdhrecCommanders([]);
-    }).finally(() => {
-      if (!cancelled) setEdhrecLoading(false);
-    });
+    suggestionsFor({
+      formatMode,
+      colorFilter: [...colorFilter],
+      fetchEdhrecTop: async () => {
+        const data = await fetchTopCommanders([...colorFilter]);
+        return data.map((c) => ({ name: c.name }));
+      },
+      fetchMoxfieldTop: fetchMoxfieldTopCommanders,
+      flagEnabled: MOXFIELD_POPULARITY_ENABLED_DEFAULT,
+    })
+      .then(async (result) => {
+        if (cancelled) return;
+        setSuggestionSource(result.source);
+        setLimitedSuggestions(!!result.limitedData);
+        if (result.source === 'edhrec') {
+          const data = await fetchTopCommanders([...colorFilter]);
+          if (!cancelled) setEdhrecCommanders(data);
+        } else if (result.source === 'moxfield') {
+          setEdhrecCommanders(
+            result.names.map((name, i) => ({
+              name,
+              sanitized: name.replace(/[^a-z0-9]+/gi, '-').toLowerCase(),
+              colorIdentity: [],
+              rank: i + 1,
+              numDecks: 0,
+            })),
+          );
+        } else {
+          setEdhrecCommanders([]);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setEdhrecCommanders([]);
+          setSuggestionSource('search-only');
+          setLimitedSuggestions(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setEdhrecLoading(false);
+      });
     return () => { cancelled = true; };
-  }, [colorFilter]);
+  }, [colorFilter, formatMode]);
 
   // Fetch popular commanders from analytics
   useEffect(() => {
@@ -182,7 +222,11 @@ export function CommanderSearch({ onSelectCommander, destination = 'build' }: Co
       setIsSearching(true);
       try {
         const searchResults = await searchCommanders(query);
-        setResults(searchResults.slice(0, 10));
+        setResults(
+          searchResults
+            .filter((card) => isEligibleCommander(card, formatMode))
+            .slice(0, 10),
+        );
         setShowResults(true);
         trackEvent('commander_searched', { query, resultCount: searchResults.length });
       } catch (error) {
@@ -194,7 +238,7 @@ export function CommanderSearch({ onSelectCommander, destination = 'build' }: Co
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [query, ownedOnly]);
+  }, [query, ownedOnly, formatMode]);
 
   // Show local results immediately when ownedOnly
   useEffect(() => {
@@ -488,7 +532,15 @@ export function CommanderSearch({ onSelectCommander, destination = 'build' }: Co
                       </PopoverClose>
                     </PopoverContent>
                   </Popover>
-                  {suggestionTab !== 'strategy' && <span>on EDHREC</span>}
+                  {suggestionTab !== 'strategy' && (
+                    <span>
+                      {suggestionSource === 'moxfield'
+                        ? 'on Moxfield'
+                        : suggestionSource === 'search-only'
+                          ? 'search for a legal Brawl commander'
+                          : 'on EDHREC'}
+                    </span>
+                  )}
                 </p>
               </div>
 
@@ -499,6 +551,11 @@ export function CommanderSearch({ onSelectCommander, destination = 'build' }: Co
                 <StrategyBrowser colorFilter={colorFilter} onSelectCommanderName={handleSelectStrategyCommander} />
               ) : suggestionTab === 'edhrec' ? (
                 <>
+                  {limitedSuggestions && (
+                    <p className="text-xs text-amber-400/90 mb-3">
+                      Limited Brawl data — search for a commander legal in Historic Brawl.
+                    </p>
+                  )}
                   {edhrecCommanders.length > 0 ? (
                     <div className={`relative flex flex-wrap justify-center gap-2 transition-opacity ${edhrecLoading ? 'opacity-40' : ''}`}>
                       {edhrecLoading && (

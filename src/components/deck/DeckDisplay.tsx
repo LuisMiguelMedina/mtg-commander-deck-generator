@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { useStore } from '@/store';
 import { getCardImageUrl, isDoubleFacedCard, getCardBackFaceUrl, getCardPrice, getFrontFaceTypeLine, getCardByName, getCachedCard, isMdfcLand, BASIC_LAND_NAMES, useScryfallImage } from '@/services/scryfall/client';
 import { getDeckFormatConfig } from '@/lib/constants/archetypes';
+import { getFormatRules } from '@/lib/format/formatMode';
+import { fixManaPool } from '@/services/mana/fixManaPool';
 import { getMaxCopies } from '@/lib/utils';
 import { DeckHistory } from '@/components/deck/DeckHistory';
 import type { ScryfallCard, DetectedCombo, UserCardList, LoadPhase, UserCombo, CardEdhrecMeta, GeneratedDeck } from '@/types';
@@ -2004,9 +2006,10 @@ interface DeckStatsProps {
 function DeckStats({ activeFilter, onFilterChange, showRoles, onToggleRoles, hideHeader, collectionNames, buildCollectionNames, collectionScope, ownedCollectionBreakdown, showCollection, showRelevancy: _showRelevancy, overallGrade, phasesDone, cardCountAction, spellChromaDeckRef = 'generated' }: DeckStatsProps) {
   const taggerReady = !phasesDone || phasesDone.has('tagger');
   const navigate = useNavigate();
-  const { generatedDeck, colorIdentity } = useStore();
+  const { generatedDeck, colorIdentity, customization, setGeneratedDeck } = useStore();
   // Owned drill-down popover open state.
   const [ownedMenuOpen, setOwnedMenuOpen] = useState(false);
+  const [fixingManaPool, setFixingManaPool] = useState(false);
   // SpellChroma top tags — lazily load the per-card index, then aggregate.
   const [deckTags, setDeckTags] = useState<DeckTagCount[]>([]);
   useEffect(() => {
@@ -2091,6 +2094,71 @@ function DeckStats({ activeFilter, onFilterChange, showRoles, onToggleRoles, hid
 
   const totalPips = Object.values(manaPips).reduce((a, b) => a + b, 0);
   const totalProduction = Object.values(manaProduction).reduce((a, b) => a + b, 0);
+
+  const handleFixManaPool = useCallback(async () => {
+    if (!generatedDeck || fixingManaPool) return;
+    setFixingManaPool(true);
+    try {
+      const deckCards = Object.values(generatedDeck.categories).flat();
+      const landCards = deckCards.filter((c) => getFrontFaceTypeLine(c).toLowerCase().includes('land'));
+      const formatMode = customization.formatMode ?? 'commander';
+      const landTarget = Math.min(
+        customization.landCount ?? landCards.length,
+        getFormatRules(formatMode)?.deckSize ?? deckCards.length,
+      );
+      const cardByName = new Map(deckCards.map((c) => [c.name, c]));
+      const result = fixManaPool({
+        deckCards: deckCards.map((c) => ({
+          name: c.name,
+          type_line: getFrontFaceTypeLine(c),
+          color_identity: c.color_identity,
+          produced_mana: c.produced_mana,
+        })),
+        formatMode,
+        colorIdentity: colorIdentity.length > 0
+          ? colorIdentity
+          : (generatedDeck.commander?.color_identity ?? []),
+        pipDemand: manaPips,
+        sources: manaProduction,
+        landTarget,
+        rankLand: (card) => {
+          const rank = cardByName.get(card.name)?.edhrec_rank;
+          return rank != null ? Math.max(1, 10000 - rank) : 10;
+        },
+        isBanned: (name) => customization.bannedCards.includes(name),
+      });
+
+      const resolved: ScryfallCard[] = [];
+      for (const card of result.cards) {
+        let full = cardByName.get(card.name);
+        if (!full) {
+          full = await getCardByName(card.name);
+          cardByName.set(card.name, full);
+        }
+        resolved.push(full);
+      }
+
+      const landResolved = resolved.filter((c) => getFrontFaceTypeLine(c).toLowerCase().includes('land'));
+      setGeneratedDeck({
+        ...generatedDeck,
+        categories: { ...generatedDeck.categories, lands: landResolved },
+      });
+    } catch (e) {
+      console.warn('[DeckDisplay] Fix Mana Pool failed:', e);
+    } finally {
+      setFixingManaPool(false);
+    }
+  }, [
+    colorIdentity,
+    customization.bannedCards,
+    customization.formatMode,
+    customization.landCount,
+    fixingManaPool,
+    generatedDeck,
+    manaPips,
+    manaProduction,
+    setGeneratedDeck,
+  ]);
 
   // Prepare pie chart data
   const pieData = Object.entries(manaPips)
@@ -2339,10 +2407,10 @@ function DeckStats({ activeFilter, onFilterChange, showRoles, onToggleRoles, hid
         </div>
       </div>
 
-      {/* Mana Distribution - Pie Chart */}
+      {/* Mana Distribution - Pie Chart / Pip demand */}
       {totalPips > 0 && (
         <div>
-          <div className="text-xs text-muted-foreground mb-3">Color Distribution</div>
+          <div className="text-xs text-muted-foreground mb-3 uppercase tracking-wide">PIP DEMAND</div>
           <div className="flex items-center gap-4">
             <PieChart
               data={pieData}
@@ -2375,6 +2443,17 @@ function DeckStats({ activeFilter, onFilterChange, showRoles, onToggleRoles, hid
                   );
                 })}
             </div>
+          </div>
+          <div className="flex justify-center mt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={fixingManaPool}
+              onClick={() => { void handleFixManaPool(); }}
+            >
+              {fixingManaPool ? 'Fixing…' : 'Fix Mana Pool'}
+            </Button>
           </div>
         </div>
       )}
