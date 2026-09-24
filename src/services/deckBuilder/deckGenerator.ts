@@ -2564,7 +2564,23 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
       });
     edhrecData = {
       themes: edhrecData?.themes ?? [],
-      stats: edhrecData?.stats ?? { numDecks: ranked.length, typeDistribution: {}, manaCurve: {} },
+      stats: edhrecData?.stats ?? {
+        avgPrice: 0,
+        numDecks: ranked.length,
+        deckSize: 81,
+        manaCurve: {},
+        typeDistribution: {
+          creature: 0,
+          instant: 0,
+          sorcery: 0,
+          artifact: 0,
+          enchantment: 0,
+          land: 0,
+          planeswalker: 0,
+          battle: 0,
+        },
+        landDistribution: { basic: 0, nonbasic: 0, total: 0 },
+      },
       cardlists: {
         allNonLand: ranked.map((card) => ({
           ...card,

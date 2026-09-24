@@ -108,7 +108,6 @@ export function classifyLegalFill(input: {
   planeswalkers: string[];
   allNonLand: string[];
 } {
-  const nameSet = new Set(input.names);
   const byName = new Map(input.cards.map((card) => [card.name, card]));
   const lists: Record<NonLandType, string[]> = {
     Creature: [],
