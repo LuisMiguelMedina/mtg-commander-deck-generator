@@ -689,11 +689,7 @@ export function getPhaseRoleTargets(
   return result;
 }
 
-/**
- * Commander budget for the tempo strip's main targets (early / mid / late).
- * `getCurvePhases` accepts this so the 99-card total can be named in one place.
- * It is not applied yet: phase targets still normalize to the live non-land count.
- */
+/** Commander budget for the tempo strip's main targets (early / mid / late). */
 export interface MainTargetDeckBudget {
   /** Non-commander deck size. Standard Commander is 99. */
   deckSize: number;
@@ -712,9 +708,9 @@ export function getCurvePhases(
   roleTargets?: Record<string, number>,
   deckBudget?: MainTargetDeckBudget,
 ): CurvePhaseAnalysis[] {
-  // PBI-13: budget is part of the signature and intentionally unused.
-  // Targets below still sum to `totalNonLand` (MDFCs counted as spells).
-  void deckBudget;
+  const targetDeckTotal = deckBudget
+    ? deckBudget.deckSize - deckBudget.landsAlreadyAdded + deckBudget.mdfcCount
+    : totalNonLand;
   const phaseDefs: { phase: CurvePhase; label: string; range: [number, number] }[] = [
     { phase: 'early', label: 'Early Game', range: [0, 2] },
     { phase: 'mid',   label: 'Mid Game',   range: [3, 4] },
@@ -796,13 +792,13 @@ export function getCurvePhases(
     };
   });
 
-  // Normalize so adjusted targets sum to totalNonLand
+  // Normalize so adjusted targets sum to targetDeckTotal
   const totalAdjusted = result.reduce((s, p) => s + p.target, 0);
-  if (totalAdjusted > 0 && totalAdjusted !== totalNonLand) {
-    const scale = totalNonLand / totalAdjusted;
+  if (totalAdjusted > 0 && totalAdjusted !== targetDeckTotal) {
+    const scale = targetDeckTotal / totalAdjusted;
     for (const p of result) p.target = Math.round(p.target * scale);
     // Fix rounding drift on the largest phase
-    const diff = totalNonLand - result.reduce((s, p) => s + p.target, 0);
+    const diff = targetDeckTotal - result.reduce((s, p) => s + p.target, 0);
     if (diff !== 0) {
       const largest = result.reduce((max, p) => p.target > max.target ? p : max, result[0]);
       largest.target += diff;
