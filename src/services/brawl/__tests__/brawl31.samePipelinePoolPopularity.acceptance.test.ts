@@ -148,36 +148,31 @@ describe('PBI-BRAWL-31 same pipeline; only legal pool and popularity differ', ()
     const body = functionBody(await readRepoText(GENERATOR_PATH), 'export async function generateDeck');
 
     expect(body, 'generateDeck').not.toBe('');
-    expect(body, 'generateDeck never reads legalCardNames').toMatch(/\blegalCardNames\b/);
-    expect(body, 'generateDeck does not call selectFormatFill').toMatch(/selectFormatFill\s*\(/);
-    expect(body, 'brawl100 still copies EDHREC typed lists into the fill').not.toMatch(/lists\?\.instants/);
-    expect(body, 'brawl100 still overlays EDHREC only when Moxfield ranking is non-empty').not.toMatch(
-      /formatMode === 'brawl100' && rankingCards\.length > 0/,
-    );
+    expect(/\blegalCardNames\b/.test(body), 'generateDeck never reads legalCardNames').toBe(true);
+    expect(/selectFormatFill\s*\(/.test(body), 'generateDeck does not call selectFormatFill').toBe(true);
+    expect(/lists\?\.instants/.test(body), 'brawl100 still copies EDHREC typed lists into the fill').toBe(false);
+    expect(
+      /formatMode === 'brawl100' && rankingCards\.length > 0/.test(body),
+      'brawl100 still overlays EDHREC only when Moxfield ranking is non-empty',
+    ).toBe(false);
   });
 
   it('prepareBrewContext uses searchBrawl100Decks instead of an always-403 stub', async () => {
     const call = brewPlanInvocation(await readRepoText(PREPARE_BREW_PATH));
 
-    expect(call, `${PREPARE_BREW_PATH} resolveBrewFormatPlan(...)`).toMatch(/resolveBrewFormatPlan\(/);
-    expect(call, 'prepareBrewContext still stubs search → 403').not.toMatch(/status:\s*403/);
-    expect(call, 'prepareBrewContext does not call the real Moxfield search').toMatch(
-      /searchBrawl100Decks\s*\(/,
-    );
+    expect(/resolveBrewFormatPlan\(/.test(call), `${PREPARE_BREW_PATH} resolveBrewFormatPlan(...)`).toBe(true);
+    expect(/status:\s*403/.test(call), 'prepareBrewContext still stubs search → 403').toBe(false);
+    expect(/searchBrawl100Decks\s*\(/.test(call), 'prepareBrewContext does not call the real Moxfield search').toBe(true);
   });
 
   it('generateDeck passes a real legal pool and a real Moxfield search', async () => {
     const call = pipelineInvocation(await readRepoText(GENERATOR_PATH));
 
-    expect(call, `${GENERATOR_PATH} resolveBuilderFormatPipeline(...)`).toMatch(
-      /resolveBuilderFormatPipeline\(/,
-    );
-    expect(call, 'generateDeck still passes pool: []').not.toMatch(/pool:\s*\[\s*\]/);
-    expect(call, 'generateDeck does not build the legal pool').toMatch(/buildLegalFormatPool\s*\(/);
-    expect(call, 'generateDeck still stubs search → 403').not.toMatch(/status:\s*403/);
-    expect(call, 'generateDeck does not call the real Moxfield search').toMatch(
-      /searchBrawl100Decks\s*\(/,
-    );
+    expect(/resolveBuilderFormatPipeline\(/.test(call), `${GENERATOR_PATH} resolveBuilderFormatPipeline(...)`).toBe(true);
+    expect(/pool:\s*\[\s*\]/.test(call), 'generateDeck still passes pool: []').toBe(false);
+    expect(/buildLegalFormatPool\s*\(/.test(call), 'generateDeck does not build the legal pool').toBe(true);
+    expect(/status:\s*403/.test(call), 'generateDeck still stubs search → 403').toBe(false);
+    expect(/searchBrawl100Decks\s*\(/.test(call), 'generateDeck does not call the real Moxfield search').toBe(true);
   });
 
   it('a 403 search still degrades to the legal pool without blocking generate or brew', async () => {

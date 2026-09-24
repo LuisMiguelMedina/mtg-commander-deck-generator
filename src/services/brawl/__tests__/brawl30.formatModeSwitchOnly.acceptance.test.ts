@@ -168,14 +168,10 @@ describe('PBI-BRAWL-30 formatMode only switches a fixed 1+99 size', () => {
     const body = functionBody(source, 'function calculateTargetCounts');
 
     expect(body, 'calculateTargetCounts').not.toBe('');
-    expect(body, 'calculateTargetCounts sizes from getFormatRules').toMatch(/getFormatRules\s*\(/);
-    expect(body, 'calculateTargetCounts still reads customization.deckFormat').not.toMatch(
-      /customization\.deckFormat/,
-    );
-    expect(body, 'calculateTargetCounts still indexes a free-size table').not.toMatch(
-      /knownDefaults\s*\[\s*format\s*\]/,
-    );
-    expect(body, 'calculateTargetCounts still has a deckFormat 60 composition').not.toMatch(/\b60\s*:/);
+    expect(/getFormatRules\s*\(/.test(body), 'calculateTargetCounts sizes from getFormatRules').toBe(true);
+    expect(/customization\.deckFormat/.test(body), 'calculateTargetCounts still reads customization.deckFormat').toBe(false);
+    expect(/knownDefaults\s*\[\s*format\s*\]/.test(body), 'calculateTargetCounts still indexes a free-size table').toBe(false);
+    expect(/\b60\s*:/.test(body), 'calculateTargetCounts still has a deckFormat 60 composition').toBe(false);
   });
 
   it('generateDeck takes deck size only from getFormatRules(formatMode)', async () => {
@@ -184,12 +180,8 @@ describe('PBI-BRAWL-30 formatMode only switches a fixed 1+99 size', () => {
 
     expect(formatMode.getFormatRules('commander')?.deckSize).toBe(99);
     expect(formatMode.getFormatRules('brawl100')?.deckSize).toBe(99);
-    expect(body, 'generateDeck sizes from getFormatRules(formatMode)').toMatch(
-      /getFormatRules\s*\(\s*formatMode\s*\)/,
-    );
-    expect(body, 'generateDeck still assigns format from customization.deckFormat').not.toMatch(
-      /const format = customization\.deckFormat/,
-    );
+    expect(/getFormatRules\s*\(\s*formatMode\s*\)/.test(body), 'generateDeck sizes from getFormatRules(formatMode)').toBe(true);
+    expect(/const format = customization\.deckFormat/.test(body), 'generateDeck still assigns format from customization.deckFormat').toBe(false);
   });
 
   it('brew sizing uses getFormatRules(formatMode), not customization.deckFormat', async () => {
@@ -203,19 +195,14 @@ describe('PBI-BRAWL-30 formatMode only switches a fixed 1+99 size', () => {
     );
 
     expect(prepare, 'prepareBrewContext').not.toBe('');
-    expect(prepare, 'prepareBrewContext sizes from getFormatRules(formatMode)').toMatch(
-      /getFormatRules\s*\(\s*formatMode\s*\)/,
-    );
-    expect(prepare, 'prepareBrewContext still falls back to customization.deckFormat').not.toMatch(
-      /customization\.deckFormat/,
-    );
+    expect(/getFormatRules\s*\(\s*formatMode\s*\)/.test(prepare), 'prepareBrewContext sizes from getFormatRules(formatMode)').toBe(true);
+    expect(/customization\.deckFormat/.test(prepare), 'prepareBrewContext still falls back to customization.deckFormat').toBe(false);
 
     expect(finish, 'finishBrew').not.toBe('');
-    expect(finish, 'finishBrew sizes every mode from getFormatRules(formatMode)').toMatch(
-      /getFormatRules\s*\(\s*formatMode\s*\)/,
-    );
-    expect(finish, 'finishBrew still special-cases only brawl100 deck size').not.toMatch(
-      /formatMode === 'brawl100' \? getFormatRules\('brawl100'\)/,
-    );
+    expect(/getFormatRules\s*\(\s*formatMode\s*\)/.test(finish), 'finishBrew sizes every mode from getFormatRules(formatMode)').toBe(true);
+    expect(
+      /formatMode === 'brawl100' \? getFormatRules\('brawl100'\)/.test(finish),
+      'finishBrew still special-cases only brawl100 deck size',
+    ).toBe(false);
   });
 });
