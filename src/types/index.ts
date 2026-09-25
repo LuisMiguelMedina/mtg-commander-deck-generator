@@ -398,7 +398,8 @@ export type DeckDataSource =
   | 'base+bracket'    // Base commander data with bracket/power level
   | 'base'            // Base commander data, no bracket
   | 'scryfall'        // No EDHREC data at all — pure Scryfall search
-  | 'moxfield';       // Moxfield Brawl 100 popularity deck lists
+  | 'moxfield'        // Moxfield Historic Brawl popularity deck lists
+  | 'archidekt';      // Archidekt public Brawl deck lists (fallback when Moxfield blocked)
 
 /** Static per-card EDHREC metadata snapshot (see GeneratedDeck.cardEdhrecMetaMap). */
 export interface CardEdhrecMeta {

@@ -5,6 +5,7 @@ import {
   handleSubmit, handleList, handleVote,
   handleDevNote, handleShip, handleDelete,
 } from './poll';
+import { handleBrawlPopularity } from './brawlPopularity';
 
 const client = new DynamoDBClient({});
 const TABLE_NAME = process.env.TABLE_NAME!;
@@ -32,6 +33,10 @@ export async function handler(event: {
     if (action === 'poll-devnote' && method === 'POST') return handleDevNote(event.body, event.headers);
     if (action === 'poll-ship' && method === 'POST') return handleShip(event.body, event.headers);
     if (action === 'poll-delete' && method === 'POST') return handleDelete(event.body, event.headers);
+
+    if (action === 'brawl-popularity' && method === 'GET') {
+      return handleBrawlPopularity(event.queryStringParameters ?? {});
+    }
 
     if (method === 'POST') {
       // No action → legacy analytics ingest.

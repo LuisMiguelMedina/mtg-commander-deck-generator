@@ -216,6 +216,12 @@ export function ArchetypeDisplay({}: ArchetypeDisplayProps) {
               {edhrecNumDecks.toLocaleString()} lists). EDHREC theme tags apply to Commander only — generate
               without picking a theme.
             </>
+          ) : archetypeDataSource === 'archidekt' && edhrecNumDecks && edhrecNumDecks > 0 ? (
+            <>
+              Historic Brawl suggestions use public Brawl deck lists on Archidekt (
+              {edhrecNumDecks.toLocaleString()} decks sampled). Moxfield data is not reachable from the browser;
+              {archetypeLimitedData ? ' sample size is small —' : ''} generation still respects Arena Brawl legality.
+            </>
           ) : (
             <>
               Limited Historic Brawl list data from Moxfield — deck generation still uses Arena-legal cards

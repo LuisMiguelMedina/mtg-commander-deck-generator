@@ -75,7 +75,7 @@ export async function resolveBrewFormatPlan(input: BrewFormatPlanInput): Promise
       search: input.search,
     });
     const rankingCards =
-      popularity.dataSource === 'moxfield' && popularity.cards?.length
+      (popularity.dataSource === 'moxfield' || popularity.dataSource === 'archidekt') && popularity.cards?.length
         ? adaptMoxfieldCardsToRanking(popularity.cards)
         : [];
     const { names: candidateNames } = selectBrewOffers({

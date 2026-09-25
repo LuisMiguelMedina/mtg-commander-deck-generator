@@ -2,6 +2,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import { brawlPopularityDevPlugin } from './vite.brawlPopularityPlugin'
 
 export default defineConfig({
   base: process.env.BASE_PATH || '/mtg-commander-deck-generator/',
@@ -11,7 +12,7 @@ export default defineConfig({
     include: ['src/**/*.test.ts'],
     setupFiles: ['./src/test/setup.ts'],
   },
-  plugins: [react()],
+  plugins: [react(), brawlPopularityDevPlugin()],
   define: {
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.0'),
   },

@@ -2743,8 +2743,8 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
       },
       similarCommanders: edhrecData?.similarCommanders ?? [],
     };
-    if (pipeline.dataSource === 'moxfield') {
-      dataSource = 'moxfield';
+    if (pipeline.dataSource === 'moxfield' || pipeline.dataSource === 'archidekt') {
+      dataSource = pipeline.dataSource;
     }
   }
 

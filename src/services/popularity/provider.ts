@@ -21,6 +21,7 @@ type SearchResult = {
   status: number;
   numDecks?: number;
   cards?: SearchCard[];
+  popularitySource?: 'moxfield' | 'archidekt';
 };
 
 export type Brawl100PopularityResult = {
@@ -46,10 +47,10 @@ export async function getBrawl100Popularity(input: {
 
   try {
     const result = await input.search();
-    if (shouldDegradeToScryfall(result.status)) {
+    if (shouldDegradeToScryfall(result.status) && !result.popularitySource) {
       return { dataSource: 'scryfall' };
     }
-    if (result.status !== 200) {
+    if (result.status !== 200 && !result.popularitySource) {
       return { dataSource: 'scryfall' };
     }
     if (!result.numDecks || result.numDecks <= 0) {
@@ -64,10 +65,14 @@ export async function getBrawl100Popularity(input: {
       return { dataSource: 'scryfall', limitedData: true };
     }
 
+    const dataSource: DeckDataSource =
+      result.popularitySource === 'archidekt' ? 'archidekt' : 'moxfield';
+
     return {
-      dataSource: 'moxfield',
+      dataSource,
       numDecks: result.numDecks,
       fmt: MOXFIELD_BRAWL100_FMT,
+      limitedData: result.numDecks < 5 ? true : undefined,
       cards: normalizedCards.map((card) => ({
         name: card.name,
         inclusion: card.inclusion,

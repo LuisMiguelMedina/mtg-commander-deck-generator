@@ -193,7 +193,7 @@ export async function resolveBuilderFormatPipeline(
       search: input.search,
     });
     const rankingCards =
-      popularity.dataSource === 'moxfield' && popularity.cards?.length
+      (popularity.dataSource === 'moxfield' || popularity.dataSource === 'archidekt') && popularity.cards?.length
         ? adaptMoxfieldCardsToRanking(popularity.cards)
         : [];
     return {

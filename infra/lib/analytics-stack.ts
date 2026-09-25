@@ -55,6 +55,7 @@ export class AnalyticsStack extends cdk.Stack {
           'https://manafoundry.gg',
           'https://www.manafoundry.gg',
           'https://20q2.github.io',
+          'https://luismiguelmedina.github.io',
           'http://localhost:5173',
           'http://localhost:4173',
         ],
