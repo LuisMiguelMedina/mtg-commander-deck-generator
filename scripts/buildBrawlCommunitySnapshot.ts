@@ -13,7 +13,18 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT = join(__dirname, '../public/data/brawl-community-snapshot.json');
 
 /** Always prefetch archetype samples for commanders users report missing list data. */
-const EXTRA_COMMANDERS = ['Ral, Crackling Wit', 'Kinnan, Bonder Prodigy', 'Niv-Mizzet, Parun'];
+const EXTRA_COMMANDERS = [
+  'Ral, Crackling Wit',
+  'Kinnan, Bonder Prodigy',
+  'Niv-Mizzet, Parun',
+  'Atraxa, Grand Unifier',
+  'Etali, Primal Conqueror // Etali, Primal Sickness',
+  'Sythis, Harvest\'s Hand',
+  'Imoti, Celebrant of Bounty',
+  'Golos, Tireless Pilgrim',
+  'Esika, God of the Tree // The Prismatic Bridge',
+  'Roxanne, Starfall Savant',
+];
 
 function normalizeKey(name: string): string {
   return name.trim().toLowerCase();
@@ -34,7 +45,7 @@ async function main() {
   for (const name of commanders) {
     let result = await searchArchidektBrawl100Decks(name);
     if (result.status !== 200 || !result.numDecks || !result.cards?.length) {
-      await sleep(1200);
+      await sleep(2500);
       result = await searchArchidektBrawl100Decks(name);
     }
     if (result.status === 200 && result.numDecks && result.cards?.length) {
@@ -47,7 +58,7 @@ async function main() {
     } else {
       console.warn(`[brawl-snapshot] no Archidekt data for ${name}`);
     }
-    await sleep(900);
+    await sleep(2000);
   }
 
   const snapshot: BrawlCommunitySnapshot = {

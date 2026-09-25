@@ -1296,7 +1296,9 @@ export function BuilderPage() {
                 </>
               ) : noDataForSettings ? (
                 <>
-                  No EDHREC data — adjust bracket or budget
+                  {customization.formatMode === 'brawl100'
+                    ? 'No list data — adjust settings'
+                    : 'No EDHREC data — adjust bracket or budget'}
                 </>
               ) : isLoading ? (
                 <>
