@@ -33,12 +33,14 @@ export async function fetchMoxfieldTopCommanders(): Promise<{
   status: number;
   names?: string[];
   source?: 'moxfield' | 'archidekt';
+  limitedData?: boolean;
 }> {
   const result = await fetchBrawlTopCommandersProxied();
   return {
     status: result.status,
     names: result.names,
     source: result.source === 'archidekt' || result.source === 'moxfield' ? result.source : undefined,
+    limitedData: result.limitedData,
   };
 }
 
@@ -88,7 +90,7 @@ export async function suggestionsFor(input: SuggestionsInput): Promise<Suggestio
         return {
           names: res.names,
           source,
-          limitedData: source === 'archidekt',
+          limitedData: source === 'archidekt' ? res.limitedData !== false : false,
         };
       }
     }

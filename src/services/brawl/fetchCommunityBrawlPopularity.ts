@@ -99,10 +99,14 @@ export function buildBrawlPopularityRequestUrl(commanderName: string): string | 
   return buildAnalyticsActionUrl('brawl-popularity', { commanderName });
 }
 
-/** Browser entry: analytics/dev proxy → build snapshot → no direct Moxfield (blocked in browser). */
+/** Browser entry: build snapshot → analytics/dev proxy (no direct Moxfield in browser). */
 export async function searchBrawl100DecksProxied(
   commanderName: string,
 ): Promise<CommunityBrawlPopularityResponse> {
+  const { popularityFromSnapshot } = await import('@/services/brawl/brawlCommunitySnapshot');
+  const fromSnapshot = await popularityFromSnapshot(commanderName);
+  if (fromSnapshot) return fromSnapshot;
+
   const url = buildBrawlPopularityRequestUrl(commanderName);
   if (url) {
     try {
@@ -118,13 +122,9 @@ export async function searchBrawl100DecksProxied(
         }
       }
     } catch {
-      // fall through to snapshot
+      // fall through
     }
   }
-
-  const { popularityFromSnapshot } = await import('@/services/brawl/brawlCommunitySnapshot');
-  const fromSnapshot = await popularityFromSnapshot(commanderName);
-  if (fromSnapshot) return fromSnapshot;
 
   return { source: 'scryfall', status: url ? 502 : 503, limitedData: true };
 }

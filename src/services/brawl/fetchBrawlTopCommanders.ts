@@ -137,12 +137,12 @@ export async function fetchBrawlTopCommandersServer(): Promise<BrawlTopCommander
 }
 
 export async function fetchBrawlTopCommandersProxied(): Promise<BrawlTopCommandersResponse> {
-  const proxied = await fetchAnalyticsAction<BrawlTopCommandersResponse>('brawl-top-commanders');
-  if (proxied?.names?.length) return proxied;
-
   const { topCommandersFromSnapshot } = await import('@/services/brawl/brawlCommunitySnapshot');
   const fromSnapshot = await topCommandersFromSnapshot();
   if (fromSnapshot?.names?.length) return fromSnapshot;
+
+  const proxied = await fetchAnalyticsAction<BrawlTopCommandersResponse>('brawl-top-commanders');
+  if (proxied?.names?.length) return proxied;
 
   if (!buildAnalyticsActionUrl('brawl-top-commanders')) {
     return { source: 'scryfall', status: 503, names: [], limitedData: true };
