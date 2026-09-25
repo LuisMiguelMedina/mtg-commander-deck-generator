@@ -400,6 +400,7 @@ export function BuilderPage() {
             dataSource: popularity.dataSource,
             numDecks: popularity.numDecks ?? null,
             limitedData: popularity.limitedData,
+            cards: popularity.cards,
           });
         } catch {
           if (stale()) return;
@@ -1289,7 +1290,9 @@ export function BuilderPage() {
               {themesLoading ? (
                 <>
                   <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Loading EDHREC data...
+                  {customization.formatMode === 'brawl100'
+                    ? 'Loading Brawl list data...'
+                    : 'Loading EDHREC data...'}
                 </>
               ) : noDataForSettings ? (
                 <>

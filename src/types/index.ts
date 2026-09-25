@@ -668,6 +668,8 @@ export interface AppState {
   themesError: string | null;
   themeSource: 'edhrec' | 'local';
   /** Popularity source for Historic Brawl archetype panel (null in Commander until generate). */
+  /** Popular nonland cards from community Brawl lists (Historic Brawl builder panel). */
+  brawlCommunityCards: Array<{ name: string; inclusion?: number }>;
   archetypeDataSource: DeckDataSource | null;
   archetypeLimitedData: boolean;
   edhrecNumDecks: number | null;
@@ -729,6 +731,7 @@ export interface AppState {
     dataSource: DeckDataSource;
     numDecks: number | null;
     limitedData?: boolean;
+    cards?: Array<{ name: string; inclusion?: number; count?: number }>;
   }) => void;
   setEdhrecLandSuggestion: (suggestion: { landCount: number; nonBasicLandCount: number } | null) => void;
   setEdhrecStats: (stats: EDHRECCommanderStats | null) => void;

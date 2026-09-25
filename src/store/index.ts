@@ -307,6 +307,7 @@ export const useStore = create<AppState>((set, get) => ({
   themesError: null,
   themeSource: 'local',
   archetypeDataSource: null,
+  brawlCommunityCards: [],
   archetypeLimitedData: false,
   edhrecNumDecks: null,
   pendingStrategySlug: null,
@@ -370,6 +371,7 @@ export const useStore = create<AppState>((set, get) => ({
       themesError: null,
       themeSource: 'local',
       archetypeDataSource: null,
+      brawlCommunityCards: [],
       archetypeLimitedData: false,
       edhrecNumDecks: null,
       edhrecLandSuggestion: null,
@@ -405,6 +407,7 @@ export const useStore = create<AppState>((set, get) => ({
       themesError: null,
       themeSource: 'local',
       archetypeDataSource: null,
+      brawlCommunityCards: [],
       archetypeLimitedData: false,
       edhrecNumDecks: null,
       edhrecStats: null,
@@ -437,6 +440,7 @@ export const useStore = create<AppState>((set, get) => ({
     themeSource: 'edhrec',
     themesError: null,
     archetypeDataSource: null,
+    brawlCommunityCards: [],
     archetypeLimitedData: false,
   }),
 
@@ -467,6 +471,13 @@ export const useStore = create<AppState>((set, get) => ({
     archetypeDataSource: ctx.dataSource,
     archetypeLimitedData: ctx.limitedData ?? false,
     edhrecNumDecks: ctx.numDecks,
+    brawlCommunityCards: (ctx.cards ?? [])
+      .filter((c) => !/^(Plains|Island|Swamp|Mountain|Forest|Wastes|Snow-Covered )/.test(c.name))
+      .slice(0, 12)
+      .map((c) => ({
+        name: c.name,
+        inclusion: c.inclusion,
+      })),
     themesError: null,
     themeSource: 'local',
     edhrecThemes: [],

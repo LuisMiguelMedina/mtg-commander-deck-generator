@@ -1,8 +1,44 @@
 import { MOXFIELD_BRAWL100_FMT } from '@/services/moxfield/fmt';
 import { fetchBrawlTopCommandersProxied } from '@/services/brawl/fetchBrawlTopCommanders';
-import { searchCards } from '@/services/scryfall/client';
+import { getCardByName, searchCards } from '@/services/scryfall/client';
 import { BRAWL_ARENA_COMMANDER_SCRYFALL_QUERY, isEligibleCommander } from '@/lib/format/formatMode';
 import { isLegalForFormatDeck } from '@/services/scryfall/legality';
+
+const WUBRG = 'WUBRG';
+
+function commanderMatchesColorFilter(identity: string[], colorFilter: string[]): boolean {
+  if (colorFilter.length === 0) return true;
+  if (identity.length !== colorFilter.length) return false;
+  const want = new Set(colorFilter);
+  return identity.every((c) => want.has(c));
+}
+
+async function colorIdentityByCommanderNames(names: string[]): Promise<Record<string, string[]>> {
+  const out: Record<string, string[]> = {};
+  const slice = names.slice(0, 24);
+  await Promise.all(
+    slice.map(async (name) => {
+      try {
+        const card = await getCardByName(name);
+        out[name] = (card.color_identity ?? []).filter((c) => WUBRG.includes(c));
+      } catch {
+        out[name] = [];
+      }
+    }),
+  );
+  return out;
+}
+
+function filterNamesByColor(
+  names: string[],
+  colorIdentityByName: Record<string, string[]>,
+  colorFilter: string[],
+): string[] {
+  if (colorFilter.length === 0) return names;
+  return names.filter((name) =>
+    commanderMatchesColorFilter(colorIdentityByName[name] ?? [], colorFilter),
+  );
+}
 
 export type SuggestionsInput = {
   formatMode: string;
@@ -92,11 +128,18 @@ export async function suggestionsFor(input: SuggestionsInput): Promise<Suggestio
       const res = await fetchMoxfieldTop();
       if (res.status === 200 && res.names?.length) {
         const source = res.source === 'archidekt' ? 'archidekt' : 'moxfield';
-        return {
-          names: res.names,
-          source,
-          limitedData: source === 'archidekt' ? res.limitedData !== false : false,
-        };
+        const colorIdentityByName = await colorIdentityByCommanderNames(res.names);
+        const names = filterNamesByColor(res.names, colorIdentityByName, colorFilter);
+        if (names.length === 0) {
+          // Color filter excluded everyone — fall through to Scryfall narrow search
+        } else {
+          return {
+            names,
+            source,
+            limitedData: source === 'archidekt' ? res.limitedData !== false : false,
+            colorIdentityByName,
+          };
+        }
       }
     }
     const scryfall = await fetchScryfallTopBrawl(colorFilter);

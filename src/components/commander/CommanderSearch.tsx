@@ -270,6 +270,19 @@ export function CommanderSearch({ onSelectCommander, destination = 'build', form
     }
   }, [ownedOnly, query, localResults]);
 
+  const handleSelectPopularCommander = async (name: string) => {
+    setIsSearching(true);
+    try {
+      const card = await getCardByName(name);
+      if (!isEligibleCommander(card, formatMode)) return;
+      handleSelectCommander(card);
+    } catch (error) {
+      console.error('Failed to fetch commander:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   // strategySlug, when present (selection came via the "By strategy" tab), is carried to the
   // builder as a `?strategy=` URL param so it can pre-select that archetype — passed via URL
   // rather than store state so the builder reads it synchronously on mount with no render race.
@@ -616,7 +629,7 @@ export function CommanderSearch({ onSelectCommander, destination = 'build', form
                       {edhrecCommanders.filter(c => !isPartnerPair(c.name)).map((commander, i) => (
                         <button
                           key={commander.sanitized}
-                          onClick={() => setQuery(commander.name)}
+                          onClick={() => void handleSelectPopularCommander(commander.name)}
                           className="animate-chip-in flex items-center gap-1.5 px-3 py-1.5 bg-accent/50 backdrop-blur-sm rounded-full text-sm text-muted-foreground hover:bg-primary/20 hover:text-primary transition-colors cursor-pointer"
                           style={{ animationDelay: `${i * 40}ms` }}
                         >

@@ -78,6 +78,7 @@ export function ArchetypeDisplay({}: ArchetypeDisplayProps) {
     edhrecNumDecks,
     archetypeDataSource,
     archetypeLimitedData,
+    brawlCommunityCards,
     customization,
     updateCustomization,
   } = useStore();
@@ -209,7 +210,37 @@ export function ArchetypeDisplay({}: ArchetypeDisplayProps) {
       )}
 
       {!themesLoading && isBrawl && (
-        <div className="text-sm text-muted-foreground bg-accent/30 px-3 py-2 rounded-md border border-border/50">
+        <div className="space-y-3">
+          {brawlCommunityCards.length > 0 && (
+            <div>
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                Popular in community Brawl decks
+                {edhrecNumDecks ? (
+                  <span className="text-xs ml-2 opacity-60">
+                    ({edhrecNumDecks.toLocaleString()} lists sampled)
+                  </span>
+                ) : null}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {brawlCommunityCards.map((card) => (
+                  <span
+                    key={card.name}
+                    className="px-3 py-1.5 rounded-full text-sm bg-accent/50 border border-border/40 text-muted-foreground"
+                  >
+                    {card.name}
+                    {card.inclusion !== undefined ? (
+                      <span className="text-xs opacity-60 ml-1">{card.inclusion}%</span>
+                    ) : null}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Historic Brawl does not use EDHREC archetype tags — generation weights cards like these
+                from public lists, then fills with Arena-legal picks.
+              </p>
+            </div>
+          )}
+          <div className="text-sm text-muted-foreground bg-accent/30 px-3 py-2 rounded-md border border-border/50">
           {archetypeDataSource === 'moxfield' && edhrecNumDecks && edhrecNumDecks > 0 && !archetypeLimitedData ? (
             <>
               Historic Brawl suggestions use popular public decks on Moxfield (
@@ -229,6 +260,7 @@ export function ArchetypeDisplay({}: ArchetypeDisplayProps) {
               and Scryfall ordering. Try a commander from the home “Top commanders” list for richer samples.
             </>
           )}
+          </div>
         </div>
       )}
 
