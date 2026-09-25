@@ -32,7 +32,10 @@ export function HomePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { setCommander } = useStore();
-  const [landingFormatMode, setLandingFormatModeLocal] = useState<FormatMode | null>(null);
+  const [landingFormatMode, setLandingFormatModeLocal] = useState<FormatMode | null>(() => {
+    const fromStore = useStore.getState().customization.formatMode;
+    return fromStore === 'brawl100' || fromStore === 'commander' ? fromStore : null;
+  });
 
   const [mode, setMode] = useState<Step1Mode>(() => {
     if (searchParams.get('mode') === 'cards') return 'cards';
@@ -119,31 +122,74 @@ export function HomePage() {
         </h2>
         <p className="text-lg text-muted-foreground max-w-xl mx-auto mb-8">
           {mode === 'cards'
-            ? "Drop in the cards you want to build around and we'll find the commanders that play them"
+            ? "Choose Historic Brawl or Commander, add the cards you want to build around, and we'll find legal commanders that play them"
             : "Choose a format, then a commander — we'll help assemble a complete deck optimized for your strategy"}
         </p>
       </div>
 
       {mode === 'cards' ? (
-        <section className="mb-6">
-          <div className="mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
-                1
+        <>
+          <section className="mb-6">
+            <div className="mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
+                  1
+                </div>
+                <h2 className="text-lg font-semibold">Choose format</h2>
               </div>
-              <h2 className="text-lg font-semibold">Add Your Cards</h2>
+              {showModeLink && (
+                <button
+                  onClick={() => setMode('commander')}
+                  className="ml-10 mt-1 text-xs text-muted-foreground/70 hover:text-primary underline decoration-dotted underline-offset-4 transition-colors"
+                >
+                  or start from a commander →
+                </button>
+              )}
             </div>
-            {showModeLink && (
+            <div className="flex flex-wrap justify-center gap-3 max-w-lg mx-auto">
               <button
-                onClick={() => setMode('commander')}
-                className="ml-10 mt-1 text-xs text-muted-foreground/70 hover:text-primary underline decoration-dotted underline-offset-4 transition-colors"
+                type="button"
+                onClick={() => pickFormat('brawl100')}
+                className={`px-5 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
+                  landingFormatMode === 'brawl100'
+                    ? 'border-primary bg-primary/15 text-primary'
+                    : 'border-border/60 bg-card hover:border-primary/40'
+                }`}
               >
-                or start from a commander →
+                Historic Brawl
               </button>
-            )}
-          </div>
-          <CardGroupSearch onSelectCommander={handleSelectCardGroupCommander} />
-        </section>
+              <button
+                type="button"
+                onClick={() => pickFormat('commander')}
+                className={`px-5 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
+                  landingFormatMode === 'commander'
+                    ? 'border-primary bg-primary/15 text-primary'
+                    : 'border-border/60 bg-card hover:border-primary/40'
+                }`}
+              >
+                Commander
+              </button>
+            </div>
+          </section>
+
+          {landingModel.step2Available && (
+            <section className="mb-6" data-landing-format-mode={landingFormatMode ?? undefined}>
+              <div className="mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
+                    2
+                  </div>
+                  <h2 className="text-lg font-semibold">Add your cards</h2>
+                </div>
+              </div>
+              <CardGroupSearch
+                key={landingFormatMode ?? 'pending'}
+                formatMode={landingFormatMode!}
+                onSelectCommander={handleSelectCardGroupCommander}
+              />
+            </section>
+          )}
+        </>
       ) : (
         <>
           <section className="mb-6">

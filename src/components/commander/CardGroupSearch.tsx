@@ -7,6 +7,8 @@ import { fetchCardTopCommanders, isPartnerPair } from '@/services/edhrec/client'
 import type { CardCommanderStat } from '@/services/edhrec/client';
 import { scoreCommanderMatches } from '@/services/commanderMatch/scoreCommanders';
 import type { CommanderMatch, SeedResult } from '@/services/commanderMatch/scoreCommanders';
+import { isEligibleCommander, type FormatMode } from '@/lib/format/formatMode';
+import { isLegalForFormatDeck } from '@/services/scryfall/legality';
 import { Loader2, X } from 'lucide-react';
 import type { ScryfallCard } from '@/types';
 
@@ -29,11 +31,13 @@ function withinColors(identity: string[], allowed: Set<string>): boolean {
 }
 
 export interface CardGroupSearchProps {
+  /** Same formatMode as the landing picker / store — drives legality and commander eligibility. */
+  formatMode: FormatMode;
   /** Chosen commander + the seed cards that produced it. The host resolves the card and navigates. */
   onSelectCommander: (commanderName: string, seeds: string[]) => void | Promise<void>;
 }
 
-export function CardGroupSearch({ onSelectCommander }: CardGroupSearchProps) {
+export function CardGroupSearch({ formatMode, onSelectCommander }: CardGroupSearchProps) {
   const [seeds, setSeeds] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(SEEDS_KEY);
@@ -82,6 +86,23 @@ export function CardGroupSearch({ onSelectCommander }: CardGroupSearchProps) {
     return () => { cancelled = true; };
   }, [seeds, seedData]);
 
+  // Resolve seed printings early so format legality badges don't wait on commander enrichment.
+  useEffect(() => {
+    if (seeds.length === 0) return;
+    let cancelled = false;
+    getCardsByNames(seeds)
+      .then(map => {
+        if (cancelled) return;
+        setCards(prev => {
+          const next = new Map(prev);
+          for (const [name, card] of map) next.set(name, card);
+          return next;
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [seeds]);
+
   /** Bulk import merges into the group — pasting again adds, it never wipes what's there. */
   const handleImportCards = (validatedNames: string[]) => {
     const current = seedsRef.current;
@@ -104,12 +125,41 @@ export function CardGroupSearch({ onSelectCommander }: CardGroupSearchProps) {
   const removeSeed = (name: string) => setSeeds(prev => prev.filter(s => s !== name));
   const clearSeeds = () => { setSeeds([]); setOverflow([]); };
 
+  // Union of the seed cards' color identities — the constraint when no ceiling is picked.
+  const seedIdentity = useMemo(() => {
+    const set = new Set<string>();
+    for (const n of seeds) {
+      for (const c of cards.get(n)?.color_identity ?? []) set.add(c);
+    }
+    return set;
+  }, [seeds, cards]);
+
+  /** Seeds that fall outside the picked colors — shown struck through, dropped on handoff. */
+  const offColorSeeds = useMemo(() => {
+    if (!capped) return new Set<string>();
+    return new Set(seeds.filter(n => {
+      const ci = cards.get(n)?.color_identity;
+      return ci ? !withinColors(ci, colorFilter) : false;
+    }));
+  }, [capped, seeds, cards, colorFilter]);
+
+  /** Seeds illegal in the active format (and Arena pool for Brawl) — excluded from scoring and handoff. */
+  const illegalForFormatSeeds = useMemo(() => {
+    return new Set(seeds.filter(n => {
+      const card = cards.get(n);
+      if (!card) return false;
+      return !isLegalForFormatDeck(card, formatMode);
+    }));
+  }, [seeds, cards, formatMode]);
+
   // Score over RESOLVED seeds only — a still-loading seed shouldn't dilute coverage.
   const resolved: SeedResult[] = useMemo(
-    () => seeds.filter(n => n in seedData).map(n => ({ name: n, commanders: seedData[n] })),
-    [seeds, seedData]
+    () => seeds
+      .filter(n => n in seedData && !illegalForFormatSeeds.has(n) && !offColorSeeds.has(n))
+      .map(n => ({ name: n, commanders: seedData[n] })),
+    [seeds, seedData, illegalForFormatSeeds, offColorSeeds]
   );
-  const pendingCount = seeds.length - resolved.length;
+  const pendingCount = seeds.filter(n => !(n in seedData)).length;
 
   const scored = useMemo(
     () => scoreCommanderMatches(resolved).filter(m => !isPartnerPair(m.name)),
@@ -134,24 +184,6 @@ export function CardGroupSearch({ onSelectCommander }: CardGroupSearchProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enrichKey]);
 
-  // Union of the seed cards' color identities — the constraint when no ceiling is picked.
-  const seedIdentity = useMemo(() => {
-    const set = new Set<string>();
-    for (const n of seeds) {
-      for (const c of cards.get(n)?.color_identity ?? []) set.add(c);
-    }
-    return set;
-  }, [seeds, cards]);
-
-  /** Seeds that fall outside the picked colors — shown struck through, dropped on handoff. */
-  const offColorSeeds = useMemo(() => {
-    if (!capped) return new Set<string>();
-    return new Set(seeds.filter(n => {
-      const ci = cards.get(n)?.color_identity;
-      return ci ? !withinColors(ci, colorFilter) : false;
-    }));
-  }, [capped, seeds, cards, colorFilter]);
-
   // Color filter runs AFTER scoring so it never distorts the ranking.
   const { rows, filteredByColor } = useMemo(() => {
     const out: CommanderMatch[] = [];
@@ -159,6 +191,7 @@ export function CardGroupSearch({ onSelectCommander }: CardGroupSearchProps) {
     for (const m of topCandidates) {
       const card = cards.get(m.name);
       if (!card) continue;   // identity unknown — can't vouch for legality, so don't offer it
+      if (!isEligibleCommander(card, formatMode)) { dropped++; continue; }
       const ci = card.color_identity;
       // With a ceiling picked the commander must fit inside it, and we no longer insist it can
       // play every card. Without one, it must cover the whole group.
@@ -171,13 +204,16 @@ export function CardGroupSearch({ onSelectCommander }: CardGroupSearchProps) {
     }
     // `dropped` only matters when out is empty, in which case the loop never broke early.
     return { rows: out, filteredByColor: dropped };
-  }, [topCandidates, cards, seedIdentity, capped, colorFilter]);
+  }, [topCandidates, cards, seedIdentity, capped, colorFilter, formatMode]);
 
   /** Cards this commander can legally run — the only ones worth sending to the builder. */
   const playableSeeds = (commanderIdentity: string[]) =>
     seeds.filter(n => {
-      const ci = cards.get(n)?.color_identity;
-      return ci ? withinColors(ci, new Set(commanderIdentity)) : true;
+      if (offColorSeeds.has(n) || illegalForFormatSeeds.has(n)) return false;
+      const card = cards.get(n);
+      if (!card) return false;
+      const ci = card.color_identity;
+      return withinColors(ci, new Set(commanderIdentity));
     });
 
   const handleSelect = async (match: CommanderMatch) => {
@@ -221,6 +257,13 @@ export function CardGroupSearch({ onSelectCommander }: CardGroupSearchProps) {
           {capped
             ? `Only commanders inside these colors. ${offColorSeeds.size > 0 ? `${offColorSeeds.size} of your cards can't be played in them and won't be carried into the build.` : 'All of your cards fit.'}`
             : 'Any colors — every suggested commander can play your whole group. Pick colors to narrow the deck instead.'}
+          {illegalForFormatSeeds.size > 0 && (
+            <>
+              {' '}
+              {illegalForFormatSeeds.size} {illegalForFormatSeeds.size === 1 ? 'card is' : 'cards are'} not legal in{' '}
+              {formatMode === 'brawl100' ? 'Historic Brawl on Arena' : 'Commander'} and won't count toward matches.
+            </>
+          )}
         </p>
       )}
 
@@ -243,26 +286,36 @@ export function CardGroupSearch({ onSelectCommander }: CardGroupSearchProps) {
               const card = cards.get(name);
               const noData = name in seedData && seedData[name].length === 0;
               const offColor = offColorSeeds.has(name);
+              const notLegal = illegalForFormatSeeds.has(name);
               return (
                 <span
                   key={name}
-                  className={`flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 backdrop-blur-sm rounded-full text-sm ${offColor ? 'bg-accent/20' : 'bg-accent/50'}`}
+                  className={`flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 backdrop-blur-sm rounded-full text-sm ${offColor || notLegal ? 'bg-accent/20' : 'bg-accent/50'}`}
                   title={
-                    offColor ? "Outside your chosen colors — won't be built with"
-                    : noData ? 'No EDHREC data for this card'
-                    : undefined
+                    notLegal
+                      ? formatMode === 'brawl100'
+                        ? 'Not legal in Historic Brawl on Arena'
+                        : 'Not legal in Commander'
+                      : offColor ? "Outside your chosen colors — won't be built with"
+                      : noData ? 'No EDHREC data for this card'
+                      : undefined
                   }
                 >
                   {card && card.color_identity.length > 0 && (
-                    <span className={offColor ? 'opacity-40' : undefined}>
+                    <span className={offColor || notLegal ? 'opacity-40' : undefined}>
                       <ColorIdentity colors={card.color_identity} size="sm" />
                     </span>
                   )}
-                  <span className={offColor ? 'text-muted-foreground/50 line-through' : noData ? 'text-muted-foreground/70' : 'text-foreground/90'}>
+                  <span className={offColor || notLegal ? 'text-muted-foreground/50 line-through' : noData ? 'text-muted-foreground/70' : 'text-foreground/90'}>
                     {name}
                   </span>
-                  {offColor && <span className="text-[10px] text-muted-foreground/50">off-color</span>}
-                  {!offColor && noData && <span className="text-[10px] text-muted-foreground/60">no data</span>}
+                  {notLegal && (
+                    <span className="text-[10px] text-muted-foreground/50">
+                      {formatMode === 'brawl100' ? 'not in Brawl' : 'not legal'}
+                    </span>
+                  )}
+                  {!notLegal && offColor && <span className="text-[10px] text-muted-foreground/50">off-color</span>}
+                  {!notLegal && !offColor && noData && <span className="text-[10px] text-muted-foreground/60">no data</span>}
                   {!(name in seedData) && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground/60" />}
                   <button
                     onClick={() => removeSeed(name)}
@@ -318,8 +371,9 @@ export function CardGroupSearch({ onSelectCommander }: CardGroupSearchProps) {
               ))}
             </div>
             <p className="mt-3 text-[11px] text-muted-foreground/70 leading-relaxed">
-              Coverage is measured against each card's top 24 commanders on EDHREC, so "plays 3 of 5"
-              means it's a top-24 commander for 3 of your cards.
+              {formatMode === 'brawl100'
+                ? 'Suggestions use EDHREC co-play stats but only list commanders legal in Historic Brawl on Arena. Cards must pass Scryfall Brawl legality and be on MTG Arena.'
+                : 'Coverage is measured against each card\'s top 24 commanders on EDHREC, so "plays 3 of 5" means it\'s a top-24 commander for 3 of your cards.'}
             </p>
           </>
         ) : pendingCount > 0 ? (
@@ -337,7 +391,9 @@ export function CardGroupSearch({ onSelectCommander }: CardGroupSearchProps) {
           </p>
         ) : (
           <p className="text-sm text-muted-foreground text-center">
-            No commanders found for this group — try removing a card.
+            {resolved.length === 0 && seeds.some(n => n in seedData) && illegalForFormatSeeds.size === seeds.length
+              ? `None of these cards are legal in ${formatMode === 'brawl100' ? 'Historic Brawl on Arena' : 'Commander'} — try a different group.`
+              : 'No commanders found for this group — try removing a card.'}
           </p>
         )}
       </div>
