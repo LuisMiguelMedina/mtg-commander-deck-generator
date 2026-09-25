@@ -117,6 +117,13 @@ export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast,
   const { customization, updateCustomization, commander, edhrecLandSuggestion, edhrecStats } = useStore();
   const formatMode = customization.formatMode ?? 'commander';
   const isBrawl = formatMode === 'brawl100';
+
+  useEffect(() => {
+    if (isBrawl && !customization.arenaOnly) {
+      updateCustomization({ arenaOnly: true });
+    }
+  }, [isBrawl, customization.arenaOnly, updateCustomization]);
+
   const { count: collectionCount } = useCollection();
   const { binders } = useBinders();
   const selectedBinderIds = customization.collectionBinderIds;
@@ -1279,10 +1286,10 @@ export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast,
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
             Other
-            {!otherOpen && (customization.allowedRarities !== null || customization.tinyLeaders || customization.arenaOnly || customization.scryfallQuery) && (
+            {!otherOpen && (customization.allowedRarities !== null || customization.tinyLeaders || customization.arenaOnly || isBrawl || customization.scryfallQuery) && (
               <span className="text-[10px] font-normal text-violet-200 bg-primary/20 px-1.5 py-0.5 rounded-full">
                 {[
-                  customization.arenaOnly ? 'Arena' : null,
+                  isBrawl || customization.arenaOnly ? 'Arena' : null,
                   customization.allowedRarities !== null
                     ? customization.allowedRarities
                         .map((r) => r.charAt(0).toUpperCase() + r.slice(1))
@@ -1372,7 +1379,20 @@ export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast,
               <InfoTooltip text="Experimental: Restricts all non-land cards to converted mana cost (CMC) 3 or less." />
             </label>
 
-            {/* Arena Only */}
+            {/* Arena Only — Commander toggle; Historic Brawl always uses Arena */}
+            {isBrawl ? (
+              <div className="flex items-center gap-3 select-none text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked
+                  disabled
+                  readOnly
+                  className="rounded border-border accent-primary w-4 h-4 opacity-70 cursor-not-allowed"
+                />
+                <span className="text-sm font-medium">Arena card pool</span>
+                <InfoTooltip text="Historic Brawl on MTG Arena only uses cards available on Arena. This is always on in Brawl mode and cannot be turned off." />
+              </div>
+            ) : (
             <label className="flex items-center gap-3 cursor-pointer select-none group">
               <input
                 type="checkbox"
@@ -1383,6 +1403,7 @@ export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast,
               <span className="text-sm font-medium group-hover:text-primary transition-colors">Limit to Arena cards</span>
               <InfoTooltip text="Builds the deck using only cards available on MTG Arena (checked across every printing). Your chosen commander is always included even if it isn't on Arena — you'll be warned if so." />
             </label>
+            )}
 
             {/* Additional Scryfall Query */}
             <div>

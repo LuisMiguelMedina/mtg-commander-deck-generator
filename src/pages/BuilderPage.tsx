@@ -19,6 +19,7 @@ import { removeCards, addCard } from '@/services/deckBuilder/cardSwap';
 import { fetchCommanderData, fetchPartnerCommanderData, formatCommanderNameForUrl, edhrecColorSegment } from '@/services/edhrec';
 import { fetchBrawl100ArchetypePopularity } from '@/services/brawl/loadBuilderArchetype';
 import { applyCommanderTheme, resetTheme } from '@/lib/commanderTheme';
+import { usesArenaCardPool } from '@/lib/format/formatMode';
 import type { BracketLevel, BudgetOption, EDHRECTheme, GeneratedDeck, ScryfallCard, ThemeResult } from '@/types';
 import { Loader2, ArrowLeft, ExternalLink, SlidersHorizontal, Bookmark, Check, Copy, X, Swords, Library, AlertTriangle } from 'lucide-react';
 import { FloatingListPanel } from '@/components/lists/FloatingListPanel';
@@ -220,7 +221,9 @@ export function BuilderPage() {
     if (customization.deckBudget !== null) summaryParts.push(`${sym}${customization.deckBudget} deck budget`);
     if (customization.allowedRarities) summaryParts.push(customization.allowedRarities.map((r) => r.charAt(0).toUpperCase() + r.slice(1)).join(', '));
     if (customization.tinyLeaders) summaryParts.push('Tiny Leaders');
-    if (customization.arenaOnly) summaryParts.push('Arena Only');
+    if (usesArenaCardPool(customization.formatMode ?? 'commander', customization.arenaOnly)) {
+      summaryParts.push(customization.formatMode === 'brawl100' ? 'Arena (Brawl)' : 'Arena Only');
+    }
     if (customization.collectionMode) summaryParts.push(customization.collectionStrategy === 'partial' ? `Collection (${customization.collectionOwnedPercent}%)` : 'Collection Only');
     if (!customization.tempoAutoDetect) {
       const pacingLabels: Record<string, string> = { 'aggressive-early': 'Aggressive Early', 'fast-tempo': 'Fast Tempo', 'balanced': 'Balanced', 'midrange': 'Midrange', 'late-game': 'Late Game' };
@@ -1222,7 +1225,9 @@ export function BuilderPage() {
                     </button>
                     <button
                       onClick={() => {
-                        const { bannedCards, mustIncludeCards, banLists, currency } = useStore.getState().customization;
+                        const { bannedCards, mustIncludeCards, banLists, currency, formatMode } =
+                          useStore.getState().customization;
+                        const brawl = formatMode === 'brawl100';
                         useStore.getState().updateCustomization({
                           deckFormat: 99,
                           landCount: 37,
@@ -1235,7 +1240,7 @@ export function BuilderPage() {
                           allowedRarities: null,
                           tinyLeaders: false,
                           collectionMode: false,
-                          arenaOnly: false,
+                          arenaOnly: brawl,
                           comboCount: 1,
                           hyperFocus: false,
                           bannedCards,

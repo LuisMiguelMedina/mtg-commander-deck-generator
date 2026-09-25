@@ -52,6 +52,11 @@ export function getFormatRules(mode: string): FormatRules | undefined {
   return undefined;
 }
 
+/** Historic Brawl always uses the Arena card pool; Commander uses the customization toggle. */
+export function usesArenaCardPool(formatMode: string, customizationArenaOnly = false): boolean {
+  return formatMode === 'brawl100' || customizationArenaOnly;
+}
+
 function isLegendaryType(typeLine: string, suffix: string): boolean {
   return typeLine.includes('Legendary') && typeLine.includes(suffix);
 }

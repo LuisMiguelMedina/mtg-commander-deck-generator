@@ -12,7 +12,7 @@ import { bannedNameSet } from './banned';
 import type { BrewContext, BrewCandidate } from './brewTypes';
 import { resolveBrewFormatPlan } from '@/services/brawl/brewFormatPipeline';
 import { buildLegalFormatPool } from '@/services/brawl/builderFormatPipeline';
-import { getFormatRules } from '@/lib/format/formatMode';
+import { getFormatRules, usesArenaCardPool } from '@/lib/format/formatMode';
 import { searchBrawl100Decks } from '@/services/moxfield/client';
 import type { EDHRECCommanderData } from '@/types';
 
@@ -153,7 +153,7 @@ export async function prepareBrewContext(args: PrepareBrewArgs): Promise<BrewCon
   // Arena-only: never OFFER a pick the player couldn't actually run on Arena.
   // Resolved by name across all printings (same source the generator uses), so a
   // card like Counterspell whose default printing isn't on Arena still qualifies.
-  const arenaLegalNames = customization.arenaOnly
+  const arenaLegalNames = usesArenaCardPool(formatMode, customization.arenaOnly)
     ? await getArenaLegalNames(poolNames)
     : null;
 

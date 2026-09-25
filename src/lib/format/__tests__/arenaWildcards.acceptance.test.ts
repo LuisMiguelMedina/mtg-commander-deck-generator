@@ -19,6 +19,14 @@ describe('Brawl Arena wildcard limits (replaces budget UI)', () => {
     expect(/formatMode === 'brawl100'[\s\S]*deckBudget = null/.test(store)).toBe(true);
     expect(/maxCardPrice = null/.test(store)).toBe(true);
     expect(/budgetOption = 'any'/.test(store)).toBe(true);
+    expect(/resolvedMode === 'brawl100'[\s\S]*arenaOnly = true/.test(store)).toBe(true);
+  });
+
+  it('Brawl forces Arena pool in UI without a manual Commander-style toggle', async () => {
+    const ui = await readRepoText('src/components/customization/DeckCustomizer.tsx');
+    expect(/Arena card pool/.test(ui)).toBe(true);
+    expect(/usesArenaCardPool/.test(await readRepoText('src/components/customization/MustIncludeCards.tsx'))).toBe(true);
+    expect(/usesArenaCardPool/.test(await readRepoText('src/lib/format/formatMode.ts'))).toBe(true);
   });
 
   it('countArenaWildcardsNeeded sums one wildcard per missing card by rarity', () => {

@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import type { AppState, AdvancedTargets, Customization, BanList, AppliedList, ScryfallCard, GeneratedDeck, EDHRECTheme, ThemeResult, DeckHistoryEntry, DeckHistoryAction } from '@/types';
-import { getFormatRules } from '@/lib/format/formatMode';
-import type { FormatMode } from '@/lib/format/formatMode';
+import { getFormatRules, type FormatMode } from '@/lib/format/formatMode';
 import { isEuropean } from '@/lib/region';
 import { combineColorIdentity, needsChosenColor } from '@/lib/partnerUtils';
 import { swapCard, addCard } from '@/services/deckBuilder/cardSwap';
@@ -285,9 +284,12 @@ const defaultCustomization: Customization = {
 export function hydrateCustomization(input: {
   formatMode?: string;
   deckFormat?: number;
-}): { formatMode: FormatMode; deckFormat: number } {
+}): { formatMode: FormatMode; deckFormat: number; arenaOnly?: boolean } {
   const formatMode: FormatMode = input.formatMode === 'brawl100' ? 'brawl100' : 'commander';
   const deckFormat = getFormatRules(formatMode)?.deckSize ?? 99;
+  if (formatMode === 'brawl100') {
+    return { formatMode, deckFormat, arenaOnly: true };
+  }
   return { formatMode, deckFormat };
 }
 
@@ -506,12 +508,12 @@ export const useStore = create<AppState>((set, get) => ({
       saveAppliedIncludeLists(newCustomization.appliedIncludeLists);
     }
 
-    // Persist arena-only setting to localStorage when it changes
-    if (updates.arenaOnly !== undefined) {
+    const resolvedMode = (newCustomization.formatMode ?? 'commander') as FormatMode;
+
+    // Persist arena-only preference for Commander only (Brawl always uses Arena pool)
+    if (updates.arenaOnly !== undefined && resolvedMode !== 'brawl100') {
       saveArenaOnly(newCustomization.arenaOnly);
     }
-
-    const resolvedMode = (newCustomization.formatMode ?? 'commander') as FormatMode;
 
     if (updates.formatMode !== undefined) {
       const rules = getFormatRules(updates.formatMode as FormatMode);
@@ -524,6 +526,13 @@ export const useStore = create<AppState>((set, get) => ({
         newCustomization.maxCardPrice = null;
         newCustomization.arenaOnly = true;
       }
+      if (updates.formatMode === 'commander') {
+        newCustomization.arenaOnly = loadArenaOnly();
+      }
+    }
+
+    if (resolvedMode === 'brawl100') {
+      newCustomization.arenaOnly = true;
     }
 
     if (updates.deckFormat !== undefined) {

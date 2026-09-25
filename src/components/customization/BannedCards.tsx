@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { useStore } from '@/store';
 import { searchCards, getCardImageUrl, getCardsByNames } from '@/services/scryfall/client';
+import { usesArenaCardPool } from '@/lib/format/formatMode';
 import type { ScryfallCard } from '@/types';
 import { CardTypeIcon } from '@/components/ui/mtg-icons';
 import { Search, Loader2, X, Trash2, ChevronRight, Ban, ListPlus, Check, Shield, Info, Plus, PlusSquare } from 'lucide-react';
@@ -118,7 +119,8 @@ export function BannedCards() {
   const { customization, updateCustomization, colorIdentity } = useStore();
   const bannedCards = customization.bannedCards;
   const banLists = customization.banLists || [];
-  const arenaOnly = customization.arenaOnly;
+  const formatMode = customization.formatMode ?? 'commander';
+  const arenaOnly = usesArenaCardPool(formatMode, customization.arenaOnly);
   const appliedExcludeLists = customization.appliedExcludeLists || [];
   const { lists: allUserLists } = useUserLists();
   const userLists = useMemo(() => allUserLists.filter(l => l.type !== 'deck'), [allUserLists]);
