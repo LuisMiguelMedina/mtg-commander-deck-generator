@@ -68,6 +68,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('[brawl-snapshot] failed:', err);
-  process.exit(1);
+  console.error('[brawl-snapshot] failed (keeping existing snapshot if present):', err);
+  process.exit(0);
 });

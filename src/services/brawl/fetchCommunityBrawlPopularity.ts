@@ -3,7 +3,6 @@ import { buildAnalyticsActionUrl } from '@/services/brawl/brawlAnalyticsProxy';
 import { MOXFIELD_BRAWL100_FMT } from '@/services/moxfield/fmt';
 import {
   MOXFIELD_SEARCH_URL,
-  MOXFIELD_TIMEOUT_MS,
   MOXFIELD_USER_AGENT,
   type MoxfieldSearchCard,
 } from '@/services/moxfield/client';

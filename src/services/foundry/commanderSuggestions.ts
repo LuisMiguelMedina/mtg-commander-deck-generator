@@ -8,7 +8,12 @@ export type SuggestionsInput = {
   formatMode: string;
   colorFilter?: string[];
   fetchEdhrecTop: () => Promise<{ name: string }[]>;
-  fetchMoxfieldTop: () => Promise<{ status: number; names?: string[]; source?: 'moxfield' | 'archidekt' }>;
+  fetchMoxfieldTop: () => Promise<{
+    status: number;
+    names?: string[];
+    source?: 'moxfield' | 'archidekt';
+    limitedData?: boolean;
+  }>;
   fetchScryfallTopBrawl?: (
     colorFilter?: string[],
   ) => Promise<{ names: string[]; colorIdentityByName: Record<string, string[]> }>;
