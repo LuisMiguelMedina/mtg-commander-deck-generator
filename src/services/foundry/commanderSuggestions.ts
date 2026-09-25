@@ -5,7 +5,7 @@ import {
   MOXFIELD_TIMEOUT_MS,
 } from '@/services/moxfield/client';
 import { searchCards } from '@/services/scryfall/client';
-import { isEligibleCommander } from '@/lib/format/formatMode';
+import { BRAWL_ARENA_COMMANDER_SCRYFALL_QUERY, isEligibleCommander } from '@/lib/format/formatMode';
 import { isLegalForFormatDeck } from '@/services/scryfall/legality';
 
 export type SuggestionsInput = {
@@ -76,8 +76,7 @@ const BRAWL_TOP_LIMIT = 24;
 export async function fetchScryfallTopBrawlCommanders(
   colorFilter: string[] = [],
 ): Promise<{ names: string[]; colorIdentityByName: Record<string, string[]> }> {
-  const inner =
-    'game:arena legal:brawl -is:funny (is:commander OR (t:legendary t:planeswalker) OR "Legendary Artifact — Vehicle" OR "Legendary Artifact — Spacecraft")';
+  const inner = BRAWL_ARENA_COMMANDER_SCRYFALL_QUERY;
   const response = await searchCards(inner, colorFilter, { order: 'edhrec', skipFormatFilter: true });
   const names: string[] = [];
   const colorIdentityByName: Record<string, string[]> = {};

@@ -1,6 +1,10 @@
 export const FORMAT_MODES = ['commander', 'brawl100'] as const;
 export type FormatMode = (typeof FORMAT_MODES)[number];
 
+/** Scryfall inner query for Historic Brawl commanders on Arena (shared by search + top lists). */
+export const BRAWL_ARENA_COMMANDER_SCRYFALL_QUERY =
+  'game:arena legal:brawl -is:funny (is:commander OR (t:legendary t:planeswalker) OR "Legendary Artifact — Vehicle" OR "Legendary Artifact — Spacecraft")';
+
 export type FormatRules = {
   deckSize: number;
   singleton: boolean;

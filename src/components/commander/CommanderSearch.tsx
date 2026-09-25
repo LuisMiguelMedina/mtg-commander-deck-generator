@@ -22,10 +22,12 @@ import type { CollectionCard } from '@/services/collection/db';
 import { Search, Loader2, Shuffle, ChevronDown, Check } from 'lucide-react';
 import { trackEvent, fetchMetrics } from '@/services/analytics';
 
-function isLegendaryCreature(card: CollectionCard): boolean {
-  // Use only the front face type line to avoid matching DFC back faces (e.g. Battles)
-  const tl = (card.typeLine?.split(' // ')[0] ?? '').toLowerCase();
-  return tl.includes('legendary') && (tl.includes('creature') || tl.includes('spacecraft'));
+function isOwnedCommanderCandidate(card: CollectionCard, formatMode: FormatMode): boolean {
+  const typeLine = card.typeLine?.split(' // ')[0] ?? '';
+  return isEligibleCommander(
+    { name: card.name, type_line: typeLine, color_identity: card.colorIdentity ?? [] },
+    formatMode,
+  );
 }
 
 /** Map a sorted color key (e.g. "UBR") to its MTG name */
@@ -107,10 +109,10 @@ export function CommanderSearch({ onSelectCommander, destination = 'build', form
   const formatMode = formatModeProp ?? customization.formatMode ?? 'commander';
   const isBrawl = formatMode === 'brawl100';
   const { cards: collectionCards, count: collectionCount } = useCollection();
-  // All legendary creatures in the collection
+  // Commanders in the collection that are legal for the active format
   const collectionLegends = useMemo(
-    () => collectionCards.filter(isLegendaryCreature),
-    [collectionCards]
+    () => collectionCards.filter((c) => isOwnedCommanderCandidate(c, formatMode)),
+    [collectionCards, formatMode],
   );
 
   // Random suggestions from owned legends (stable until ownedOnly toggles)
@@ -240,7 +242,7 @@ export function CommanderSearch({ onSelectCommander, destination = 'build', form
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const searchResults = await searchCommanders(query);
+        const searchResults = await searchCommanders(query, { formatMode });
         setResults(
           searchResults
             .filter((card) => isEligibleCommander(card, formatMode))
@@ -503,7 +505,7 @@ export function CommanderSearch({ onSelectCommander, destination = 'build', form
             collectionLegends.length > 0 ? (
               <>
                 <p className="text-muted-foreground mb-4">
-                  Your legendary creatures:
+                  {isBrawl ? 'Your Brawl commanders:' : 'Your legendary creatures:'}
                 </p>
                 <div className="flex flex-wrap justify-center gap-2">
                   {ownedSuggestions.map((legend) => (
@@ -522,7 +524,9 @@ export function CommanderSearch({ onSelectCommander, destination = 'build', form
               </>
             ) : (
               <p className="text-muted-foreground text-sm">
-                No legendary creatures found in your collection.
+                {isBrawl
+                  ? 'No Brawl-legal commanders found in your collection.'
+                  : 'No legendary creatures found in your collection.'}
               </p>
             )
           ) : (

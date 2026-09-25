@@ -6,6 +6,8 @@ import {
   readPersistedOracleTag, writePersistedOracleTag,
 } from './cache';
 import { isExtraPrinting } from './extras';
+import { BRAWL_ARENA_COMMANDER_SCRYFALL_QUERY, isEligibleCommander } from '@/lib/format/formatMode';
+import { isLegalForFormatDeck } from '@/services/scryfall/legality';
 
 export { isExtraPrinting };
 
@@ -241,10 +243,35 @@ function commanderNameRelevance(name: string, query: string): number {
   return best;
 }
 
-export async function searchCommanders(query: string): Promise<ScryfallCard[]> {
+export async function searchCommanders(
+  query: string,
+  options?: { formatMode?: string },
+): Promise<ScryfallCard[]> {
   if (!query.trim()) return [];
 
+  const formatMode = options?.formatMode ?? 'commander';
+
   try {
+    if (formatMode === 'brawl100') {
+      const encodedQuery = encodeURIComponent(`(${BRAWL_ARENA_COMMANDER_SCRYFALL_QUERY}) ${query}`);
+      const response = await scryfallFetch<ScryfallSearchResponse>(
+        `/cards/search?q=${encodedQuery}&order=edhrec`,
+      );
+      return response.data
+        .filter(
+          (card) => isEligibleCommander(card, 'brawl100') && isLegalForFormatDeck(card, 'brawl100'),
+        )
+        .map((card) => ({ card, rel: commanderNameRelevance(card.name, query) }))
+        .sort((a, b) => {
+          if (b.rel !== a.rel) return b.rel - a.rel;
+          const ra = a.card.edhrec_rank ?? Number.POSITIVE_INFINITY;
+          const rb = b.card.edhrec_rank ?? Number.POSITIVE_INFINITY;
+          if (ra !== rb) return ra - rb;
+          return a.card.name.localeCompare(b.card.name);
+        })
+        .map((scored) => scored.card);
+    }
+
     // `is:commander` matches anything that can legally head a deck (legendary
     // creatures + "can be your commander" cards) and already excludes banlisted
     // commanders — but it does NOT gate on format legality. We deliberately drop
