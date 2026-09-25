@@ -1,4 +1,5 @@
 import { searchArchidektBrawl100Decks } from '@/services/brawl/archidektBrawl100';
+import { buildAnalyticsActionUrl } from '@/services/brawl/brawlAnalyticsProxy';
 import { MOXFIELD_BRAWL100_FMT } from '@/services/moxfield/fmt';
 import {
   MOXFIELD_SEARCH_URL,
@@ -95,14 +96,7 @@ export async function fetchCommunityBrawlPopularity(
 }
 
 export function buildBrawlPopularityRequestUrl(commanderName: string): string | null {
-  const encoded = encodeURIComponent(commanderName);
-  if (import.meta.env.DEV) {
-    return `/api/brawl-popularity?commanderName=${encoded}`;
-  }
-  const base = import.meta.env.VITE_ANALYTICS_URL as string | undefined;
-  if (!base) return null;
-  const join = base.includes('?') ? '&' : '?';
-  return `${base}${join}action=brawl-popularity&commanderName=${encoded}`;
+  return buildAnalyticsActionUrl('brawl-popularity', { commanderName });
 }
 
 /** Browser entry: uses analytics/dev proxy when configured. */

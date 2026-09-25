@@ -23,7 +23,7 @@ function searchToken(commanderName: string): string {
   return beforeComma.split(/\s+/)[0] || beforeComma;
 }
 
-function commanderNamesFromDeck(deck: {
+export function commanderNamesFromDeckDetail(deck: {
   cards?: Array<{
     categories?: Array<string | { name?: string }>;
     card?: { oracleCard?: { name?: string } };
@@ -43,7 +43,7 @@ function commanderNamesFromDeck(deck: {
   return out;
 }
 
-function isBrawlDeckSize(size: number | undefined, cardCount: number): boolean {
+export function isBrawlDeckSize(size: number | undefined, cardCount: number): boolean {
   if (size !== undefined && size >= 55 && size <= 110) return true;
   return cardCount >= 35 && cardCount <= 105;
 }
@@ -69,7 +69,7 @@ type DeckListRow = { id: number; size?: number; name?: string };
 
 type DeckListResponse = { count?: number; results?: DeckListRow[] };
 
-type DeckDetail = Parameters<typeof commanderNamesFromDeck>[0] & { id?: number; size?: number; cards?: unknown[] };
+type DeckDetail = Parameters<typeof commanderNamesFromDeckDetail>[0] & { id?: number; size?: number };
 
 function aggregate(decks: DeckDetail[]): CommunityBrawlSearchResult {
   const tallies = new Map<string, { decks: number; copies: number }>();
@@ -137,7 +137,7 @@ export async function searchArchidektBrawl100Decks(
       );
       for (const detail of details) {
         if (!detail) continue;
-        const commanders = commanderNamesFromDeck(detail).map(normalizeName);
+        const commanders = commanderNamesFromDeckDetail(detail).map(normalizeName);
         if (!commanders.includes(target)) continue;
         const cardCount = detail.cards?.length ?? 0;
         if (!isBrawlDeckSize(detail.size, cardCount)) continue;

@@ -160,7 +160,9 @@ export function CommanderSearch({ onSelectCommander, destination = 'build', form
   // Fetch top commanders from EDHREC based on color filter
   const [edhrecCommanders, setEdhrecCommanders] = useState<import('@/types').EDHRECTopCommander[]>([]);
   const [edhrecLoading, setEdhrecLoading] = useState(false);
-  const [suggestionSource, setSuggestionSource] = useState<'edhrec' | 'moxfield' | 'scryfall' | 'search-only'>('edhrec');
+  const [suggestionSource, setSuggestionSource] = useState<
+    'edhrec' | 'moxfield' | 'archidekt' | 'scryfall' | 'search-only'
+  >('edhrec');
   const [limitedSuggestions, setLimitedSuggestions] = useState(false);
 
   useEffect(() => {
@@ -190,7 +192,7 @@ export function CommanderSearch({ onSelectCommander, destination = 'build', form
         if (result.source === 'edhrec') {
           const data = await fetchTopCommanders([...colorFilter]);
           if (!cancelled) setEdhrecCommanders(data);
-        } else if (result.source === 'moxfield' || result.source === 'scryfall') {
+        } else if (result.source === 'moxfield' || result.source === 'archidekt' || result.source === 'scryfall') {
           if (!cancelled) {
             setEdhrecCommanders(
               toTopCommanderRows(result.names, result.colorIdentityByName ?? {}),
@@ -569,6 +571,8 @@ export function CommanderSearch({ onSelectCommander, destination = 'build', form
                     <span>
                       {suggestionSource === 'moxfield'
                         ? 'on Moxfield'
+                        : suggestionSource === 'archidekt'
+                          ? 'from public Brawl decks on Archidekt'
                         : suggestionSource === 'scryfall'
                           ? 'legal in Historic Brawl (Arena)'
                           : suggestionSource === 'search-only'
@@ -593,7 +597,14 @@ export function CommanderSearch({ onSelectCommander, destination = 'build', form
                   )}
                   {limitedSuggestions && edhrecCommanders.length > 0 && suggestionSource === 'scryfall' && (
                     <p className="text-xs text-muted-foreground/80 mb-3">
-                      Moxfield top decks unavailable — showing popular legal Brawl commanders on Arena from Scryfall.
+                      Community Brawl lists unavailable (deploy analytics Lambda or check VITE_ANALYTICS_URL) —
+                      showing popular legal commanders on Arena from Scryfall.
+                    </p>
+                  )}
+                  {suggestionSource === 'archidekt' && edhrecCommanders.length > 0 && (
+                    <p className="text-xs text-muted-foreground/80 mb-3">
+                      Moxfield is blocked from the browser; showing commanders from recent public Brawl decks on
+                      Archidekt.
                     </p>
                   )}
                   {edhrecCommanders.length > 0 ? (

@@ -5,7 +5,7 @@ import {
   handleSubmit, handleList, handleVote,
   handleDevNote, handleShip, handleDelete,
 } from './poll';
-import { handleBrawlPopularity } from './brawlPopularity';
+import { handleBrawlPopularity, handleBrawlTopCommanders } from './brawlPopularity';
 
 const client = new DynamoDBClient({});
 const TABLE_NAME = process.env.TABLE_NAME!;
@@ -36,6 +36,9 @@ export async function handler(event: {
 
     if (action === 'brawl-popularity' && method === 'GET') {
       return handleBrawlPopularity(event.queryStringParameters ?? {});
+    }
+    if (action === 'brawl-top-commanders' && method === 'GET') {
+      return handleBrawlTopCommanders();
     }
 
     if (method === 'POST') {
