@@ -6,6 +6,7 @@ on:
     paths:
       - 'infra/lambda/**'
       - 'infra/lib/analytics-stack.ts'
+      - 'infra/lib/github-oidc.ts'
       - 'src/services/brawl/fetchCommunityBrawlPopularity.ts'
       - 'src/services/brawl/fetchBrawlTopCommanders.ts'
       - 'src/services/brawl/archidektBrawl100.ts'
@@ -21,6 +22,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: ${{ secrets.AWS_ANALYTICS_DEPLOY_ROLE_ARN != '' || secrets.AWS_DEPLOY_ROLE_ARN != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,15 +38,31 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ANALYTICS_DEPLOY_ROLE_ARN != '' && secrets.AWS_ANALYTICS_DEPLOY_ROLE_ARN || secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
+
+      - name: CDK bootstrap (if needed)
+        working-directory: infra
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          npx cdk bootstrap "aws://${ACCOUNT}/us-east-1" || true
 
       - name: CDK deploy Analytics stack
         working-directory: infra
         run: npx cdk deploy MtgDeckBuilderAnalytics --require-approval never --outputs-file cdk-outputs.json
         env:
+          GITHUB_OWNER: LuisMiguelMedina
+          GITHUB_REPO: mtg-commander-deck-generator
           VITE_METRICS_SECRET: ${{ secrets.VITE_METRICS_SECRET }}
           POLL_ADMIN_SECRET: ${{ secrets.POLL_ADMIN_SECRET }}
 
       - name: Print analytics Function URL
         run: cat infra/cdk-outputs.json
+
+  missing-credentials:
+    if: ${{ secrets.AWS_ANALYTICS_DEPLOY_ROLE_ARN == '' && secrets.AWS_DEPLOY_ROLE_ARN == '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "::warning::Skipping Analytics Lambda deploy — set GitHub secret AWS_DEPLOY_ROLE_ARN or AWS_ANALYTICS_DEPLOY_ROLE_ARN."
+          echo "See docs/ops/despliegue-aws-github.md"

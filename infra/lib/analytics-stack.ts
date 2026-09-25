@@ -3,7 +3,12 @@ import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as path from 'path';
+import { addGitHubOidcDeployRole } from './github-oidc';
+
+const GITHUB_OWNER = process.env.GITHUB_OWNER || 'LuisMiguelMedina';
+const GITHUB_REPO = process.env.GITHUB_REPO || 'mtg-commander-deck-generator';
 
 export class AnalyticsStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -69,6 +74,37 @@ export class AnalyticsStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'AnalyticsFunctionUrl', {
       value: fnUrl.url,
       description: 'Analytics Lambda Function URL — set this as VITE_ANALYTICS_URL',
+    });
+
+    const analyticsDeployRole = addGitHubOidcDeployRole(this, 'GitHubAnalyticsDeployRole', {
+      owner: GITHUB_OWNER,
+      repo: GITHUB_REPO,
+      description: `GitHub Actions deploy for ${GITHUB_OWNER}/${GITHUB_REPO} analytics Lambda`,
+      policy: new iam.PolicyDocument({
+        statements: [
+          new iam.PolicyStatement({
+            actions: ['sts:GetCallerIdentity'],
+            resources: ['*'],
+          }),
+          new iam.PolicyStatement({
+            actions: [
+              'cloudformation:*',
+              'lambda:*',
+              'dynamodb:*',
+              'iam:*',
+              's3:*',
+              'logs:*',
+              'ssm:GetParameter',
+            ],
+            resources: ['*'],
+          }),
+        ],
+      }),
+    });
+
+    new cdk.CfnOutput(this, 'AnalyticsDeployRoleArn', {
+      value: analyticsDeployRole.roleArn,
+      description: 'GitHub secret AWS_ANALYTICS_DEPLOY_ROLE_ARN (or reuse AWS_DEPLOY_ROLE_ARN if it has CDK permissions)',
     });
   }
 }

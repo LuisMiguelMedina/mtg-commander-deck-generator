@@ -1,3 +1,5 @@
+import { resolveAnalyticsFunctionUrl } from '@/config/publicEndpoints';
+
 /** Build analytics Lambda Function URL requests (browser-safe — no direct Moxfield). */
 export function buildAnalyticsActionUrl(
   action: string,
@@ -14,7 +16,7 @@ export function buildAnalyticsActionUrl(
     if (!path) return null;
     return qs ? `${path}?${qs}` : path;
   }
-  const base = import.meta.env.VITE_ANALYTICS_URL as string | undefined;
+  const base = resolveAnalyticsFunctionUrl();
   if (!base) return null;
   const url = new URL(base);
   url.searchParams.set('action', action);

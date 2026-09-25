@@ -16,7 +16,7 @@ export class SiteStack extends cdk.Stack {
     // to a different domain/repo without editing code.
     const DOMAIN_NAME = process.env.SITE_DOMAIN || 'manafoundry.gg';
     const WWW_DOMAIN = `www.${DOMAIN_NAME}`;
-    const GITHUB_OWNER = process.env.GITHUB_OWNER || '20q2';
+    const GITHUB_OWNER = process.env.GITHUB_OWNER || 'LuisMiguelMedina';
     const GITHUB_REPO = process.env.GITHUB_REPO || 'mtg-commander-deck-generator';
     const bucketSlug = DOMAIN_NAME.replace(/\./g, '-');
 

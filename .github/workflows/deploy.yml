@@ -33,7 +33,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_ANALYTICS_URL: ${{ vars.VITE_ANALYTICS_URL }}
+          VITE_ANALYTICS_URL: ${{ vars.VITE_ANALYTICS_URL != '' && vars.VITE_ANALYTICS_URL || 'https://ge5snsne7lr62h44l7w5bm6z540hkpue.lambda-url.us-east-1.on.aws/' }}
           VITE_TAG_REPO_URL: /mtg-commander-deck-generator/data/tagger-tags.json
           VITE_SPELLCHROMA_DICT_URL: /mtg-commander-deck-generator/data/spellchroma-tag-dictionary.json
           VITE_SPELLCHROMA_INDEX_URL: /mtg-commander-deck-generator/data/spellchroma-tag-index.json
