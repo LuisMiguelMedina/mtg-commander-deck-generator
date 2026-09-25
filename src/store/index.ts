@@ -498,6 +498,12 @@ export const useStore = create<AppState>((set, get) => ({
       if (rules?.generation === 'implemented') {
         newCustomization.deckFormat = rules.deckSize;
       }
+      if (updates.formatMode === 'brawl100') {
+        newCustomization.budgetOption = 'any';
+        newCustomization.deckBudget = null;
+        newCustomization.maxCardPrice = null;
+        newCustomization.arenaOnly = true;
+      }
     }
 
     if (updates.deckFormat !== undefined) {

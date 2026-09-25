@@ -2077,8 +2077,13 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
   const colorSeg = edhrecColorSegment(colorIdentity, chosenColor);
 
   const formatMode = customization.formatMode ?? 'commander';
-  const budgetOption = customization.budgetOption !== 'any' ? customization.budgetOption : undefined;
-  const bracketLevel = customization.bracketLevel !== 'all' ? customization.bracketLevel : undefined;
+  const isBrawlFormat = formatMode === 'brawl100';
+  const budgetOption = isBrawlFormat
+    ? undefined
+    : (customization.budgetOption !== 'any' ? customization.budgetOption : undefined);
+  const bracketLevel = isBrawlFormat
+    ? undefined
+    : (customization.bracketLevel !== 'all' ? customization.bracketLevel : undefined);
 
   onProgress?.('Surveying legal cards for this format...', 2);
   const formatCandidateResponse = await searchCards(
@@ -2149,10 +2154,10 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
     console.log(`[DeckGen] Temp banned cards:`, tempBanned);
     tempBanned.forEach(markBanned);
   }
-  const maxCardPrice = customization.maxCardPrice ?? null;
+  const maxCardPrice = isBrawlFormat ? null : (customization.maxCardPrice ?? null);
   const allowedRarities = customization.allowedRarities ?? null;
   const maxCmc = customization.tinyLeaders ? 3 : null;
-  const arenaOnly = !!customization.arenaOnly;
+  const arenaOnly = isBrawlFormat ? true : !!customization.arenaOnly;
   const scryfallQuery = customization.scryfallQuery ?? '';
   // All sets the query references (a multi-set OR query lists several). preferredSet is
   // just the first, used as a single-set printing hint when batch-fetching; preferredSets
@@ -2163,7 +2168,7 @@ export async function generateDeck(context: GenerationContext): Promise<Generate
     : customization.gameChangerLimit === 'unlimited' ? Infinity
     : customization.gameChangerLimit;
   const gameChangerCount = { value: 0 };
-  const deckBudget = customization.deckBudget ?? null;
+  const deckBudget = isBrawlFormat ? null : (customization.deckBudget ?? null);
   const currency = customization.currency ?? 'USD';
   const ignoreOwnedBudget = !!(customization.ignoreOwnedBudget && context.collectionNames);
   const ignoreOwnedRarity = !!(customization.ignoreOwnedRarity && context.collectionNames);
