@@ -24,7 +24,7 @@ async function searchMoxfieldDirect(commanderName: string): Promise<CommunityBra
     pageNumber: '1',
   });
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), MOXFIELD_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
     const response = await fetch(`${MOXFIELD_SEARCH_URL}?${params.toString()}`, {
       headers: { 'User-Agent': MOXFIELD_USER_AGENT, Accept: 'application/json' },
@@ -99,21 +99,32 @@ export function buildBrawlPopularityRequestUrl(commanderName: string): string | 
   return buildAnalyticsActionUrl('brawl-popularity', { commanderName });
 }
 
-/** Browser entry: uses analytics/dev proxy when configured. */
+/** Browser entry: analytics/dev proxy → build snapshot → no direct Moxfield (blocked in browser). */
 export async function searchBrawl100DecksProxied(
   commanderName: string,
 ): Promise<CommunityBrawlPopularityResponse> {
   const url = buildBrawlPopularityRequestUrl(commanderName);
-  if (!url) {
-    return searchMoxfieldDirect(commanderName);
-  }
-  try {
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!res.ok) {
-      return { source: 'scryfall', status: res.status, limitedData: true };
+  if (url) {
+    try {
+      const res = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (res.ok) {
+        const body = (await res.json()) as CommunityBrawlPopularityResponse;
+        if (
+          (body.source === 'moxfield' || body.source === 'archidekt') &&
+          body.numDecks &&
+          body.cards?.length
+        ) {
+          return body;
+        }
+      }
+    } catch {
+      // fall through to snapshot
     }
-    return (await res.json()) as CommunityBrawlPopularityResponse;
-  } catch {
-    return { source: 'scryfall', status: 503, limitedData: true };
   }
+
+  const { popularityFromSnapshot } = await import('@/services/brawl/brawlCommunitySnapshot');
+  const fromSnapshot = await popularityFromSnapshot(commanderName);
+  if (fromSnapshot) return fromSnapshot;
+
+  return { source: 'scryfall', status: url ? 502 : 503, limitedData: true };
 }

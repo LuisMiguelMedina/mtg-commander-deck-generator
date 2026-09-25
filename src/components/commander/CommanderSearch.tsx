@@ -597,14 +597,13 @@ export function CommanderSearch({ onSelectCommander, destination = 'build', form
                   )}
                   {limitedSuggestions && edhrecCommanders.length > 0 && suggestionSource === 'scryfall' && (
                     <p className="text-xs text-muted-foreground/80 mb-3">
-                      Community Brawl lists unavailable (deploy analytics Lambda or check VITE_ANALYTICS_URL) —
-                      showing popular legal commanders on Arena from Scryfall.
+                      No community Brawl deck lists loaded — showing popular legal commanders on Arena from
+                      Scryfall. Rebuild the site or enable the analytics proxy for fresher Archidekt data.
                     </p>
                   )}
-                  {suggestionSource === 'archidekt' && edhrecCommanders.length > 0 && (
+                  {suggestionSource === 'archidekt' && edhrecCommanders.length > 0 && limitedSuggestions && (
                     <p className="text-xs text-muted-foreground/80 mb-3">
-                      Moxfield is blocked from the browser; showing commanders from recent public Brawl decks on
-                      Archidekt.
+                      Top commanders from public Historic Brawl decks (Archidekt snapshot or live proxy).
                     </p>
                   )}
                   {edhrecCommanders.length > 0 ? (

@@ -219,13 +219,14 @@ export function ArchetypeDisplay({}: ArchetypeDisplayProps) {
           ) : archetypeDataSource === 'archidekt' && edhrecNumDecks && edhrecNumDecks > 0 ? (
             <>
               Historic Brawl suggestions use public Brawl deck lists on Archidekt (
-              {edhrecNumDecks.toLocaleString()} decks sampled). Moxfield data is not reachable from the browser;
-              {archetypeLimitedData ? ' sample size is small —' : ''} generation still respects Arena Brawl legality.
+              {edhrecNumDecks.toLocaleString()} decks sampled).
+              {archetypeLimitedData ? ' Sample size is small —' : ''} Generation still respects Arena Brawl
+              legality.
             </>
           ) : (
             <>
-              Limited Historic Brawl list data from Moxfield — deck generation still uses Arena-legal cards
-              and Scryfall ordering. Popular commanders can show this when list data is unavailable from here.
+              Limited community Brawl list data for this commander — deck generation still uses Arena-legal cards
+              and Scryfall ordering. Try a commander from the home “Top commanders” list for richer samples.
             </>
           )}
         </div>
