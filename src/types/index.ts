@@ -666,6 +666,9 @@ export interface AppState {
   themesLoading: boolean;
   themesError: string | null;
   themeSource: 'edhrec' | 'local';
+  /** Popularity source for Historic Brawl archetype panel (null in Commander until generate). */
+  archetypeDataSource: DeckDataSource | null;
+  archetypeLimitedData: boolean;
   edhrecNumDecks: number | null;
   // Strategy slug chosen via the "By strategy" discovery tab, pending consumption by the
   // builder to pre-select the matching archetype. Cleared once applied.
@@ -721,6 +724,11 @@ export interface AppState {
   toggleThemeSelection: (themeName: string) => void;
   setThemesLoading: (loading: boolean) => void;
   setThemesError: (error: string | null) => void;
+  setArchetypePopularityContext: (ctx: {
+    dataSource: DeckDataSource;
+    numDecks: number | null;
+    limitedData?: boolean;
+  }) => void;
   setEdhrecLandSuggestion: (suggestion: { landCount: number; nonBasicLandCount: number } | null) => void;
   setEdhrecStats: (stats: EDHRECCommanderStats | null) => void;
   updateCustomization: (updates: Partial<Customization>) => void;

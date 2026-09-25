@@ -17,6 +17,7 @@ import { generateDeck, type OwnedCardMeta } from '@/services/deckBuilder/deckGen
 import { getCardByName, getCardImageUrl, getCachedCard, getCardPrice } from '@/services/scryfall/client';
 import { removeCards, addCard } from '@/services/deckBuilder/cardSwap';
 import { fetchCommanderData, fetchPartnerCommanderData, formatCommanderNameForUrl, edhrecColorSegment } from '@/services/edhrec';
+import { fetchBrawl100ArchetypePopularity } from '@/services/brawl/loadBuilderArchetype';
 import { applyCommanderTheme, resetTheme } from '@/lib/commanderTheme';
 import type { BracketLevel, BudgetOption, EDHRECTheme, GeneratedDeck, ScryfallCard, ThemeResult } from '@/types';
 import { Loader2, ArrowLeft, ExternalLink, SlidersHorizontal, Bookmark, Check, Copy, X, Swords, Library, AlertTriangle } from 'lucide-react';
@@ -140,6 +141,7 @@ export function BuilderPage() {
   const exportTriggerRef = useRef<(() => void) | null>(null);
   const [headerCollectionNames, setHeaderCollectionNames] = useState<Set<string> | null>(null);
   const [listsPanelOpen, setListsPanelOpen] = useState(false);
+  const archetypeLoadKeyRef = useRef<string | null>(null);
 
   const {
     commander,
@@ -161,6 +163,7 @@ export function BuilderPage() {
     setSelectedThemes,
     setThemesLoading,
     setThemesError,
+    setArchetypePopularityContext,
     setGeneratedDeck,
     setLoading,
     setError,
@@ -376,12 +379,34 @@ export function BuilderPage() {
         }
       }
 
-      // Skip if we already have themes loaded for this commander
-      if (hasCommanderCached && selectedThemes.length > 0) {
+      const formatMode = useStore.getState().customization.formatMode ?? 'commander';
+      const loadKey = `${decodedName}:${formatMode}`;
+      if (archetypeLoadKeyRef.current === loadKey) return;
+
+      if (formatMode === 'brawl100') {
+        setThemesLoading(true);
+        setThemesError(null);
+        try {
+          const popularity = await fetchBrawl100ArchetypePopularity(card.name);
+          setArchetypePopularityContext({
+            dataSource: popularity.dataSource,
+            numDecks: popularity.numDecks ?? null,
+            limitedData: popularity.limitedData,
+          });
+        } catch {
+          setArchetypePopularityContext({
+            dataSource: 'scryfall',
+            numDecks: null,
+            limitedData: true,
+          });
+        } finally {
+          setThemesLoading(false);
+        }
+        archetypeLoadKeyRef.current = loadKey;
         return;
       }
 
-      // Fetch EDHREC themes
+      // Fetch EDHREC themes (Commander)
       setThemesLoading(true);
       setThemesError(null);
 
@@ -427,10 +452,11 @@ export function BuilderPage() {
       } finally {
         setThemesLoading(false);
       }
+      archetypeLoadKeyRef.current = loadKey;
     }
 
     loadCommanderFromUrl();
-  }, [commanderName]);
+  }, [commanderName, customization.formatMode]);
 
   // Load partner commander from URL if present, or clear if absent
   useEffect(() => {
@@ -556,6 +582,9 @@ export function BuilderPage() {
       return;
     }
 
+    const brawlMode = useStore.getState().customization.formatMode === 'brawl100';
+    if (brawlMode) return;
+
     async function refreshThemes() {
       setThemesLoading(true);
       setThemesError(null);
@@ -629,6 +658,8 @@ export function BuilderPage() {
 
     // Skip if commander not loaded yet, or if neither setting actually changed
     if (!commander || (currentBracket === prevBracket && currentBudget === prevBudget)) return;
+
+    if (useStore.getState().customization.formatMode === 'brawl100') return;
 
     // Always clear the no-data flag when settings change so the button re-enables
     setNoDataForSettings(false);

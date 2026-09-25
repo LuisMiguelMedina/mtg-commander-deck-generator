@@ -304,6 +304,8 @@ export const useStore = create<AppState>((set, get) => ({
   themesLoading: false,
   themesError: null,
   themeSource: 'local',
+  archetypeDataSource: null,
+  archetypeLimitedData: false,
   edhrecNumDecks: null,
   pendingStrategySlug: null,
   edhrecLandSuggestion: null,
@@ -365,6 +367,8 @@ export const useStore = create<AppState>((set, get) => ({
       themesLoading: false,
       themesError: null,
       themeSource: 'local',
+      archetypeDataSource: null,
+      archetypeLimitedData: false,
       edhrecNumDecks: null,
       edhrecLandSuggestion: null,
       edhrecStats: null,
@@ -398,6 +402,8 @@ export const useStore = create<AppState>((set, get) => ({
       themesLoading: false,
       themesError: null,
       themeSource: 'local',
+      archetypeDataSource: null,
+      archetypeLimitedData: false,
       edhrecNumDecks: null,
       edhrecStats: null,
       deckHistory: [],
@@ -428,6 +434,8 @@ export const useStore = create<AppState>((set, get) => ({
     edhrecThemes: themes,
     themeSource: 'edhrec',
     themesError: null,
+    archetypeDataSource: null,
+    archetypeLimitedData: false,
   }),
 
   setEdhrecNumDecks: (count) => set({ edhrecNumDecks: count }),
@@ -452,6 +460,18 @@ export const useStore = create<AppState>((set, get) => ({
     themesError: error,
     themeSource: error ? 'local' : state.themeSource,
   })),
+
+  setArchetypePopularityContext: (ctx) => set({
+    archetypeDataSource: ctx.dataSource,
+    archetypeLimitedData: ctx.limitedData ?? false,
+    edhrecNumDecks: ctx.numDecks,
+    themesError: null,
+    themeSource: 'local',
+    edhrecThemes: [],
+    selectedThemes: [],
+    edhrecStats: null,
+    edhrecLandSuggestion: null,
+  }),
 
   updateCustomization: (updates: Partial<Customization>) => set((state) => {
     const newCustomization = { ...state.customization, ...updates };
@@ -994,6 +1014,8 @@ export const useStore = create<AppState>((set, get) => ({
     themesLoading: false,
     themesError: null,
     themeSource: 'local',
+    archetypeDataSource: null,
+    archetypeLimitedData: false,
     edhrecNumDecks: null,
     pendingStrategySlug: null,
     userEditedLands: false,

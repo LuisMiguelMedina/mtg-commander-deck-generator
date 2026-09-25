@@ -76,9 +76,14 @@ export function ArchetypeDisplay({}: ArchetypeDisplayProps) {
     themesError,
     themeSource,
     edhrecNumDecks,
+    archetypeDataSource,
+    archetypeLimitedData,
     customization,
     updateCustomization,
   } = useStore();
+
+  const formatMode = customization.formatMode ?? 'commander';
+  const isBrawl = formatMode === 'brawl100';
 
   const [showOtherDropdown, setShowOtherDropdown] = useState(false);
   const [buildModesOpen, setBuildModesOpen] = useState(() => {
@@ -203,8 +208,25 @@ export function ArchetypeDisplay({}: ArchetypeDisplayProps) {
         </div>
       )}
 
-      {/* Fallback Notice — shown when EDHREC data is unavailable */}
-      {!themesLoading && themesError && (
+      {!themesLoading && isBrawl && (
+        <div className="text-sm text-muted-foreground bg-accent/30 px-3 py-2 rounded-md border border-border/50">
+          {archetypeDataSource === 'moxfield' && edhrecNumDecks && edhrecNumDecks > 0 && !archetypeLimitedData ? (
+            <>
+              Historic Brawl suggestions use popular public decks on Moxfield (
+              {edhrecNumDecks.toLocaleString()} lists). EDHREC theme tags apply to Commander only — generate
+              without picking a theme.
+            </>
+          ) : (
+            <>
+              Limited Historic Brawl list data from Moxfield — deck generation still uses Arena-legal cards
+              and Scryfall ordering. Popular commanders can show this when list data is unavailable from here.
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Fallback Notice — Commander only; EDHREC data unavailable */}
+      {!themesLoading && !isBrawl && themesError && (
         <div className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 rounded-md">
           {customization.bracketLevel !== 'all' || customization.budgetOption !== 'any' ? (
             <>
@@ -225,9 +247,8 @@ export function ArchetypeDisplay({}: ArchetypeDisplayProps) {
         </div>
       )}
 
-      {/* Build Modes accordion — pinned to bottom of card. Always shown, even with no theme
-          selected: Hyper Focus simply has nothing to focus on until one is picked, and hiding
-          the section made the feature undiscoverable. */}
+      {/* Build Modes accordion — Commander only (Hyper Focus needs EDHREC themes) */}
+      {!isBrawl && (
       <div className={`mt-auto ${buildModesOpen ? 'pt-2 border-t border-border/50' : ''}`}>
         <button
           onClick={() => { const v = !buildModesOpen; setBuildModesOpen(v); localStorage.setItem('accordion-buildmodes', String(v)); }}
@@ -256,49 +277,49 @@ export function ArchetypeDisplay({}: ArchetypeDisplayProps) {
         <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${buildModesOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
           <div className="overflow-hidden">
             <div className="mt-3 space-y-2">
-              {/* Hyper Focus */}
-              <button
-                type="button"
-                onClick={() => updateCustomization({ hyperFocus: !customization.hyperFocus })}
-                className={`
+                <button
+                  type="button"
+                  onClick={() => updateCustomization({ hyperFocus: !customization.hyperFocus })}
+                  className={`
                   w-full flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer
                   ${customization.hyperFocus
                     ? 'border-primary/50 bg-primary/10'
                     : 'border-border/50 bg-accent/20 hover:border-primary/30'
                   }
                 `}
-              >
-                <div className={`
+                >
+                  <div className={`
                   w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors
                   ${customization.hyperFocus ? 'bg-primary/20 text-primary' : 'bg-accent text-muted-foreground'}
                 `}>
-                  <Crosshair className="w-4 h-4" />
-                </div>
-                <div className="flex-1 text-left">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`text-sm font-medium ${customization.hyperFocus ? 'text-primary' : ''}`}>
-                      Hyper Focus
-                    </span>
-                    <InfoTooltip text="Experimental: Prioritizes cards unique to your selected themes and deprioritizes generic staples that appear across many archetypes. Great for discovering hidden gems specific to your strategy." />
+                    <Crosshair className="w-4 h-4" />
                   </div>
-                  <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
-                    Discover unique cards, avoid generic staples
-                  </p>
-                </div>
-                <div className={`
+                  <div className="flex-1 text-left">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-sm font-medium ${customization.hyperFocus ? 'text-primary' : ''}`}>
+                        Hyper Focus
+                      </span>
+                      <InfoTooltip text="Experimental: Prioritizes cards unique to your selected themes and deprioritizes generic staples that appear across many archetypes. Great for discovering hidden gems specific to your strategy." />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+                      Discover unique cards, avoid generic staples
+                    </p>
+                  </div>
+                  <div className={`
                   w-9 h-5 rounded-full relative transition-colors shrink-0
                   ${customization.hyperFocus ? 'bg-primary' : 'bg-muted'}
                 `}>
-                  <div className={`
+                    <div className={`
                     absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform
                     ${customization.hyperFocus ? 'translate-x-4' : 'translate-x-0.5'}
                   `} />
-                </div>
-              </button>
+                  </div>
+                </button>
             </div>
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }
