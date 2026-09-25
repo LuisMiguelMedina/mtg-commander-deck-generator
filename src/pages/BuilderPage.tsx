@@ -143,6 +143,7 @@ export function BuilderPage() {
   const [headerCollectionNames, setHeaderCollectionNames] = useState<Set<string> | null>(null);
   const [listsPanelOpen, setListsPanelOpen] = useState(false);
   const archetypeLoadKeyRef = useRef<string | null>(null);
+  const archetypeLoadSeqRef = useRef(0);
 
   const {
     commander,
@@ -386,24 +387,29 @@ export function BuilderPage() {
       const loadKey = `${decodedName}:${formatMode}`;
       if (archetypeLoadKeyRef.current === loadKey) return;
 
+      const loadSeq = ++archetypeLoadSeqRef.current;
+      const stale = () => loadSeq !== archetypeLoadSeqRef.current;
+
       if (formatMode === 'brawl100') {
         setThemesLoading(true);
         setThemesError(null);
         try {
           const popularity = await fetchBrawl100ArchetypePopularity(card.name);
+          if (stale()) return;
           setArchetypePopularityContext({
             dataSource: popularity.dataSource,
             numDecks: popularity.numDecks ?? null,
             limitedData: popularity.limitedData,
           });
         } catch {
+          if (stale()) return;
           setArchetypePopularityContext({
             dataSource: 'scryfall',
             numDecks: null,
             limitedData: true,
           });
         } finally {
-          setThemesLoading(false);
+          if (!stale()) setThemesLoading(false);
         }
         archetypeLoadKeyRef.current = loadKey;
         return;
@@ -416,6 +422,7 @@ export function BuilderPage() {
       try {
         const bracketLevel = customization.bracketLevel !== 'all' ? customization.bracketLevel : undefined;
         const data = await fetchCommanderData(card.name, undefined, bracketLevel);
+        if (stale()) return;
         const themes = data.themes;
 
         // Apply EDHREC land stats — more accurate than hardcoded defaults
@@ -444,18 +451,19 @@ export function BuilderPage() {
         setEdhrecStats(data.stats);
 
         if (themes.length > 0) {
+          if (stale()) return;
           setEdhrecThemes(themes);
 
           setSelectedThemes(buildThemeResults(themes, strategyParam));
         } else {
-          setThemesError('No popular themes yet on EDHREC');
+          if (!stale()) setThemesError('No popular themes yet on EDHREC');
         }
       } catch {
-        setThemesError('Could not fetch EDHREC themes');
+        if (!stale()) setThemesError('Could not fetch EDHREC themes');
       } finally {
-        setThemesLoading(false);
+        if (!stale()) setThemesLoading(false);
       }
-      archetypeLoadKeyRef.current = loadKey;
+      if (!stale()) archetypeLoadKeyRef.current = loadKey;
     }
 
     loadCommanderFromUrl();

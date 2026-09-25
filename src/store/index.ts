@@ -539,7 +539,12 @@ export const useStore = create<AppState>((set, get) => ({
       newCustomization.deckFormat = getFormatRules(resolvedMode)?.deckSize ?? 99;
     }
 
-    return { customization: newCustomization };
+    return {
+      customization: newCustomization,
+      ...(resolvedMode === 'brawl100'
+        ? { themesError: null as string | null }
+        : {}),
+    };
   }),
 
   setGeneratedDeck: (deck: GeneratedDeck | null) => set({ generatedDeck: deck }),
