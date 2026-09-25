@@ -41,24 +41,32 @@ export function resolveBgLayers(choice: BgChoice, colorIdentity: string[]): BgLa
   }
 }
 
-export type BattlefieldCardSize = 'small' | 'medium' | 'large';
+export type BattlefieldCardSize = 'smallest' | 'small' | 'medium' | 'large';
 
+/**
+ * Ordered smallest-first — the settings picker renders them in key order, and a
+ * row of size swatches only reads as a scale if it goes one way.
+ */
 export const CARD_SIZES: Record<BattlefieldCardSize, { label: string; width: number; height: number }> = {
+  smallest: { label: 'Smallest', width: 75, height: 105 },
   small:  { label: 'Small',  width: 100, height: 140 },
   medium: { label: 'Medium', width: 130, height: 182 },
   large:  { label: 'Large',  width: 165, height: 231 },
 };
 
 /**
- * How an opponent's card reveals itself. `ctrl` matches your own battlefield;
- * `hover` is the impatient option; `off` suits anyone who finds the popup noisy.
+ * How an opponent's card reveals itself. `hover` matches your own battlefield;
+ * `ctrl` asks for the key on their side only; `off` suits anyone who finds the
+ * popup noisy.
  */
 export type OpponentPreviewMode = 'follow' | 'ctrl' | 'hover' | 'off';
 
 /**
  * The same choice for your own cards, minus `off` — a hand card is 130px wide
  * and the preview is the only way to read one, so there always has to be a
- * gesture that opens it.
+ * gesture that opens it. `hover` is the default: the preview is what reading a
+ * card *is* here, and gating the only legible view behind a held key taxes the
+ * thing you do most.
  */
 export type CardPreviewMode = 'ctrl' | 'hover';
 
@@ -73,6 +81,11 @@ interface Settings {
   cardSize: BattlefieldCardSize;
   /** How your own cards open their magnified preview. */
   cardPreview: CardPreviewMode;
+  /**
+   * Whether the stored `cardPreview` is a choice somebody made, rather than an
+   * old default being carried along. See `migrateChangedDefault`.
+   */
+  cardPreviewExplicit: boolean;
   animations: boolean;
   /**
    * Quiet synthesized table sounds — shuffle, draw, counter click, card landing, tap — plus the
@@ -89,10 +102,7 @@ interface Settings {
    * a deliberate override for their side only.
    */
   opponentPreview: OpponentPreviewMode;
-  /**
-   * Whether the stored `opponentPreview` is a choice somebody made, rather
-   * than the old default being carried along. See `migrateOpponentPreview`.
-   */
+  /** The same, for `opponentPreview`. */
   opponentPreviewExplicit: boolean;
   /** Whether newly seated bots cast interaction at you. */
   opponentResistanceDefault: boolean;
@@ -100,6 +110,16 @@ interface Settings {
   opponentAutoTurns: boolean;
   /** How much of a bot's turn stops and waits for you. See `StackMode`. */
   stackMode: StackMode;
+  /**
+   * How big the hand bar is, as a multiplier on its natural card width. Set by
+   * dragging the bar's top edge; 1 is the size it has always been.
+   *
+   * A scale rather than a pixel height because the bar has no height of its
+   * own — it is a row of cards and piles, and its height is whatever their
+   * width times the 5:7 card ratio comes to. Storing the height would mean
+   * inverting that on every read, and it would stop tracking the viewport.
+   */
+  handScale: number;
 }
 
 interface SettingsActions {
@@ -115,12 +135,14 @@ interface SettingsActions {
   setOpponentResistanceDefault: (v: boolean) => void;
   setOpponentAutoTurns: (v: boolean) => void;
   setStackMode: (mode: StackMode) => void;
+  setHandScale: (scale: number) => void;
 }
 
 const defaults: Settings = {
   bg: { kind: 'preset', id: 'arena' },
   cardSize: 'medium',
-  cardPreview: 'ctrl',
+  cardPreview: 'hover',
+  cardPreviewExplicit: false,
   animations: true,
   sounds: true,
   dotGrid: true,
@@ -130,7 +152,17 @@ const defaults: Settings = {
   opponentResistanceDefault: true,
   opponentAutoTurns: true,
   stackMode: 'targeted',
+  handScale: 1,
 };
+
+/** Small enough that the piles stay legible, big enough to fill half the table. */
+export const HAND_SCALE_MIN = 0.6;
+export const HAND_SCALE_MAX = 2;
+
+export function clampHandScale(scale: number): number {
+  if (!Number.isFinite(scale)) return 1;
+  return Math.min(HAND_SCALE_MAX, Math.max(HAND_SCALE_MIN, scale));
+}
 
 /**
  * How much of a bot's turn stops and waits for you.
@@ -174,21 +206,24 @@ function migrateBg(bg: unknown): BgChoice {
 }
 
 /**
- * The bots' preview mode used to default to `ctrl` while your own cards were a
- * separate setting, and every setter writes the whole settings object — so a
- * stored `ctrl` is nearly always that default being carried along rather than
- * a decision anybody made, and picking "On hover" for your own cards left the
- * bots' board still asking for a key.
+ * Both preview settings used to default to `ctrl`, and every setter writes the
+ * whole settings object — so a stored `ctrl` is nearly always that default
+ * being carried along rather than a decision anybody made. Changing the
+ * default would otherwise reach nobody who has ever opened this dialog.
  *
- * So a stored `ctrl` from before the change is read as `follow`. A `ctrl`
- * chosen since is marked and kept: `opponentPreviewExplicit` rides along in
- * the same object and is written by the next save.
+ * So a stored copy of the old default is read as the new one. A value chosen
+ * since is marked and kept: the matching `…Explicit` flag rides along in the
+ * same object and is written by the next save.
  */
-function migrateOpponentPreview(parsed: Partial<Settings>): OpponentPreviewMode {
-  const stored = parsed.opponentPreview;
-  if (!stored) return defaults.opponentPreview;
-  if (parsed.opponentPreviewExplicit) return stored;
-  return stored === 'ctrl' ? 'follow' : stored;
+function migrateChangedDefault<T>(
+  stored: T | undefined,
+  explicit: boolean | undefined,
+  oldDefault: T,
+  nextDefault: T,
+): T {
+  if (stored === undefined) return nextDefault;
+  if (explicit) return stored;
+  return stored === oldDefault ? nextDefault : stored;
 }
 
 function load(): Settings {
@@ -202,10 +237,13 @@ function load(): Settings {
       ...parsed,
       bg: migrateBg(parsed.bg),
       stackMode: migrateStackMode(parsed.stackMode, (parsed as { stackHold?: unknown }).stackHold),
-      opponentPreview: migrateOpponentPreview(parsed),
+      cardPreview: migrateChangedDefault(parsed.cardPreview, parsed.cardPreviewExplicit, 'ctrl', defaults.cardPreview),
+      opponentPreview: migrateChangedDefault(parsed.opponentPreview, parsed.opponentPreviewExplicit, 'ctrl', defaults.opponentPreview),
       // From here on, whatever is in storage was put there deliberately.
+      cardPreviewExplicit: true,
       opponentPreviewExplicit: true,
       logFilter: { ...ALL_LOG_CATEGORIES_ON, ...(parsed.logFilter ?? {}) },
+      handScale: clampHandScale(parsed.handScale ?? defaults.handScale),
     };
   } catch {
     return defaults;
@@ -220,7 +258,10 @@ export const usePlaytestSettings = create<Settings & SettingsActions>((set, get)
   ...load(),
   setBg: (bg) => { set({ bg }); save({ ...get(), bg }); },
   setCardSize: (cardSize) => { set({ cardSize }); save({ ...get(), cardSize }); },
-  setCardPreview: (cardPreview) => { set({ cardPreview }); save({ ...get(), cardPreview }); },
+  setCardPreview: (cardPreview) => {
+    set({ cardPreview, cardPreviewExplicit: true });
+    save({ ...get(), cardPreview, cardPreviewExplicit: true });
+  },
   setAnimations: (animations) => { set({ animations }); save({ ...get(), animations }); },
   setSounds: (sounds) => { set({ sounds }); save({ ...get(), sounds }); },
   setDotGrid: (dotGrid) => { set({ dotGrid }); save({ ...get(), dotGrid }); },
@@ -232,6 +273,11 @@ export const usePlaytestSettings = create<Settings & SettingsActions>((set, get)
   setOpponentResistanceDefault: (opponentResistanceDefault) => { set({ opponentResistanceDefault }); save({ ...get(), opponentResistanceDefault }); },
   setOpponentAutoTurns: (opponentAutoTurns) => { set({ opponentAutoTurns }); save({ ...get(), opponentAutoTurns }); },
   setStackMode: (stackMode) => { set({ stackMode }); save({ ...get(), stackMode }); },
+  setHandScale: (raw) => {
+    const handScale = clampHandScale(raw);
+    set({ handScale });
+    save({ ...get(), handScale });
+  },
   toggleLogCategory: (category) => {
     const next: LogFilter = { ...get().logFilter, [category]: !get().logFilter[category] };
     set({ logFilter: next });
