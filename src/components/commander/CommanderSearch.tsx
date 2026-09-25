@@ -9,9 +9,9 @@ import {
   getCardImageUrl,
 } from '@/services/scryfall/client';
 import { fetchTopCommanders, fetchAllCommanderNames, fetchCommandersIncludingColors, formatCommanderNameForUrl, isPartnerPair } from '@/services/edhrec/client';
-import { suggestionsFor, fetchMoxfieldTopCommanders } from '@/services/foundry/commanderSuggestions';
+import { suggestionsFor, fetchMoxfieldTopCommanders, fetchScryfallTopBrawlCommanders } from '@/services/foundry/commanderSuggestions';
 import { MOXFIELD_POPULARITY_ENABLED_DEFAULT } from '@/services/moxfield/flags';
-import { isEligibleCommander } from '@/lib/format/formatMode';
+import { isEligibleCommander, type FormatMode } from '@/lib/format/formatMode';
 import { StrategyBrowser } from '@/components/commander/StrategyBrowser';
 import { ColorFilterChips } from '@/components/commander/ColorFilterChips';
 import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from '@/components/ui/popover';
@@ -79,9 +79,24 @@ export interface CommanderSearchProps {
    * 'brew' → the interactive brewing flow. Ignored when `onSelectCommander` is provided.
    */
   destination?: 'build' | 'brew';
+  /** When set (e.g. Foundry landing step 1), overrides store customization for format rules. */
+  formatMode?: FormatMode;
 }
 
-export function CommanderSearch({ onSelectCommander, destination = 'build' }: CommanderSearchProps = {}) {
+function toTopCommanderRows(
+  names: string[],
+  colorIdentityByName: Record<string, string[]> = {},
+): import('@/types').EDHRECTopCommander[] {
+  return names.map((name, i) => ({
+    name,
+    sanitized: name.replace(/[^a-z0-9]+/gi, '-').toLowerCase(),
+    colorIdentity: colorIdentityByName[name] ?? [],
+    rank: i + 1,
+    numDecks: 0,
+  }));
+}
+
+export function CommanderSearch({ onSelectCommander, destination = 'build', formatMode: formatModeProp }: CommanderSearchProps = {}) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ScryfallCard[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -89,7 +104,8 @@ export function CommanderSearch({ onSelectCommander, destination = 'build' }: Co
   const [ownedOnly, setOwnedOnly] = useState(() => localStorage.getItem('ownedCommandersOnly') === 'true');
   const navigate = useNavigate();
   const { setCommander, customization } = useStore();
-  const formatMode = customization.formatMode ?? 'commander';
+  const formatMode = formatModeProp ?? customization.formatMode ?? 'commander';
+  const isBrawl = formatMode === 'brawl100';
   const { cards: collectionCards, count: collectionCount } = useCollection();
   // All legendary creatures in the collection
   const collectionLegends = useMemo(
@@ -142,8 +158,14 @@ export function CommanderSearch({ onSelectCommander, destination = 'build' }: Co
   // Fetch top commanders from EDHREC based on color filter
   const [edhrecCommanders, setEdhrecCommanders] = useState<import('@/types').EDHRECTopCommander[]>([]);
   const [edhrecLoading, setEdhrecLoading] = useState(false);
-  const [suggestionSource, setSuggestionSource] = useState<'edhrec' | 'moxfield' | 'search-only'>('edhrec');
+  const [suggestionSource, setSuggestionSource] = useState<'edhrec' | 'moxfield' | 'scryfall' | 'search-only'>('edhrec');
   const [limitedSuggestions, setLimitedSuggestions] = useState(false);
+
+  useEffect(() => {
+    if (isBrawl && suggestionTab === 'strategy') {
+      setSuggestionTab('edhrec');
+    }
+  }, [isBrawl, suggestionTab]);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,6 +178,7 @@ export function CommanderSearch({ onSelectCommander, destination = 'build' }: Co
         return data.map((c) => ({ name: c.name }));
       },
       fetchMoxfieldTop: fetchMoxfieldTopCommanders,
+      fetchScryfallTopBrawl: fetchScryfallTopBrawlCommanders,
       flagEnabled: MOXFIELD_POPULARITY_ENABLED_DEFAULT,
     })
       .then(async (result) => {
@@ -165,16 +188,12 @@ export function CommanderSearch({ onSelectCommander, destination = 'build' }: Co
         if (result.source === 'edhrec') {
           const data = await fetchTopCommanders([...colorFilter]);
           if (!cancelled) setEdhrecCommanders(data);
-        } else if (result.source === 'moxfield') {
-          setEdhrecCommanders(
-            result.names.map((name, i) => ({
-              name,
-              sanitized: name.replace(/[^a-z0-9]+/gi, '-').toLowerCase(),
-              colorIdentity: [],
-              rank: i + 1,
-              numDecks: 0,
-            })),
-          );
+        } else if (result.source === 'moxfield' || result.source === 'scryfall') {
+          if (!cancelled) {
+            setEdhrecCommanders(
+              toTopCommanderRows(result.names, result.colorIdentityByName ?? {}),
+            );
+          }
         } else {
           setEdhrecCommanders([]);
         }
@@ -309,6 +328,15 @@ export function CommanderSearch({ onSelectCommander, destination = 'build' }: Co
 
     setIsSearching(true);
     try {
+      if (formatMode === 'brawl100') {
+        const { names } = await fetchScryfallTopBrawlCommanders([...colorFilter]);
+        const pool = names.filter(n => !isPartnerPair(n));
+        if (pool.length === 0) return;
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        const card = await getCardByName(pick);
+        if (isEligibleCommander(card, formatMode)) handleSelectCommander(card);
+        return;
+      }
       if (colorFilter.size > 0) {
         // Color filter active — fetch superset, then narrow to commanders whose color identity
         // matches the filter exactly (e.g. GB filter → only GB commanders, not GBW/GBU/etc.)
@@ -524,7 +552,8 @@ export function CommanderSearch({ onSelectCommander, destination = 'build' }: Co
                       <PopoverClose asChild>
                         <button
                           onClick={() => setSuggestionTab('strategy')}
-                          className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-md text-sm text-left transition-colors ${suggestionTab === 'strategy' ? 'bg-violet-500/15 text-violet-200 font-medium' : 'text-foreground/80 hover:bg-accent/50 hover:text-foreground'}`}
+                          disabled={isBrawl}
+                          className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-md text-sm text-left transition-colors ${suggestionTab === 'strategy' ? 'bg-violet-500/15 text-violet-200 font-medium' : 'text-foreground/80 hover:bg-accent/50 hover:text-foreground'} disabled:opacity-40 disabled:cursor-not-allowed`}
                         >
                           By Strategy
                           {suggestionTab === 'strategy' && <Check className="w-3.5 h-3.5" />}
@@ -536,9 +565,11 @@ export function CommanderSearch({ onSelectCommander, destination = 'build' }: Co
                     <span>
                       {suggestionSource === 'moxfield'
                         ? 'on Moxfield'
-                        : suggestionSource === 'search-only'
-                          ? 'search for a legal Brawl commander'
-                          : 'on EDHREC'}
+                        : suggestionSource === 'scryfall'
+                          ? 'legal in Historic Brawl (Arena)'
+                          : suggestionSource === 'search-only'
+                            ? 'search for a legal Brawl commander'
+                            : 'on EDHREC'}
                     </span>
                   )}
                 </p>
@@ -551,9 +582,14 @@ export function CommanderSearch({ onSelectCommander, destination = 'build' }: Co
                 <StrategyBrowser colorFilter={colorFilter} onSelectCommanderName={handleSelectStrategyCommander} />
               ) : suggestionTab === 'edhrec' ? (
                 <>
-                  {limitedSuggestions && (
+                  {limitedSuggestions && edhrecCommanders.length === 0 && (
                     <p className="text-xs text-amber-400/90 mb-3">
                       Limited Brawl data — search for a commander legal in Historic Brawl.
+                    </p>
+                  )}
+                  {limitedSuggestions && edhrecCommanders.length > 0 && suggestionSource === 'scryfall' && (
+                    <p className="text-xs text-muted-foreground/80 mb-3">
+                      Moxfield top decks unavailable — showing popular legal Brawl commanders on Arena from Scryfall.
                     </p>
                   )}
                   {edhrecCommanders.length > 0 ? (

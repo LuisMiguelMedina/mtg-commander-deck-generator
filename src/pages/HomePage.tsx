@@ -245,7 +245,7 @@ export function HomePage() {
                   <h2 className="text-lg font-semibold">Choose a commander</h2>
                 </div>
               </div>
-              <CommanderSearch key={landingFormatMode ?? 'pending'} />
+              <CommanderSearch key={landingFormatMode ?? 'pending'} formatMode={landingFormatMode!} />
             </section>
           )}
         </>
