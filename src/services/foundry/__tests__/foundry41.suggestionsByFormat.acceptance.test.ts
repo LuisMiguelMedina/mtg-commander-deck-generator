@@ -27,12 +27,15 @@ type SuggestionsInput = {
   colorFilter?: string[];
   fetchEdhrecTop: () => Promise<{ name: string }[]>;
   fetchMoxfieldTop: () => Promise<{ status: number; names?: string[] }>;
+  fetchScryfallTopBrawl?: (
+    colorFilter?: string[],
+  ) => Promise<{ names: string[]; colorIdentityByName: Record<string, string[]> }>;
   flagEnabled?: boolean;
 };
 
 type SuggestionsResult = {
   names: string[];
-  source: 'edhrec' | 'moxfield' | 'search-only';
+  source: 'edhrec' | 'moxfield' | 'scryfall' | 'search-only';
   limitedData?: boolean;
 };
 
@@ -110,7 +113,35 @@ describe('PBI-FOUNDRY-41 suggestions by formatMode (EDHREC | Moxfield)', () => {
     expect(fetchEdhrecTop).not.toHaveBeenCalled();
   });
 
-  it('brawl100 403/5xx/empty/flag-off degrades to search-only + limitedData (never EDHREC fill)', async () => {
+  it('brawl100 Moxfield fail falls back to Scryfall top (never EDHREC)', async () => {
+    const suggestionsFor = await loadSuggestionsFor();
+    const fetchEdhrecTop = vi.fn(async () => [{ name: 'Atraxa, Praetors\' Voice' }]);
+    const fetchMoxfieldTop = vi.fn(async () => ({ status: 403, names: [] }));
+    const fetchScryfallTopBrawl = vi.fn(async () => ({
+      names: ['Krenko, Mob Boss'],
+      colorIdentityByName: { 'Krenko, Mob Boss': ['R'] },
+    }));
+
+    expect(typeof suggestionsFor, 'suggestionsFor seam').toBe('function');
+    if (typeof suggestionsFor !== 'function') return;
+
+    const result = await suggestionsFor({
+      formatMode: 'brawl100',
+      fetchEdhrecTop,
+      fetchMoxfieldTop,
+      fetchScryfallTopBrawl,
+      flagEnabled: true,
+    });
+
+    expect(result.source).toBe('scryfall');
+    expect(result.names).toContain('Krenko, Mob Boss');
+    expect(result.limitedData).toBe(true);
+    expect(fetchEdhrecTop).not.toHaveBeenCalled();
+    expect(fetchMoxfieldTop).toHaveBeenCalledTimes(1);
+    expect(fetchScryfallTopBrawl).toHaveBeenCalledTimes(1);
+  });
+
+  it('brawl100 with Moxfield and Scryfall both empty degrades to search-only (never EDHREC fill)', async () => {
     const suggestionsFor = await loadSuggestionsFor();
 
     expect(typeof suggestionsFor, 'suggestionsFor seam').toBe('function');
@@ -146,10 +177,12 @@ describe('PBI-FOUNDRY-41 suggestions by formatMode (EDHREC | Moxfield)', () => {
     for (const c of cases) {
       const fetchEdhrecTop = vi.fn(async () => [{ name: 'Atraxa, Praetors\' Voice' }]);
       const fetchMoxfieldTop = vi.fn(c.fetchMoxfieldTop);
+      const fetchScryfallTopBrawl = vi.fn(async () => ({ names: [], colorIdentityByName: {} }));
       const result = await suggestionsFor({
         formatMode: 'brawl100',
         fetchEdhrecTop,
         fetchMoxfieldTop,
+        fetchScryfallTopBrawl,
         flagEnabled: c.flagEnabled,
       });
 

@@ -23,3 +23,17 @@ export function isLegalForFormat(
   }
   return false;
 }
+
+/** Historic Brawl deck building always uses the Arena card pool (`game:arena`). */
+export function formatUsesArenaPool(mode: string): boolean {
+  return mode === 'brawl100';
+}
+
+export function isLegalForFormatDeck(
+  card: LegalityCard,
+  mode: string,
+  customizationArenaOnly?: boolean,
+): boolean {
+  const arenaOnly = formatUsesArenaPool(mode) || !!customizationArenaOnly;
+  return isLegalForFormat(card, mode, { arenaOnly });
+}
