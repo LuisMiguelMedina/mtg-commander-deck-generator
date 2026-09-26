@@ -34,7 +34,7 @@ jobs:
         run: npm run build
         env:
           BASE_PATH: /
-          VITE_ANALYTICS_URL: ${{ vars.VITE_ANALYTICS_URL != '' && vars.VITE_ANALYTICS_URL || 'https://ge5snsne7lr62h44l7w5bm6z540hkpue.lambda-url.us-east-1.on.aws/' }}
+          VITE_ANALYTICS_URL: ${{ vars.VITE_ANALYTICS_URL || '' }}
           VITE_TAG_REPO_URL: ${{ vars.VITE_TAG_REPO_URL }}
 
       - name: Configure AWS credentials (OIDC)
