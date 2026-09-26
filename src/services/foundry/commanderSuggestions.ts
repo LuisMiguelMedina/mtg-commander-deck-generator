@@ -1,6 +1,6 @@
 import { MOXFIELD_BRAWL100_FMT } from '@/services/moxfield/fmt';
 import { fetchBrawlTopCommandersProxied } from '@/services/brawl/fetchBrawlTopCommanders';
-import { getCardByName, searchCards } from '@/services/scryfall/client';
+import { getCardsByNames, searchCards } from '@/services/scryfall/client';
 import { BRAWL_ARENA_COMMANDER_SCRYFALL_QUERY, isEligibleCommander } from '@/lib/format/formatMode';
 import { isLegalForFormatDeck } from '@/services/scryfall/legality';
 
@@ -16,16 +16,18 @@ function commanderMatchesColorFilter(identity: string[], colorFilter: string[]):
 async function colorIdentityByCommanderNames(names: string[]): Promise<Record<string, string[]>> {
   const out: Record<string, string[]> = {};
   const slice = names.slice(0, 24);
-  await Promise.all(
-    slice.map(async (name) => {
-      try {
-        const card = await getCardByName(name);
-        out[name] = (card.color_identity ?? []).filter((c) => WUBRG.includes(c));
-      } catch {
-        out[name] = [];
-      }
-    }),
-  );
+  if (slice.length === 0) return out;
+  try {
+    const cardMap = await getCardsByNames(slice);
+    for (const name of slice) {
+      const card = cardMap.get(name) ?? cardMap.get(name.split('//')[0].trim());
+      out[name] = (card?.color_identity ?? []).filter((c) => WUBRG.includes(c));
+    }
+  } catch {
+    for (const name of slice) {
+      out[name] = [];
+    }
+  }
   return out;
 }
 
@@ -130,9 +132,7 @@ export async function suggestionsFor(input: SuggestionsInput): Promise<Suggestio
         const source = res.source === 'archidekt' ? 'archidekt' : 'moxfield';
         const colorIdentityByName = await colorIdentityByCommanderNames(res.names);
         const names = filterNamesByColor(res.names, colorIdentityByName, colorFilter);
-        if (names.length === 0) {
-          // Color filter excluded everyone — fall through to Scryfall narrow search
-        } else {
+        if (names.length > 0) {
           return {
             names,
             source,
