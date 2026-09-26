@@ -409,11 +409,8 @@ export function BuilderPage() {
             numDecks: null,
             limitedData: true,
           });
-        } finally {
-          if (!stale()) setThemesLoading(false);
         }
-        archetypeLoadKeyRef.current = loadKey;
-        return;
+        // Do not return here! Let it proceed to fetch EDHREC themes so the user can select archetypes.
       }
 
       // Fetch EDHREC themes (Commander)
@@ -594,8 +591,6 @@ export function BuilderPage() {
       return;
     }
 
-    const brawlMode = useStore.getState().customization.formatMode === 'brawl100';
-    if (brawlMode) return;
 
     async function refreshThemes() {
       setThemesLoading(true);
@@ -670,8 +665,6 @@ export function BuilderPage() {
 
     // Skip if commander not loaded yet, or if neither setting actually changed
     if (!commander || (currentBracket === prevBracket && currentBudget === prevBudget)) return;
-
-    if (useStore.getState().customization.formatMode === 'brawl100') return;
 
     // Always clear the no-data flag when settings change so the button re-enables
     setNoDataForSettings(false);

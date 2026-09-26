@@ -19,7 +19,6 @@ import { Folder } from 'lucide-react';
 import { calculateCurvePercentages } from '@/services/deckBuilder/curveUtils';
 import { PACING_CURVE_MULTIPLIERS } from '@/services/deckBuilder/roleTargets';
 import { FormatModeSelector } from './FormatModeSelector';
-import { ArenaWildcardLimitsPanel } from './ArenaWildcardLimitsPanel';
 
 const IS_EU = isEuropean() || location.hostname === 'localhost';
 
@@ -179,10 +178,7 @@ export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast,
     return { total: selectedCollectionCards.length, typeCounts, typeColorCounts };
   }, [selectedCollectionCards]);
 
-  const ownedNameSet = useMemo(
-    () => new Set((selectedCollectionCards ?? []).map(c => c.name.toLowerCase())),
-    [selectedCollectionCards],
-  );
+
 
   // useLiveQuery re-resolves on every binder change; hold the last stats so the
   // visualizer tweens from the old shape instead of blanking out mid-swap.
@@ -606,7 +602,8 @@ export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast,
       </>
       )}
 
-      {/* Budget (Commander) / Arena wildcards (Brawl 100) */}
+      {/* Budget (Commander) */}
+      {!isBrawl && (
       <div className={budgetOpen ? 'pt-2 border-t border-border/50' : ''}>
         <button
           onClick={() => { const v = !budgetOpen; setBudgetOpen(v); localStorage.setItem('accordion-budget', String(v)); }}
@@ -617,8 +614,8 @@ export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast,
               <line x1="12" y1="1" x2="12" y2="23" />
               <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
             </svg>
-            {isBrawl ? 'Arena Wildcards' : 'Budget Options'}
-            {!budgetOpen && !isBrawl && (customization.budgetOption !== 'any' || customization.maxCardPrice !== null || customization.deckBudget !== null || customization.currency === 'EUR') && (
+            Budget Options
+            {!budgetOpen && (customization.budgetOption !== 'any' || customization.maxCardPrice !== null || customization.deckBudget !== null || customization.currency === 'EUR') && (
               <span className="text-[10px] font-normal text-violet-200 bg-primary/20 px-1.5 py-0.5 rounded-full">
                 {[
                   customization.budgetOption !== 'any' ? customization.budgetOption : null,
@@ -642,9 +639,6 @@ export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast,
 
         <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${budgetOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
           <div className="overflow-hidden">
-          {isBrawl ? (
-            <ArenaWildcardLimitsPanel ownedNames={ownedNameSet.size > 0 ? ownedNameSet : undefined} />
-          ) : (
           <div className="mt-3 space-y-6 px-3">
             {/* Total Deck Budget */}
             <div>
@@ -828,11 +822,10 @@ export function DeckCustomizer({ advancedOpen = false, onAdvancedClose, onToast,
               </div>
             )}
           </div>
-          )}
-          </div>
         </div>
       </div>
-
+    </div>
+    )}
       {/* Power Level Accordion */}
       <div className={powerLevelOpen ? 'pt-2 border-t border-border/50' : ''}>
         <button

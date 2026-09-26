@@ -76,8 +76,6 @@ export function ArchetypeDisplay({}: ArchetypeDisplayProps) {
     themesError,
     themeSource,
     edhrecNumDecks,
-    archetypeDataSource,
-    archetypeLimitedData,
     brawlCommunityCards,
     customization,
     updateCustomization,
@@ -234,33 +232,8 @@ export function ArchetypeDisplay({}: ArchetypeDisplayProps) {
                   </span>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Historic Brawl does not use EDHREC archetype tags — generation weights cards like these
-                from public lists, then fills with Arena-legal picks.
-              </p>
             </div>
           )}
-          <div className="text-sm text-muted-foreground bg-accent/30 px-3 py-2 rounded-md border border-border/50">
-          {archetypeDataSource === 'moxfield' && edhrecNumDecks && edhrecNumDecks > 0 && !archetypeLimitedData ? (
-            <>
-              Historic Brawl suggestions use popular public decks on Moxfield (
-              {edhrecNumDecks.toLocaleString()} lists). EDHREC theme tags apply to Commander only — generate
-              without picking a theme.
-            </>
-          ) : archetypeDataSource === 'archidekt' && edhrecNumDecks && edhrecNumDecks > 0 ? (
-            <>
-              Historic Brawl suggestions use public Brawl deck lists on Archidekt (
-              {edhrecNumDecks.toLocaleString()} decks sampled).
-              {archetypeLimitedData ? ' Sample size is small —' : ''} Generation still respects Arena Brawl
-              legality.
-            </>
-          ) : (
-            <>
-              Limited community Brawl list data for this commander — deck generation still uses Arena-legal cards
-              and Scryfall ordering. Try a commander from the home “Top commanders” list for richer samples.
-            </>
-          )}
-          </div>
         </div>
       )}
 
