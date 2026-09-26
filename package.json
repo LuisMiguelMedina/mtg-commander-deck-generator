@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && npm run build:brawl-snapshot && vite build",
+    "build": "tsc -b && vite build",
     "build:brawl-snapshot": "tsx scripts/buildBrawlCommunitySnapshot.ts",
     "lint": "eslint .",
     "preview": "vite preview",
