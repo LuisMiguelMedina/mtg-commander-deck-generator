@@ -96,7 +96,6 @@ async function archidektTopCommanders(limit = 24): Promise<BrawlTopCommandersRes
   const names: string[] = [];
   const seen = new Set<string>();
   const ids = list.results.map((r) => r.id).slice(0, 36);
-  const batchSize = 6;
 
   for (let i = 0; i < ids.length && names.length < limit; i++) {
     const id = ids[i];
