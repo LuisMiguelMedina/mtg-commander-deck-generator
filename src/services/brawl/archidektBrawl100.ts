@@ -129,21 +129,17 @@ export async function searchArchidektBrawl100Decks(
     if (!list?.results?.length) break;
 
     const ids = list.results.map((r) => r.id);
-    const batchSize = 6;
-    for (let i = 0; i < ids.length && matched.length < 16; i += batchSize) {
-      const batch = ids.slice(i, i + batchSize);
-      const details = await Promise.all(
-        batch.map((id) => fetchJson<DeckDetail>(`${ARCHIDEKT_DECK}/${id}/`)),
-      );
-      for (const detail of details) {
-        if (!detail) continue;
-        const commanders = commanderNamesFromDeckDetail(detail).map(normalizeName);
-        if (!commanders.includes(target)) continue;
-        const cardCount = detail.cards?.length ?? 0;
-        if (!isBrawlDeckSize(detail.size, cardCount)) continue;
-        matched.push(detail);
-        if (matched.length >= 16) break;
-      }
+    for (let i = 0; i < ids.length && matched.length < 16; i++) {
+      const id = ids[i];
+      const detail = await fetchJson<DeckDetail>(`${ARCHIDEKT_DECK}/${id}/`);
+      await new Promise((r) => setTimeout(r, 600)); // sleep 600ms between requests
+      if (!detail) continue;
+      const commanders = commanderNamesFromDeckDetail(detail).map(normalizeName);
+      if (!commanders.includes(target)) continue;
+      const cardCount = detail.cards?.length ?? 0;
+      if (!isBrawlDeckSize(detail.size, cardCount)) continue;
+      matched.push(detail);
+      if (matched.length >= 16) break;
     }
   }
 

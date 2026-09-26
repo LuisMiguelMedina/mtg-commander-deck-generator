@@ -98,22 +98,19 @@ async function archidektTopCommanders(limit = 24): Promise<BrawlTopCommandersRes
   const ids = list.results.map((r) => r.id).slice(0, 36);
   const batchSize = 6;
 
-  for (let i = 0; i < ids.length && names.length < limit; i += batchSize) {
-    const batch = ids.slice(i, i + batchSize);
-    const details = await Promise.all(
-      batch.map((id) => fetchJson<DeckDetail>(`${ARCHIDEKT_DECK}/${id}/`)),
-    );
-    for (const detail of details) {
-      if (!detail) continue;
-      const cardCount = detail.cards?.length ?? 0;
-      if (!isBrawlDeckSize(detail.size, cardCount)) continue;
-      for (const cmd of commanderNamesFromDeckDetail(detail)) {
-        const key = cmd.trim().toLowerCase();
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
-        names.push(cmd);
-        if (names.length >= limit) break;
-      }
+  for (let i = 0; i < ids.length && names.length < limit; i++) {
+    const id = ids[i];
+    const detail = await fetchJson<DeckDetail>(`${ARCHIDEKT_DECK}/${id}/`);
+    await new Promise((r) => setTimeout(r, 600)); // sleep 600ms between requests
+    if (!detail) continue;
+    const cardCount = detail.cards?.length ?? 0;
+    if (!isBrawlDeckSize(detail.size, cardCount)) continue;
+    for (const cmd of commanderNamesFromDeckDetail(detail)) {
+      const key = cmd.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      names.push(cmd);
+      if (names.length >= limit) break;
     }
   }
 
