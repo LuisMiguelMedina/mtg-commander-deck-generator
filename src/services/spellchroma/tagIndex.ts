@@ -45,7 +45,13 @@ export function loadTagDictionary(): Promise<TagDictEntry[] | null> {
     try {
       const res = await fetch(DICT_URL);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const file: TagDictionaryFile = await res.json();
+      const text = await res.text();
+      let file: TagDictionaryFile;
+      try {
+        file = JSON.parse(text);
+      } catch (e) {
+        throw new Error('Invalid JSON response: ' + text.slice(0, 100));
+      }
       dict = file.tags;
       slugToEntry = new Map(dict.map(e => [e.s, e]));
       console.log(`[SpellChroma] dictionary loaded: ${dict.length} tags (gen ${file.generatedAt})`);
@@ -70,7 +76,13 @@ export function loadTagIndex(): Promise<boolean> {
       await loadTagDictionary();
       const res = await fetch(INDEX_URL);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const file: TagIndexFile = await res.json();
+      const text = await res.text();
+      let file: TagIndexFile;
+      try {
+        file = JSON.parse(text);
+      } catch (e) {
+        throw new Error('Invalid JSON response: ' + text.slice(0, 100));
+      }
       index = file.index;
       console.log(`[SpellChroma] index loaded: ${Object.keys(index).length} cards (gen ${file.generatedAt})`);
       return true;

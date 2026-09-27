@@ -179,6 +179,13 @@ function getBracketSuffix(bracketLevel?: BracketLevel): string {
  * was never published" apart from "the network is down" — the two look identical once
  * the error is flattened to a string.
  */
+function isMissingPage(error: unknown): boolean {
+  if (!error) return false;
+  if ((error as any).status === 403 || (error as any).status === 404) return true;
+  if (error instanceof Error && (error.message.includes('403') || error.message.includes('404'))) return true;
+  return false;
+}
+
 export class EdhrecHttpError extends Error {
   constructor(readonly status: number, statusText: string) {
     super(`EDHREC API error: ${status} ${statusText}`);
@@ -654,7 +661,7 @@ export async function fetchCommanderData(
     }
   }
 
-  if (((lastError as EdhrecHttpError)?.status === 403 || (lastError as EdhrecHttpError)?.status === 404)) {
+  if (isMissingPage(lastError)) {
     console.warn(`[EDHREC] Page missing for ${commanderName}, returning empty data`);
     return {
       themes: [],
@@ -873,7 +880,7 @@ export async function fetchCommanderThemeData(
     // A missing page is EDHREC saying "nobody builds this pairing", not a fault. Callers
     // fall back to the generic tag page, so log it as the routine outcome it is — but keep
     // anything that isn't a clean miss (network down, 5xx) loud.
-    if (((lastError as EdhrecHttpError)?.status === 403 || (lastError as EdhrecHttpError)?.status === 404)) {
+    if (isMissingPage(lastError)) {
       throw noThemePage(commanderName, themeSlug);
     }
     console.error(`Failed to fetch EDHREC theme data for ${themeSlug}:`, lastError);
