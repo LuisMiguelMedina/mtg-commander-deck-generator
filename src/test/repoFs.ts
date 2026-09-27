@@ -21,7 +21,9 @@ async function nodeFs(): Promise<NodeFs> {
 }
 
 function abs(relative: string): string {
-  return new URL(`../../${relative}`, import.meta.url).pathname;
+  const p = decodeURIComponent(new URL(`../../${relative}`, import.meta.url).pathname);
+  const isWin = (globalThis as unknown as { process?: { platform?: string } }).process?.platform === 'win32';
+  return isWin && /^\/[a-zA-Z]:/.test(p) ? p.slice(1) : p;
 }
 
 export async function repoPathExists(relative: string): Promise<boolean> {

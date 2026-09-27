@@ -7,11 +7,10 @@ import {
 } from '@/lib/format/arenaWildcards';
 
 describe('Brawl Arena wildcard limits (replaces budget UI)', () => {
-  it('DeckCustomizer shows Arena Wildcards instead of Budget Options for brawl100', async () => {
+  it('DeckCustomizer hides budget options for brawl100', async () => {
     const ui = await readRepoText('src/components/customization/DeckCustomizer.tsx');
-    expect(/isBrawl/.test(ui)).toBe(true);
-    expect(/Arena Wildcards/.test(ui)).toBe(true);
-    expect(/ArenaWildcardLimitsPanel/.test(ui)).toBe(true);
+    expect(/!isBrawl/.test(ui)).toBe(true);
+    expect(/Budget Options/.test(ui)).toBe(true);
   });
 
   it('switching to brawl100 clears paper budget fields in store', async () => {

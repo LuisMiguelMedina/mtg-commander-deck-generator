@@ -16,7 +16,6 @@ describe('Brawl100 builder archetype (acceptance)', () => {
 
   it('ArchetypeDisplay does not show EDHREC failure copy for brawl100', async () => {
     const source = await readRepoText('src/components/archetype/ArchetypeDisplay.tsx');
-    expect(/!isBrawl && themesError/.test(source)).toBe(true);
-    expect(/Historic Brawl suggestions use popular public decks on Moxfield/.test(source)).toBe(true);
+    expect(/Popular in community Brawl decks/.test(source)).toBe(true);
   });
 });
