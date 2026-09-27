@@ -185,6 +185,26 @@ export async function buildEdhrecMaps(
       ? await fetchPartnerCommanderData(commanderName, partnerCommanderName, undefined, undefined, colorSegment)
       : await fetchCommanderData(commanderName, undefined, undefined, colorSegment);
 
+      if (edhrecData.cardlists.allNonLand.length === 0 && !partnerCommanderName) {
+        try {
+          const { searchBrawl100Decks } = await import('@/services/moxfield/client');
+          const brawlData = await searchBrawl100Decks(commanderName);
+          if (brawlData.cards && brawlData.cards.length > 0) {
+            edhrecData.cardlists.allNonLand = brawlData.cards.map(c => ({
+              name: c.name,
+              sanitized: c.name,
+              inclusion: c.inclusion ?? 0,
+              num_decks: c.count ?? 0,
+              primary_type: 'Unknown',
+            }));
+            edhrecData.stats.numDecks = brawlData.numDecks ?? brawlData.cards.length;
+            console.log(`[Enricher] Fallback to Brawl popularity for ${commanderName}: ${brawlData.cards.length} cards`);
+          }
+        } catch (e) {
+          console.warn('[Enricher] Brawl fallback failed', e);
+        }
+      }
+
     // Theme-aware enrichment: when the list has assigned themes, swap the card pool
     // for the blended commander-theme + archetype pool. Stats and role targets keep
     // coming from the base commander page (already fetched above). Fail-open: any

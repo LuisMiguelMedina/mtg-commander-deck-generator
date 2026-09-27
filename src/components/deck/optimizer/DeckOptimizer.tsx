@@ -895,6 +895,25 @@ export function DeckOptimizer({
       const edhrecData = partnerCommanderName
         ? await fetchPartnerCommanderData(commanderName, partnerCommanderName, undefined, undefined, colorSeg)
         : await fetchCommanderData(commanderName, undefined, undefined, colorSeg);
+
+        if (edhrecData.cardlists && edhrecData.cardlists.allNonLand.length === 0 && !partnerCommanderName) {
+          try {
+            const { searchBrawl100Decks } = await import('@/services/moxfield/client');
+            const brawlData = await searchBrawl100Decks(commanderName);
+            if (brawlData.cards && brawlData.cards.length > 0) {
+              edhrecData.cardlists.allNonLand = brawlData.cards.map(c => ({
+                name: c.name,
+                sanitized: c.name,
+                inclusion: c.inclusion ?? 0,
+                num_decks: c.count ?? 0,
+                primary_type: 'Unknown',
+              }));
+              edhrecData.stats.numDecks = brawlData.numDecks ?? brawlData.cards.length;
+            }
+          } catch (e) {
+            console.warn('[DeckOptimizer] Brawl fallback failed', e);
+          }
+        }
       cachedEdhrecDataRef.current = edhrecData;
 
       const effectiveInclusionMap = buildInclusionMap(edhrecData);
