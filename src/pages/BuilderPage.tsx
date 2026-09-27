@@ -758,7 +758,9 @@ export function BuilderPage() {
           setSelectedThemes(themeResults);
         } else {
           // No themes at this bracket/budget
-          setNoDataForSettings(true);
+          if (useStore.getState().customization.formatMode !== 'brawl100') {
+            setNoDataForSettings(true);
+          }
           setThemesError('No EDHREC themes available for this combination');
           const lostNames = selectedThemes.filter(t => t.isSelected).map(t => t.name);
           if (lostNames.length > 0) {
@@ -769,7 +771,9 @@ export function BuilderPage() {
       } catch {
         // EDHREC has no data for this combination (e.g., cEDH + budget returns 403)
         console.warn('[BuilderPage] No EDHREC data for this bracket/budget combination');
-        setNoDataForSettings(true);
+        if (useStore.getState().customization.formatMode !== 'brawl100') {
+          setNoDataForSettings(true);
+        }
         setThemesError('No EDHREC data available for this combination');
         setEdhrecNumDecks(null);
 

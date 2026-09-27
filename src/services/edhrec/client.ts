@@ -654,6 +654,16 @@ export async function fetchCommanderData(
     }
   }
 
+  if (lastError instanceof EdhrecHttpError && lastError.pageMissing) {
+    console.warn(`[EDHREC] Page missing for ${commanderName}, returning empty data`);
+    return {
+      themes: [],
+      stats: { avgPrice: 0, numDecks: 0, deckSize: 81, manaCurve: {}, typeDistribution: { creature: 0, instant: 0, sorcery: 0, artifact: 0, enchantment: 0, land: 0, planeswalker: 0, battle: 0 }, landDistribution: { basic: 0, nonbasic: 0, total: 0 } },
+      cardlists: { creatures: [], instants: [], sorceries: [], artifacts: [], enchantments: [], planeswalkers: [], lands: [], allNonLand: [] },
+      similarCommanders: []
+    };
+  }
+
   console.error('Failed to fetch EDHREC commander data:', lastError);
   throw lastError;
 }
