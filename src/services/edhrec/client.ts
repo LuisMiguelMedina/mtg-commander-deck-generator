@@ -654,7 +654,7 @@ export async function fetchCommanderData(
     }
   }
 
-  if (lastError instanceof EdhrecHttpError && lastError.pageMissing) {
+  if (((lastError as EdhrecHttpError)?.status === 403 || (lastError as EdhrecHttpError)?.status === 404)) {
     console.warn(`[EDHREC] Page missing for ${commanderName}, returning empty data`);
     return {
       themes: [],
@@ -873,7 +873,7 @@ export async function fetchCommanderThemeData(
     // A missing page is EDHREC saying "nobody builds this pairing", not a fault. Callers
     // fall back to the generic tag page, so log it as the routine outcome it is — but keep
     // anything that isn't a clean miss (network down, 5xx) loud.
-    if (lastError instanceof EdhrecHttpError && lastError.pageMissing) {
+    if (((lastError as EdhrecHttpError)?.status === 403 || (lastError as EdhrecHttpError)?.status === 404)) {
       throw noThemePage(commanderName, themeSlug);
     }
     console.error(`Failed to fetch EDHREC theme data for ${themeSlug}:`, lastError);

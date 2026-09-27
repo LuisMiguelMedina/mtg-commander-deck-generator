@@ -78,13 +78,13 @@ export async function fetchSpellbookCombosBySlug(slug: string): Promise<Spellboo
     try {
       const res = await fetch(`${BASE}/${slug}.json`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: SpellbookComboFile = await res.json();
+      const text = await res.text(); let data: SpellbookComboFile; try { data = JSON.parse(text); } catch { throw new Error('Invalid JSON response'); }
       if (!Array.isArray(data.combos)) throw new Error('malformed combo file');
       cache.set(slug, data.combos);
       console.log(`[Spellbook] Loaded ${data.combos.length} ${slug} combos (generated ${data.generatedAt})`);
       return data.combos;
     } catch (err) {
-      console.warn(`[Spellbook] Combo index unavailable for ${slug} — falling back to EDHREC page:`, err);
+      console.log(`[Spellbook] Combo index unavailable for ${slug} - falling back to EDHREC page`);
       cache.set(slug, null);
       return null;
     } finally {
