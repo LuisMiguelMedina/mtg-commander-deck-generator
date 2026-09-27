@@ -259,10 +259,10 @@ export async function hydrateDeckForAnalysis(input: HydrateDeckInput): Promise<H
     protectionSubtypeCounts: enrichResult.protectionSubtypeCounts,
     bracketEstimation: enrichResult.bracketEstimation,
     gameChangerNames: enrichResult.gameChangerNames,
-    cardInclusionMap: enrichResult.cardInclusionMap,
-    cardSynergyMap: enrichResult.cardSynergyMap,
-    cardRelevancyMap: enrichResult.cardRelevancyMap,
-    deckScore: enrichResult.deckScore,
+    cardInclusionMap: input.generatedDeck?.cardInclusionMap ?? enrichResult.cardInclusionMap,
+    cardSynergyMap: input.generatedDeck?.cardSynergyMap ?? enrichResult.cardSynergyMap,
+    cardRelevancyMap: input.generatedDeck?.cardRelevancyMap ?? enrichResult.cardRelevancyMap,
+    deckScore: input.generatedDeck?.deckScore ?? enrichResult.deckScore,
     gapAnalysis: enrichResult.gapAnalysis,
   };
 
