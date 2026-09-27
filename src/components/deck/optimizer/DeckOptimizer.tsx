@@ -247,8 +247,8 @@ export function DeckOptimizer({
           if (c.synergy != null) edhrecSynergy[front] = c.synergy;
         }
       };
-      for (const c of edhrecData.cardlists.allNonLand) indexCard(c);
-      for (const c of edhrecData.cardlists.lands) indexCard(c);
+      if (edhrecData.cardlists) { for (const c of edhrecData.cardlists.allNonLand) indexCard(c);
+      for (const c of edhrecData.cardlists.lands) indexCard(c); }
 
       let changed = false;
       const newInclusionMap = { ...(deck.cardInclusionMap ?? {}) };
@@ -618,8 +618,8 @@ export function DeckOptimizer({
         base![name] = inclusion;
         if (name.includes(' // ')) base![name.split(' // ')[0]] = inclusion;
       };
-      for (const c of edhrecData.cardlists.allNonLand) indexCard(c.name, c.inclusion);
-      for (const c of edhrecData.cardlists.lands) indexCard(c.name, c.inclusion);
+      if (edhrecData.cardlists) { for (const c of edhrecData.cardlists.allNonLand) indexCard(c.name, c.inclusion);
+      for (const c of edhrecData.cardlists.lands) indexCard(c.name, c.inclusion); }
       inclusionMapCacheRef.current.set(edhrecData, base);
     }
     // Layer on DFC entries from the current deck — cheap (only DFCs in deck).
