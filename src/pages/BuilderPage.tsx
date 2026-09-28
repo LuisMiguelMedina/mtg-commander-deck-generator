@@ -247,6 +247,7 @@ export function BuilderPage() {
 
     const newList = createList(deckName, allCards, '', {
       type: 'deck',
+      formatMode: customization.formatMode,
       commanderName: commander.name,
       partnerCommanderName: partnerCommander?.name,
       chosenColor: chosenColor ?? undefined,

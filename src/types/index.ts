@@ -531,6 +531,7 @@ export interface DeckUpgradeState {
 export interface UserCardList {
   id: string;
   type?: 'list' | 'deck';
+  formatMode?: FormatMode;
   name: string;
   description: string;
   cards: string[];

@@ -113,6 +113,7 @@ async function computeCachedFields(
 
 interface CreateListOptions {
   type?: 'list' | 'deck';
+  formatMode?: string;
   commanderName?: string;
   partnerCommanderName?: string;
   chosenColor?: string;
@@ -244,6 +245,7 @@ export function useUserLists() {
     const newList: UserCardList = {
       id: `list-${now}`,
       type: options?.type ?? 'list',
+      formatMode: options?.formatMode as any,
       name,
       description,
       cards,

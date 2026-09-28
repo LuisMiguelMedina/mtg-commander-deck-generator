@@ -817,6 +817,21 @@ export function ListDeckView({ list, onBack, unsaved, onViewAsList, onEdit, onDu
 
   const customization = useStore(s => s.customization);
   const updateCustomization = useStore(s => s.updateCustomization);
+
+  useEffect(() => {
+    if (list.type === 'deck') {
+      let mode = list.formatMode;
+      if (!mode && list.generationSummary?.includes('Arena (Brawl)')) {
+        mode = 'brawl100';
+      }
+      mode = mode || 'commander';
+      
+      if (customization.formatMode !== mode) {
+        updateCustomization({ formatMode: mode });
+      }
+    }
+  }, [list.id, list.type, list.formatMode, list.generationSummary, customization.formatMode, updateCustomization]);
+
   const { lists: userLists, updateList, createList } = useUserLists();
   const { newCards: newUpgradeCards, fillCards: upgradeFillCards, markSeen: markUpgradesSeen } = useDeckUpgrades(list);
   // A card's "Create combo" menu entry sets this; ComboDisplay opens its form seeded with the card, then clears it.
