@@ -7,8 +7,10 @@ import {
   graveyardStaticsOf,
   staticsOf,
   type BotStaticSpec,
+  type TokenSpec,
 } from '@/services/playtest/opponents/effects';
 import { keywordsOf, type CombatKeyword } from '@/services/playtest/combat';
+import { editedTypeLine } from '@/services/playtest/powerToughness';
 import type { Opponent, OpponentPermanent } from '@/components/playtest/opponentTypes';
 
 /**
@@ -55,8 +57,21 @@ export function typeLineOf(p: OpponentPermanent): string {
   return p.edit?.typeLine ?? getFrontFaceTypeLine(p.card);
 }
 
+/**
+ * Is this permanent a creature as it stands? Reads `typeLineOf`, so a land you
+ * animated counts and a Lignified creature still does — the printed type line
+ * stopped being the answer the moment edits could rewrite it.
+ */
+export function isCreaturePermanent(p: OpponentPermanent): boolean {
+  return typeLineOf(p).toLowerCase().includes('creature');
+}
+
 function hasSubtype(typeLine: string, subtype: string): boolean {
-  return typeLine.toLowerCase().includes(subtype.toLowerCase());
+  const line = typeLine.toLowerCase();
+  // Every word has to be there: 'zombie token' is a Zombie that is a token,
+  // which is how "Zombie tokens you control have flying" is written, and a
+  // one-word subtype reads exactly as it always did.
+  return subtype.toLowerCase().split(/\s+/).every(word => line.includes(word));
 }
 
 /** Is a Maskwood Nexus out, making every subtype test pass? */
@@ -100,24 +115,41 @@ function tempDelta(p: OpponentPermanent, key: 'power' | 'toughness'): number {
   return p.tempBoost?.[key] ?? 0;
 }
 
-/** What every anthem on the board adds to this one permanent. */
-export function anthemBonus(
+/**
+ * Every anthem currently pumping this permanent, named.
+ *
+ * Named rather than summed because the player has to be told: a 1/1 attacking
+ * as a 3/2 is unblockable-in-practice information, and "+1/+1 from Goblin
+ * Chieftain" is the difference between that reading as a rule and reading as a
+ * bug. `anthemBonus` is the sum of exactly this list, so the number on screen
+ * and its explanation cannot drift apart.
+ */
+export function anthemSources(
   p: OpponentPermanent,
   battlefield: OpponentPermanent[],
-): { power: number; toughness: number } {
-  let power = 0;
-  let toughness = 0;
+): { name: string; power: number; toughness: number }[] {
+  const out: { name: string; power: number; toughness: number }[] = [];
   for (const source of battlefield) {
     for (const spec of staticsOf(source.card.name)) {
       if (spec.kind !== 'anthem') continue;
       // Almost every lord says "OTHER creatures", so a source skips itself.
       if (source.instanceId === p.instanceId && !spec.includeSelf) continue;
       if (spec.subtype && !countsAs(typeLineOf(p), spec.subtype, battlefield)) continue;
-      power += spec.power;
-      toughness += spec.toughness;
+      out.push({ name: source.card.name, power: spec.power, toughness: spec.toughness });
     }
   }
-  return { power, toughness };
+  return out;
+}
+
+/** What every anthem on the board adds to this one permanent. */
+export function anthemBonus(
+  p: OpponentPermanent,
+  battlefield: OpponentPermanent[],
+): { power: number; toughness: number } {
+  return anthemSources(p, battlefield).reduce(
+    (acc, a) => ({ power: acc.power + a.power, toughness: acc.toughness + a.toughness }),
+    { power: 0, toughness: 0 },
+  );
 }
 
 /**
@@ -134,10 +166,12 @@ function dynamicBonus(
 ): { power: number; toughness: number } {
   const spec = BOT_DYNAMIC_STATS[p.card.name];
   if (!spec) return { power: 0, toughness: 0 };
-  const n =
-    spec.kind === 'ownGraveyardCreatures' ? graveyard.filter(isCreatureCard).length
+  const counted =
+    spec.kind === 'flat'                  ? 1
+    : spec.kind === 'ownGraveyardCreatures' ? graveyard.filter(isCreatureCard).length
     : spec.kind === 'ownGraveyardCards'   ? graveyard.length
     :                                       battlefield.filter(x => isLand(x.card)).length;
+  const n = spec.max === undefined ? counted : Math.min(counted, spec.max);
   return { power: spec.power * n, toughness: spec.toughness * n };
 }
 
@@ -173,6 +207,97 @@ export function botToughness(
 }
 
 /**
+ * The P/T the card itself shows.
+ *
+ * Deliberately blind to the edit, unlike `baseStat`. An edit is the loudest
+ * reason live and printed disagree, so reading the rewrite as if it were
+ * printed made a Frogified creature look untouched — `differs` came out false
+ * and the badge drew in the plain "nothing to see" black.
+ */
+function printedPT(p: OpponentPermanent): string {
+  const power = p.card.power ?? p.card.card_faces?.[0]?.power ?? '0';
+  const toughness = p.card.toughness ?? p.card.card_faces?.[0]?.toughness ?? '0';
+  return `${power}/${toughness}`;
+}
+
+/**
+ * What a bot's creature is right now, against what its card says, and why.
+ *
+ * The display half of `botPower`/`botToughness`, kept beside them so there is
+ * no second opinion about a creature's size. Every caller that draws a bot's
+ * creature uses this: a 1/1 Legion Loyalist attacking as a 3/2 because a lord
+ * and a Bushwhacker are on the board is a fact you have to be able to see
+ * BEFORE you decide what blocks it, and the only place a player looks for a
+ * creature's size is the corner of its card.
+ *
+ * `differs` is a string comparison against the printed text, so a `*` always
+ * counts as different — which is the point, since a star is not a size you
+ * can block against.
+ */
+export interface BotPT {
+  printed: string;
+  live: string;
+  differs: boolean;
+  /** Which kind of change dominates, for the badge's colour. */
+  reason: 'edit' | 'temp' | 'static';
+  /** The rewritten type line, when an edit changed it. */
+  typeLine: string | null;
+  /** One line per thing doing it, for the tooltip. */
+  sources: string[];
+}
+
+export function botPT(
+  p: OpponentPermanent,
+  battlefield: OpponentPermanent[],
+  graveyard: ScryfallCard[] = [],
+): BotPT | null {
+  if (!isCreatureCard(p.card) && !p.edit) return null;
+  const printed = printedPT(p);
+  const live = `${botPower(p, battlefield, graveyard)}/${botToughness(p, battlefield, graveyard)}`;
+
+  const sources: string[] = [];
+  if (p.edit) sources.push(`Rewritten as a ${p.edit.power}/${p.edit.toughness}`);
+  const counters = counterDelta(p);
+  if (counters !== 0) sources.push(`${counters > 0 ? '+' : '−'}${Math.abs(counters)}/${counters > 0 ? '+' : '−'}${Math.abs(counters)} in counters`);
+  for (const a of anthemSources(p, battlefield)) {
+    sources.push(`${a.name} +${a.power}/+${a.toughness}`);
+  }
+  if (p.tempBoost) {
+    const { power, toughness, keywords } = p.tempBoost;
+    const stats = power || toughness ? `+${power}/+${toughness}` : '';
+    const gained = keywords?.length ? `${stats ? ' and ' : ''}${keywords.join(', ')}` : '';
+    sources.push(`Until end of turn: ${stats}${gained}`);
+  }
+  if (!p.edit && BOT_DYNAMIC_STATS[p.card.name]) sources.push('Size is read off the board');
+
+  return {
+    printed,
+    live,
+    differs: printed !== live,
+    reason: p.edit ? 'edit' : p.tempBoost ? 'temp' : 'static',
+    typeLine: editedTypeLine(p.card, p.edit),
+    sources,
+  };
+}
+
+/**
+ * Keywords this creature has that its own card does not print.
+ *
+ * The other half of what a player cannot see. Legion Loyalist's battalion
+ * trigger hands first strike to a whole goblin board, and a first striker
+ * blocked by something that cannot kill it first takes no damage at all —
+ * which, unannounced, reads as the damage maths being broken.
+ */
+export function grantedKeywords(
+  p: OpponentPermanent,
+  battlefield: OpponentPermanent[],
+  graveyard: ScryfallCard[] = [],
+): CombatKeyword[] {
+  const printed = keywordsOf(p.card, p.edit);
+  return [...botKeywords(p, battlefield, graveyard)].filter(k => !printed.has(k));
+}
+
+/**
  * What this card costs the bot with its board as it stands.
  *
  * Always use this rather than `costOf` at a cast site: a deck built around its
@@ -184,6 +309,7 @@ export function effectiveCost(card: ScryfallCard, battlefield: OpponentPermanent
     for (const spec of staticsOf(source.card.name)) {
       if (spec.kind !== 'costReducer') continue;
       if (spec.subtype && !countsAs(getFrontFaceTypeLine(card), spec.subtype, battlefield)) continue;
+      if (spec.minPower !== undefined && printedStat(card, 'power') < spec.minPower) continue;
       reduction += spec.amount;
     }
   }
@@ -203,6 +329,10 @@ export function hasHaste(p: OpponentPermanent, battlefield: OpponentPermanent[])
   // keywords the damage maths cares about, and haste is not one of them.
   // A creature stripped of its abilities has no printed haste to read.
   if (!p.edit?.loseAbilities && (p.card.keywords ?? []).some(k => k.toLowerCase() === 'haste')) return true;
+  // An until-end-of-turn grant — a kicked Goblin Bushwhacker. The registry
+  // comment used to say a temporary haste grant had nowhere to live; `tempBoost`
+  // is exactly that place, and the pump spec already writes keywords into it.
+  if (p.tempBoost?.haste) return true;
   return battlefield.some(source => staticsOf(source.card.name).some(spec =>
     spec.kind === 'grantsHaste' && (!spec.subtype || countsAs(typeLineOf(p), spec.subtype, battlefield)),
   ));
@@ -299,6 +429,121 @@ export function tokenMultiplier(battlefield: OpponentPermanent[]): number {
 }
 
 /**
+ * Hard ceiling on permanents a bot may control.
+ *
+ * Krenko doubles its goblins every combat, which is what the card does and is
+ * correct — but a player who ignores it for eight turns had 300 tokens and by
+ * twelve had 2,400, every one of them a card image in their seat. That is not
+ * a hard game, it is a hung browser.
+ *
+ * Token creation stops at the cap. Nothing else does: the bot keeps casting
+ * from hand, so hitting this looks like a board that has stopped growing rather
+ * than a bot that has stopped playing.
+ *
+ * Lowered from 60 after measuring the goblin deck at 555 damage a game against
+ * the other three decks' 25 to 84. Sixty permanents was not a difficulty
+ * setting, it was a different game — and the cap is the one lever that bounds
+ * the doubling without rewriting what Krenko does.
+ */
+export const MAX_BOARD = 40;
+
+/**
+ * Find a token in the deck's fetched pool. Matched on name first, then on the
+ * type line, so a spec asking for a 'Goblin' finds "Goblin" and would also find
+ * a differently-named goblin token if a deck ever had one.
+ *
+ * A miss returns undefined and the token is simply not made. That is the right
+ * failure: a Scryfall hiccup should cost the bot a token, not crash its turn.
+ */
+export function findToken(
+  pool: ScryfallCard[],
+  name: string,
+  want?: { power?: string; toughness?: string; keyword?: string },
+): ScryfallCard | undefined {
+  const wanted = name.toLowerCase();
+  const named = pool.filter(t => t.name.toLowerCase() === wanted);
+  const candidates = named.length > 0
+    ? named
+    : pool.filter(t => getFrontFaceTypeLine(t).toLowerCase().includes(wanted));
+  if (candidates.length === 0) return undefined;
+  if (!want) return candidates[0];
+  // An exact match on what the spec described, falling back to the first of the
+  // name rather than nothing: a pool missing the exact token should still make
+  // something, the way it did before sizes were part of the match.
+  const exact = candidates.find(t =>
+    (want.power === undefined || t.power === want.power)
+    && (want.toughness === undefined || t.toughness === want.toughness)
+    && (want.keyword === undefined
+      || (t.keywords ?? []).some(k => k.toLowerCase() === want.keyword!.toLowerCase())),
+  );
+  return exact ?? candidates[0];
+}
+
+/**
+ * How many of a token to make. A fixed count, unless the spec counts a subtype
+ * already on the board — Krenko makes one goblin per goblin. Either way it is
+ * multiplied by any token doublers the bot controls.
+ */
+export function tokenCount(spec: TokenSpec, battlefield: OpponentPermanent[]): number {
+  const base = spec.countPerSubtype
+    ? battlefield.filter(p =>
+        getFrontFaceTypeLine(p.card).toLowerCase().includes(spec.countPerSubtype!.toLowerCase()),
+      ).length
+    : spec.count;
+  return base * tokenMultiplier(battlefield);
+}
+
+/** Tokens a spec would make right now, ready to be put on the board. */
+export interface TokenBatch {
+  /** New permanents, in arrival order. */
+  permanents: OpponentPermanent[];
+  /** The card behind each permanent — what the ETB triggers watch arrive. */
+  arrivals: ScryfallCard[];
+  /** "2 Goblins, Beast" — the log's half of the sentence. */
+  parts: string[];
+  /**
+   * Tokens the board cap refused.
+   *
+   * Worth saying out loud: a Krenko that makes one goblin instead of twenty-nine
+   * reads as a counting bug to anyone watching the log, and the cap is the only
+   * reason. Silent truncation cost an auditor a whole pass.
+   */
+  capped: number;
+}
+
+/**
+ * Work out a token spec against a bot's board without touching it.
+ *
+ * Pure so that both sides can use it: the engine pushes the result onto the
+ * board it is mutating, and a death trigger folds it into the new opponent it
+ * is building. Before this existed only the engine could make tokens, which
+ * quietly made every token-making death trigger a no-op — a Mogg War Marshal
+ * sacrificed to echo left no goblin behind.
+ */
+export function makeTokenBatch(
+  o: Pick<Opponent, 'tokens' | 'battlefield'>,
+  specs: TokenSpec[],
+): TokenBatch {
+  const batch: TokenBatch = { permanents: [], arrivals: [], parts: [], capped: 0 };
+  for (const spec of specs) {
+    const card = findToken(o.tokens, spec.name, spec);
+    if (!card) continue;
+    // Room left under the cap, counting what this batch has already placed, so
+    // a doubling engine plateaus instead of running away with the frame rate.
+    const room = Math.max(0, MAX_BOARD - o.battlefield.length - batch.permanents.length);
+    const wanted = tokenCount(spec, o.battlefield);
+    const n = Math.min(wanted, room);
+    batch.capped += wanted - n;
+    for (let i = 0; i < n; i++) {
+      batch.permanents.push(toPermanent(card));
+      batch.arrivals.push(card);
+    }
+    if (n > 0) batch.parts.push(n > 1 ? `${n} ${card.name}s` : card.name);
+  }
+  return batch;
+}
+
+/**
  * Does this card arrive sideways?
  *
  * Read off the oracle text, not a registry: "enters tapped" is on hundreds of
@@ -350,5 +595,31 @@ export function toPermanent(card: ScryfallCard): OpponentPermanent {
     // Only creatures care, but tracking it uniformly keeps the attack step simple.
     summoningSick: true,
     counters: {},
+    // Set here rather than at each cast site for the same reason as the rest of
+    // this function: a Bone Shredder reanimated out of the graveyard rents
+    // itself out again, exactly as it did the first time.
+    echoDue: echoCostOf(card) !== null,
   };
+}
+
+/**
+ * The echo cost printed on a card, or null if it has none.
+ *
+ * Echo is the one upkeep cost in the bot pool that is a real decision — "you
+ * rent this creature for a turn" — and skipping it turned every echo card into
+ * a permanent the bot got to keep for free. It is read off the card rather
+ * than curated because the cost is printed in a fixed shape on every one of
+ * them, which is the same reason `keywordsOf` reads `card.keywords`.
+ *
+ * The keyword gate comes first so nothing else matching the word "echo" in a
+ * rules paragraph — a card NAMED Echo of Eons, a reminder line quoting the
+ * keyword — is mistaken for one. Pre-errata printings that never spelled the
+ * cost out mean "the same as its mana cost", which is what the fallback says.
+ */
+export function echoCostOf(card: ScryfallCard): string | null {
+  if (!(card.keywords ?? []).some(k => k.toLowerCase() === 'echo')) return null;
+  const text = card.oracle_text ?? card.card_faces?.[0]?.oracle_text ?? '';
+  const match = text.match(/Echo\s+((?:\{[^}]+\})+)/);
+  if (match) return match[1];
+  return (card.mana_cost ?? card.card_faces?.[0]?.mana_cost ?? '') || null;
 }

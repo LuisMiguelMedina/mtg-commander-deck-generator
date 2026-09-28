@@ -1,4 +1,9 @@
-/** Shared site footer — attribution + support/feedback links. */
+import { Link } from 'react-router-dom';
+
+/** Shared site footer — attribution + support/feedback links.
+ *
+ * The WotC fan-content disclaimer and the TCGplayer affiliate disclosure share one
+ * small-print paragraph; both have to stay visible, but they don't each need a line. */
 export function SiteFooter() {
   return (
     <footer className="border-t border-border/50 bg-card/50 backdrop-blur-sm">
@@ -24,14 +29,9 @@ export function SiteFooter() {
             EDHREC
           </a>
           {' · '}
-          <a
-            href="https://github.com/20q2/mtg-commander-deck-generator"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline"
-          >
-            GitHub
-          </a>
+          <Link to="/developers" className="text-primary hover:underline">
+            For Developers
+          </Link>
           {' · '}
           Support me on{' '}
           <a
@@ -64,6 +64,8 @@ export function SiteFooter() {
             WotC Fan Content Policy
           </a>
           . Not approved/endorsed by Wizards. Portions © Wizards of the Coast LLC.
+          {' '}Card purchase links are TCGplayer affiliate links — we may earn a commission at no
+          extra cost to you.
         </p>
       </div>
     </footer>

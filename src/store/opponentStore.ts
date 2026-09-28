@@ -1,17 +1,16 @@
 import { create } from 'zustand';
 import { usePlaytestStore } from '@/store/playtestStore';
 import { usePlaytestSettings } from '@/store/playtestSettingsStore';
-import { floatDelta, useFloatingText } from '@/store/floatingTextStore';
+import { useFloatingText } from '@/store/floatingTextStore';
 import { playCue, BOT_GAIN } from '@/services/playtest/playtestSound';
 import { slashCard } from '@/store/cardSlashStore';
-import { seatLifeAnchor, strikeAt, strikePacing } from '@/store/combatStrikes';
+import { lungeAt, strikePacing } from '@/store/combatStrikes';
 import { takeTurn } from '@/services/playtest/opponents/engine';
-import { buildOpponentFromStub, findStub } from '@/services/playtest/opponents/deckSources';
+import { buildOpponentFromStub, findStub, openingHand } from '@/services/playtest/opponents/deckSources';
 import { fisherYates, makeInstanceId } from '@/components/playtest/utils';
-import { getFrontFaceTypeLine } from '@/services/scryfall/client';
-import { resolvePT, describeEdit } from '@/services/playtest/powerToughness';
+import { resolvePT, describeEdit, isCreatureNow, liveTypeLine } from '@/services/playtest/powerToughness';
 import { canBlock, keywordsOf, resolveDamage, type Combatant } from '@/services/playtest/combat';
-import { botKeywords, botPower, botToughness, clearTempBoosts, isCreatureCard, isTokenCard } from '@/services/playtest/opponents/stats';
+import { botKeywords, botPower, botToughness, clearTempBoosts, findToken, isCreaturePermanent, isTokenCard, toPermanent, typeLineOf } from '@/services/playtest/opponents/stats';
 import { buryPermanents } from '@/services/playtest/opponents/deaths';
 import {
   pickCardsToDiscard, pickPermanentsToGiveUp, type BotDecision,
@@ -22,7 +21,7 @@ import { readIncomingCombat } from '@/services/playtest/opponents/incomingCombat
 import { readPlayerCombat } from '@/services/playtest/opponents/outgoingCombat';
 import { botCombatant, playerCombatant } from '@/services/playtest/opponents/combatants';
 import { BOT_COMBOS } from '@/services/playtest/opponents/botCombos';
-import { EMPTY as NO_EFFECT } from '@/services/playtest/opponents/evaluate';
+import { EMPTY as NO_EFFECT, tokenPhrase } from '@/services/playtest/opponents/evaluate';
 import type { AppliedEffect, PlayerBoardRead } from '@/services/playtest/opponents/evaluate';
 import type { CastZone, CombatState, Opponent, OpponentPermanent, OpponentZone, StackItem, TurnFrame } from '@/components/playtest/opponentTypes';
 import type { BattlefieldCard, CardEdit } from '@/components/playtest/types';
@@ -136,8 +135,6 @@ interface StrikeBeat {
   attackerId: string;
   /** Absent only if the card left your board between confirm and resolve. */
   card?: ScryfallCard;
-  /** `data-float-id` of the blocker it is fighting, or of the seat's life. */
-  targetFloatId: string;
   /** What this one creature takes off the seat — trample overflow included. */
   damage: number;
   deaths: StrikeDeath[];
@@ -311,6 +308,12 @@ interface OpponentActions {
   remove: (id: string) => void;
   clearAll: () => void;
   adjustLife: (id: string, delta: number) => void;
+  /**
+   * Nudge a seat's experience counters. The engine earns them on its own — this
+   * is the manual override the rest of the seat row already offers for life and
+   * for counters on a permanent, for when you resolve something it cannot.
+   */
+  adjustExperience: (id: string, delta: number) => void;
   setLife: (id: string, life: number) => void;
   togglePermanentTap: (opponentId: string, instanceId: string) => void;
   removePermanent: (opponentId: string, instanceId: string) => void;
@@ -407,7 +410,7 @@ interface OpponentActions {
    * anthems and static effects the engine cannot read off the cards. It is not
    * applied to the creature fight — deaths still come from the printed numbers.
    */
-  resolveCombat: (damageMod?: number) => void;
+  resolveCombat: (damageMod?: number) => Promise<void>;
   /** Step into combat — opens every seat's strip as a drop target. */
   enterCombat: () => void;
   /** Back out. Anything declared is untapped and forgotten. */
@@ -449,6 +452,17 @@ interface OpponentActions {
  * what lets a bot break up a combo that's one card from live — the one thing
  * here no other playtester does.
  */
+/**
+ * A card's colours, front face first.
+ *
+ * `colors` is absent on a double-faced card at the top level, which would read
+ * as colourless — and colourless passes every "nonblack" clause, so the one
+ * case this exists to catch would slip straight through it.
+ */
+function colorsOf(card: ScryfallCard): string[] {
+  return card.colors ?? card.card_faces?.[0]?.colors ?? [];
+}
+
 function readPlayerBoard(): PlayerBoardRead {
   const s = usePlaytestStore.getState();
   const commanders = new Set(s.source?.commanderNames ?? []);
@@ -465,10 +479,10 @@ function readPlayerBoard(): PlayerBoardRead {
     handSize: s.zones.hand.length,
     // What could actually block a bot's attack this turn.
     untappedCreatures: s.battlefield
-      .filter(b => !b.tapped && (b.edit?.typeLine ?? getFrontFaceTypeLine(b.card)).toLowerCase().includes('creature'))
+      .filter(b => !b.tapped && isCreatureNow(b))
       .map(playerCombatant),
     cards: s.battlefield.map(b => {
-      const type = (b.edit?.typeLine ?? getFrontFaceTypeLine(b.card)).toLowerCase();
+      const type = liveTypeLine(b).toLowerCase();
       const pt = resolvePT(b);
       const power = parseInt(pt?.modified.split('/')[0] ?? '', 10);
       const toughness = parseInt(pt?.modified.split('/')[1] ?? '', 10);
@@ -481,6 +495,9 @@ function readPlayerBoard(): PlayerBoardRead {
         isCreature: type.includes('creature'),
         isArtifact: type.includes('artifact'),
         isLand: type.includes('land'),
+        isEnchantment: type.includes('enchantment'),
+        isPlaneswalker: type.includes('planeswalker'),
+        cmc: b.card.cmc,
         // Counters and stickers already changed these numbers on screen; a bot
         // reading the printed values would target the wrong creature.
         power: Number.isNaN(power) ? 0 : power,
@@ -489,6 +506,9 @@ function readPlayerBoard(): PlayerBoardRead {
         comboId: liveComboByCard.get(b.card.name) ?? null,
         hexproof: keywords.has('hexproof'),
         indestructible: keywords.has('indestructible'),
+        // For the removal that may not be pointed at every creature — Doom
+        // Blade's "nonblack", Bone Shredder's "nonartifact, nonblack".
+        colors: colorsOf(b.card),
       };
     }),
   };
@@ -507,10 +527,10 @@ function readBotBoard(o: Opponent): PlayerBoardRead {
     life: o.life,
     handSize: o.hand.length,
     untappedCreatures: o.battlefield
-      .filter(p => !p.tapped && isCreatureCard(p.card))
+      .filter(p => !p.tapped && isCreaturePermanent(p))
       .map(p => botCombatant(p, o.battlefield, o.graveyard)),
     cards: o.battlefield.map(p => {
-      const type = getFrontFaceTypeLine(p.card).toLowerCase();
+      const type = typeLineOf(p).toLowerCase();
       // `botKeywords`, not `keywordsOf`: a rival's Wonder-style grant is as
       // real as a printed keyword, and the bot pointing removal at this seat
       // has to see the same board its owner does.
@@ -521,12 +541,16 @@ function readBotBoard(o: Opponent): PlayerBoardRead {
         isCreature: type.includes('creature'),
         isArtifact: type.includes('artifact'),
         isLand: type.includes('land'),
+        isEnchantment: type.includes('enchantment'),
+        isPlaneswalker: type.includes('planeswalker'),
+        cmc: p.card.cmc,
         power: botPower(p, o.battlefield, o.graveyard),
         toughness: botToughness(p, o.battlefield, o.graveyard),
         isCommander: p.card.name === o.commanderName,
         comboId: armed.find(c => c.onBattlefield.includes(p.card.name))?.id ?? null,
         hexproof: keywords.has('hexproof'),
         indestructible: keywords.has('indestructible'),
+        colors: colorsOf(p.card),
       };
     }),
   };
@@ -557,6 +581,26 @@ function applyEffect(effect: AppliedEffect, casterId: string) {
       target: { kind: 'zone', zone: toCommand ? 'command' : effect.destination },
     });
     if (toCommand && hit) playtest.appendLog(`${hit.card.name} returns to the command zone`, 'bot', [casterId]);
+  }
+
+  // What the card hands back for each permanent it took — Beast Within's
+  // Beast, Terastodon's Elephants — out of the caster's own token pool, which
+  // is where every token a bot's deck can make already lives. `destroy` is
+  // the list that actually left, so a target that was gone by the time the
+  // spell resolved hands nothing back.
+  if (effect.grants && effect.destroy.length > 0) {
+    const caster = useOpponentStore.getState().opponents.find(o => o.id === casterId);
+    const token = caster ? findToken(caster.tokens, effect.grants) : undefined;
+    if (token) {
+      for (let i = 0; i < effect.destroy.length; i++) playtest.spawnToken(token);
+      playtest.appendLog(`You create ${tokenPhrase(effect.destroy.length, token.name)}`, 'bot', [casterId]);
+    }
+  }
+
+  // Swords to Plowshares: the life for the creature, paid to its controller.
+  if (effect.victimGain) {
+    playtest.adjustLife(effect.victimGain);
+    playtest.appendLog(`You gain ${effect.victimGain} life`, 'bot', [casterId]);
   }
 
   if (effect.discard > 0) {
@@ -729,7 +773,7 @@ export const useOpponentStore = create<OpponentState & OpponentActions>((set, ge
       playtest.showToast(`${card.card.name} is tapped and can't block`);
       return {};
     }
-    if (!getFrontFaceTypeLine(card.card).toLowerCase().includes('creature')) {
+    if (!isCreatureNow(card)) {
       playtest.showToast(`${card.card.name} isn't a creature`);
       return {};
     }
@@ -771,9 +815,13 @@ export const useOpponentStore = create<OpponentState & OpponentActions>((set, ge
     };
   }),
 
-  resolveCombat: (damageMod = 0) => {
+  resolveCombat: async (damageMod = 0) => {
     const combat = get().combat;
     if (!combat) return;
+    // The button goes inert while a sequence runs, but a click landing in the
+    // same frame it re-renders would still get through — and an attack paid
+    // out twice takes the life total twice.
+    if (get().resolvingCombat) return;
     const playtest = usePlaytestStore.getState();
     const float = useFloatingText.getState().float;
 
@@ -785,84 +833,137 @@ export const useOpponentStore = create<OpponentState & OpponentActions>((set, ge
     const { attackers, blocks, blockerNames: names } =
       readIncomingCombat(combat, opponent, playtest.battlefield);
 
-    // Every attacker died or left before you resolved. Nothing to work out, but
-    // the turn is still parked on this promise.
-    if (attackers.length === 0) {
-      playtest.appendLog(`${combat.opponentName}'s attack came to nothing`, 'bot', [combat.opponentId]);
+    /**
+     * Combat is over: any until-end-of-turn pump on the attacking seat ends
+     * with it, and the bot's turn — parked on this promise — moves on.
+     */
+    const finish = () => {
       set(s => ({
         combat: null,
         opponents: s.opponents.map(o => (o.id === combat.opponentId ? clearTempBoosts(o) : o)),
       }));
       combatResolver?.();
       combatResolver = null;
+    };
+
+    // Every attacker died or left before you resolved. Nothing to work out, but
+    // the turn is still parked on this promise.
+    if (attackers.length === 0) {
+      playtest.appendLog(`${combat.opponentName}'s attack came to nothing`, 'bot', [combat.opponentId]);
+      finish();
       return;
     }
 
     const outcome = resolveDamage(attackers, blocks);
-    const { deadAttackers, deadBlockers } = outcome;
+    const deadAttackers = new Set(outcome.deadAttackers);
+    const deadBlockers = new Set(outcome.deadBlockers);
+    /**
+     * One beat per attacker — the mirror of `resolvePlayerCombat`.
+     *
+     * The whole fight is worked out here, before any of it is applied, and the
+     * sequencing below only decides *when* each part of a settled result
+     * lands. Their attack used to arrive as a single frame — every death,
+     * every point of life and every graveyard move at once — which reads as
+     * damage happening to you rather than as creatures coming at you and
+     * hitting something.
+     */
+    const beats = attackers.map(a => {
+      const assigned = blocks[a.instanceId] ?? [];
+      return {
+        id: a.instanceId,
+        name: a.name,
+        damage: outcome.damageByAttacker[a.instanceId] ?? 0,
+        blockersDying: assigned.filter(b => deadBlockers.has(b.instanceId)).map(b => b.instanceId),
+        dies: deadAttackers.has(a.instanceId),
+      };
+    });
 
-    for (const id of deadBlockers) {
-      float('Dies', 'damage', id);
-      slashCard(id);
-      const killer = combat.attackers.find(a =>
-        (combat.blocks[a.instanceId] ?? []).includes(id),
-      );
-      playtest.appendLog(
-        `${names.get(id) ?? 'A creature'} died blocking ${killer?.card.name ?? 'an attacker'}`,
-        'bot', [combat.opponentId],
-      );
-    }
-    for (const id of deadAttackers) {
-      float('Dies', 'damage', id);
-      slashCard(id);
-      const attacker = attackers.find(a => a.instanceId === id);
-      playtest.appendLog(`${attacker?.name ?? 'An attacker'} died in combat`, 'bot', [combat.opponentId]);
-    }
+    const animate = usePlaytestSettings.getState().animations;
+    const pacing = strikePacing(beats.length);
+    // A reset, a new table or an undo abandons whatever is left of the
+    // sequence: in all three the board it was applying to has been thrown away.
+    const myRun = ++strikeRun;
+    const mine = () => myRun === strikeRun;
+    const pause = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-    for (const id of deadBlockers) {
-      playtest.moveCard({
-        source: { kind: 'battlefield', instanceId: id },
-        target: { kind: 'zone', zone: 'graveyard' },
-      });
-    }
-    if (deadAttackers.length > 0) {
-      // Read the toll off the pre-death board, then apply — one resolution,
-      // two projections, so the drain and the graveyard cannot disagree.
-      const before = get().opponents.find(o => o.id === combat.opponentId);
-      const toll = before ? deathToll(before, deadAttackers) : { lifeLoss: 0, logs: [] };
-      set(s => ({
-        opponents: s.opponents.map(o =>
-          o.id === combat.opponentId ? sendToGraveyard(o, deadAttackers) : o,
-        ),
-      }));
-      toll.logs.forEach(line => playtest.appendLog(line, 'bot', [combat.opponentId]));
-      if (toll.lifeLoss > 0) playtest.adjustLife(-toll.lifeLoss);
-    }
+    set({ resolvingCombat: true });
+    try {
+      /** One attacker's share of the result, applied as it connects. */
+      const applyBeat = (beat: (typeof beats)[number]) => {
+        playCue('hit');
+        for (const id of beat.blockersDying) {
+          float('Dies', 'damage', id);
+          slashCard(id);
+          playtest.appendLog(
+            `${names.get(id) ?? 'A creature'} died blocking ${beat.name}`,
+            'bot', [combat.opponentId],
+          );
+          playtest.moveCard({
+            source: { kind: 'battlefield', instanceId: id },
+            target: { kind: 'zone', zone: 'graveyard' },
+          });
+        }
+        if (beat.dies) {
+          float('Dies', 'damage', beat.id);
+          slashCard(beat.id);
+          playtest.appendLog(`${beat.name} died in combat`, 'bot', [combat.opponentId]);
+          // Read the toll off the pre-death board, then apply — one resolution,
+          // two projections, so the drain and the graveyard cannot disagree.
+          const before = get().opponents.find(o => o.id === combat.opponentId);
+          const toll = before ? deathToll(before, [beat.id]) : { lifeLoss: 0, logs: [] };
+          set(s => ({
+            opponents: s.opponents.map(o =>
+              o.id === combat.opponentId ? sendToGraveyard(o, [beat.id]) : o,
+            ),
+          }));
+          toll.logs.forEach(line => playtest.appendLog(line, 'bot', [combat.opponentId]));
+          if (toll.lifeLoss > 0) playtest.adjustLife(-toll.lifeLoss, { quiet: true });
+        }
+        // Quiet: the beats are the fight, and the one line under them is what
+        // the whole attack came to.
+        if (beat.damage > 0) playtest.adjustLife(-beat.damage, { quiet: true });
+      };
 
-    // The hand adjustment lands here and nowhere else: it is a correction to
-    // what reaches your face, not a rewrite of the creature fight above.
-    const dealt = Math.max(0, outcome.damageToDefender + damageMod);
-    if (dealt > 0) {
-      playtest.appendLog(
-        `You took ${dealt} from ${combat.opponentName}${adjustmentNote(damageMod)}`,
-        'bot', [combat.opponentId],
-      );
-      playtest.adjustLife(-dealt);
-    } else {
-      playtest.appendLog(
-        `${combat.opponentName}'s attack dealt no damage${adjustmentNote(damageMod)}`,
-        'bot', [combat.opponentId],
-      );
-    }
+      for (const beat of beats) {
+        if (!mine()) return;
+        if (animate) {
+          // The card in the strip leans down the screen at you and settles
+          // back. Thrown before the beat is applied so the damage lands on the
+          // frame it is furthest forward.
+          lungeAt(beat.id, 'player', pacing);
+          await pause(Math.min(pacing.impactMs, pacing.beatMs));
+          if (!mine()) return;
+        }
+        applyBeat(beat);
+        if (animate) await pause(Math.max(0, pacing.beatMs - pacing.impactMs));
+      }
+      if (!mine()) return;
 
-    // Combat is over, so any until-end-of-turn pump on the attacking seat ends
-    // with it — the survivors shrink back to their printed size.
-    set(s => ({
-      combat: null,
-      opponents: s.opponents.map(o => (o.id === combat.opponentId ? clearTempBoosts(o) : o)),
-    }));
-    combatResolver?.();
-    combatResolver = null;
+      // The hand adjustment lands here and nowhere else: it is a correction to
+      // what reaches your face, not a rewrite of the creature fight above. The
+      // beats already took off what the creatures dealt, so this is only the
+      // difference — which keeps the total exactly what the button promised.
+      const dealt = Math.max(0, outcome.damageToDefender + damageMod);
+      const correction = dealt - outcome.damageToDefender;
+      if (correction !== 0) playtest.adjustLife(-correction, { quiet: true });
+      if (dealt > 0) {
+        playtest.appendLog(
+          `You took ${dealt} from ${combat.opponentName}${adjustmentNote(damageMod)}`,
+          'bot', [combat.opponentId],
+        );
+      } else {
+        playtest.appendLog(
+          `${combat.opponentName}'s attack dealt no damage${adjustmentNote(damageMod)}`,
+          'bot', [combat.opponentId],
+        );
+      }
+
+      finish();
+    } finally {
+      // Only if the sequence is still ours: a cancel resets the flag along with
+      // everything else, and may have started a fresh fight since.
+      if (mine()) set({ resolvingCombat: false });
+    }
   },
 
   resolveStackTop: () => {
@@ -951,7 +1052,7 @@ export const useOpponentStore = create<OpponentState & OpponentActions>((set, ge
       playtest.showToast(`${card.card.name} is tapped and can't attack`);
       return;
     }
-    if (!getFrontFaceTypeLine(card.card).toLowerCase().includes('creature')) {
+    if (!isCreatureNow(card)) {
       playtest.showToast(`${card.card.name} isn't a creature`);
       return;
     }
@@ -1036,7 +1137,7 @@ export const useOpponentStore = create<OpponentState & OpponentActions>((set, ge
 
       // Untapped creatures only. Summoning-sick creatures block fine.
       const blockers = opponent.battlefield
-        .filter(p => !p.tapped && isCreatureCard(p.card))
+        .filter(p => !p.tapped && isCreaturePermanent(p))
         .map(p => botCombatant(p, opponent.battlefield, opponent.graveyard));
 
       perOpponent[opponentId] = {
@@ -1129,11 +1230,6 @@ export const useOpponentStore = create<OpponentState & OpponentActions>((set, ge
           opponentId,
           card: card?.card,
           attackerId: attacker.instanceId,
-          // A blocked creature swings at what stands in front of it, an
-          // unblocked one at the seat. Menace puts two bodies in the way and
-          // the lunge picks the first: one ghost per attacker, not one per
-          // pairing, because the attacker is what is taking the swing.
-          targetFloatId: assigned[0]?.instanceId ?? seatLifeAnchor(opponentId),
           damage: outcome.damageByAttacker[attacker.instanceId] ?? 0,
           deaths,
         });
@@ -1197,10 +1293,10 @@ export const useOpponentStore = create<OpponentState & OpponentActions>((set, ge
       for (const beat of beats) {
         if (!mine()) return;
         if (animate) {
-          // Both ends are measured off the live board, so the ghost has to be
-          // thrown before the beat is applied: a blocker already buried has no
-          // box left to aim at.
-          if (beat.card) strikeAt(beat.attackerId, beat.card, beat.targetFloatId, pacing);
+          // Your creature leans up the screen at the seat it is attacking,
+          // from its slot in the strip. Thrown before the beat is applied so
+          // the damage lands on the frame it is furthest forward.
+          lungeAt(beat.attackerId, 'seat', pacing);
           await pause(Math.min(pacing.impactMs, pacing.beatMs));
           if (!mine()) return;
         }
@@ -1249,7 +1345,6 @@ export const useOpponentStore = create<OpponentState & OpponentActions>((set, ge
   },
 
   adjustLife: (id, delta) => {
-    floatDelta(delta, seatLifeAnchor(id));
     const before = get().opponents.find(o => o.id === id);
     set(s => ({
       opponents: s.opponents.map(o => (o.id === id ? { ...o, life: o.life + delta } : o)),
@@ -1259,6 +1354,11 @@ export const useOpponentStore = create<OpponentState & OpponentActions>((set, ge
       usePlaytestStore.getState().appendLog(`${before.name} is defeated`, 'bot', [id]);
     }
   },
+
+  adjustExperience: (id, delta) => set(s => ({
+    opponents: s.opponents.map(o =>
+      o.id === id ? { ...o, experience: Math.max(0, (o.experience ?? 0) + delta) } : o),
+  })),
 
   setLife: (id, life) => set(s => ({
     opponents: s.opponents.map(o => (o.id === id ? { ...o, life } : o)),
@@ -1657,7 +1757,7 @@ export const useOpponentStore = create<OpponentState & OpponentActions>((set, ge
       if (attackers.length === 0) return;
 
       const pool = defender.battlefield
-        .filter(p => !p.tapped && isCreatureCard(p.card))
+        .filter(p => !p.tapped && isCreaturePermanent(p))
         .map(p => botCombatant(p, defender.battlefield, defender.graveyard));
 
       const assignment = chooseBlocks({
@@ -1718,6 +1818,19 @@ export const useOpponentStore = create<OpponentState & OpponentActions>((set, ge
     };
 
     /**
+     * Nothing in this effect touches the board it landed on — no permanent
+     * leaves, no life lost, no card discarded, and the game does not end.
+     *
+     * Only the caster got anything out of it, which is what the green half of
+     * a Deathrite Shaman is: two life for its controller and nothing for you.
+     * The stack is for things you might want to answer, so these do not go on
+     * it — a one-mana ability activated every turn would otherwise park the
+     * game on a window with nothing in it.
+     */
+    const harmless = (e: AppliedEffect) =>
+      !e.lethal && e.destroy.length === 0 && e.lifeLoss === 0 && e.discard === 0;
+
+    /**
      * An effect aimed at another seat. Both sides are bots, so it applies
      * at once — your stack is for things aimed at you.
      */
@@ -1749,8 +1862,22 @@ export const useOpponentStore = create<OpponentState & OpponentActions>((set, ge
         }
         const names = rival.battlefield.filter(p => ids.includes(p.instanceId)).map(p => p.card.name);
         playtest.appendLog(`${caster.name} ${e.destination === 'exile' ? 'exiles' : 'destroys'} ${rival.name}'s ${names.join(', ')}`, 'bot', [caster.id, seatId]);
+        // The Beast Within Beast, on a rival's board: straight onto it, one per
+        // permanent taken, out of the caster's pool as on yours.
+        if (e.grants) {
+          const token = findToken(caster.tokens, e.grants);
+          if (token) {
+            set(s => ({
+              opponents: s.opponents.map(o => o.id === seatId
+                ? { ...o, battlefield: [...o.battlefield, ...ids.map(() => toPermanent(token))] }
+                : o),
+            }));
+            playtest.appendLog(`${rival.name} creates ${tokenPhrase(ids.length, token.name)}`, 'bot', [seatId]);
+          }
+        }
       }
       if (e.lifeLoss > 0) get().adjustLife(seatId, -e.lifeLoss);
+      if (e.victimGain) get().adjustLife(seatId, e.victimGain);
       // Paid to the caster, not the seat that lost the life — see AppliedEffect.
       if (e.lifeGain) {
         get().adjustLife(caster.id, e.lifeGain);
@@ -1908,11 +2035,11 @@ export const useOpponentStore = create<OpponentState & OpponentActions>((set, ge
             name: o.name,
             life: o.life,
             untappedCreatures: o.battlefield
-              .filter(p => !p.tapped && isCreatureCard(p.card))
+              .filter(p => !p.tapped && isCreaturePermanent(p))
               .map(p => botCombatant(p, o.battlefield, o.graveyard)),
             // Everything it has, tapped or not: what it swings with next turn.
             threat: o.battlefield
-              .filter(p => isCreatureCard(p.card))
+              .filter(p => isCreaturePermanent(p))
               .reduce((n, p) => n + botPower(p, o.battlefield, o.graveyard), 0),
           }));
         // Every other live seat's board, so removal can be pointed at whichever
@@ -1981,8 +2108,19 @@ export const useOpponentStore = create<OpponentState & OpponentActions>((set, ge
           // it; without, the item still shows for a beat, so the panel is a
           // record of what hit you either way.
           const toRivals = f.effects.filter(e => e.target);
-          const toYou = f.effects.filter(e => !e.target);
+          // An effect with your name on it that takes nothing from you: a bot
+          // gaining life off its own ability. It resolves at once rather than
+          // parking the turn on a stack item you have no reason to answer.
+          const selfOnly = f.effects.filter(e => !e.target && harmless(e));
+          const toYou = f.effects.filter(e => !e.target && !harmless(e));
           for (const e of toRivals) applyRivalEffect(e, f.opponent);
+          for (const e of selfOnly) {
+            if (!e.lifeGain) continue;
+            get().adjustLife(f.opponent.id, e.lifeGain);
+            usePlaytestStore.getState().appendLog(
+              `${f.opponent.name} gains ${e.lifeGain} life`, 'bot', [f.opponent.id],
+            );
+          }
           if (toYou.length > 0) {
             await putOnStack({ ...f, effects: toYou }, step);
           } else if (usePlaytestSettings.getState().stackMode === 'everything' && f.moved?.onStack && before) {
@@ -2009,6 +2147,15 @@ export const useOpponentStore = create<OpponentState & OpponentActions>((set, ge
           if (!mine()) return false;
           // Damage from the bot's own triggers, billed per beat.
           if (f.selfDamage) usePlaytestStore.getState().adjustLife(-f.selfDamage);
+          // And the other half of a drain — a Wayward Servant gains its seat the
+          // life it took from you. Applied here rather than in the engine
+          // because `correct` above throws the engine's copy of a life total
+          // away on purpose.
+          if (f.selfLifeGain) get().adjustLife(f.opponent.id, f.selfLifeGain);
+          // And what it paid for its own cards — an Undead Augur's draw, a
+          // tutor's cost. Through adjustLife so a seat that pays itself out
+          // announces its own defeat like any other.
+          if (f.selfLifeLoss) get().adjustLife(f.opponent.id, -f.selfLifeLoss);
 
           // An attack on another seat needs nothing from the player: both sides
           // are bot decisions, so it is worked out here and the turn carries on.
@@ -2158,12 +2305,15 @@ export const useOpponentStore = create<OpponentState & OpponentActions>((set, ge
           : undefined;
         const deck = commander ? all.filter(c => c !== commander) : all;
 
-        const shuffled = fisherYates(deck);
+        // Same free-mulligan rule the bot got when it first sat down. Dealing a
+        // raw seven here meant a reset could hand a bot the one-land hand the
+        // build path exists to prevent.
+        const { library, hand } = openingHand(deck);
         return {
           ...o,
           life: STARTING_LIFE,
-          library: shuffled.slice(7),
-          hand: shuffled.slice(0, 7),
+          library,
+          hand,
           graveyard: [],
           exile: [],
           command: commander ? [commander] : o.command,

@@ -6,7 +6,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { usePlaytestStore } from '@/store/playtestStore';
 import { useOpponentStore } from '@/store/opponentStore';
 import { FloatingDialog } from '@/components/playtest/FloatingDialog';
-import { getFrontFaceTypeLine } from '@/services/scryfall/client';
+import {
+  EDITABLE_CARD_TYPES,
+  animatedTypeLine,
+  composeTypeLine,
+  liveTypeLine,
+  parseTypeLine,
+} from '@/services/playtest/powerToughness';
+import { typeLineOf } from '@/services/playtest/opponents/stats';
 import type { CardEdit, EditTarget } from '@/components/playtest/types';
 import type { ScryfallCard } from '@/types';
 
@@ -22,6 +29,14 @@ const PRESETS: { label: string; edit: CardEdit }[] = [
   { label: '3/3 Elephant',  edit: { power: 3, toughness: 3, typeLine: 'Creature — Elephant',  loseAbilities: true } },
 ];
 
+/**
+ * Sizes for animating something that isn't a creature yet — a manland, a
+ * Karn'd artifact. Only numbers, because the type line is derived from the
+ * permanent's own rather than replaced by a preset's, and the abilities stay:
+ * a Mutavault that lost its own activated ability would be pointless.
+ */
+const ANIMATE_SIZES: [number, number][] = [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]];
+
 /** Printed P/T as numbers, for seeding the form. `*` and blanks read as 0. */
 function printedPT(card: ScryfallCard): { power: number; toughness: number } {
   const read = (key: 'power' | 'toughness') => {
@@ -32,9 +47,13 @@ function printedPT(card: ScryfallCard): { power: number; toughness: number } {
 }
 
 /**
- * Rewrite a creature's characteristics — Lignify, Frogify, Kenrith's
- * Transformation. Works on either side of the table: `target` says whose
- * creature it is, and the matching store action does the write.
+ * Rewrite a permanent's characteristics — Lignify, Frogify, Kenrith's
+ * Transformation one way, Mutavault and Karn, Liberated the other. Works on
+ * either side of the table: `target` says whose permanent it is, and the
+ * matching store action does the write.
+ *
+ * The two directions want different defaults, so the dialog reads which one it
+ * is off the permanent's live type line rather than offering both at once.
  */
 export function EditCreatureModal() {
   const modal = usePlaytestStore(s => s.modal);
@@ -51,11 +70,11 @@ export function EditCreatureModal() {
     if (!target) return null;
     if (target.side === 'player') {
       const hit = battlefield.find(b => b.instanceId === target.instanceId);
-      return hit ? { card: hit.card, edit: hit.edit } : null;
+      return hit ? { card: hit.card, edit: hit.edit, typeLine: liveTypeLine(hit) } : null;
     }
     const opp = opponents.find(o => o.id === target.opponentId);
     const hit = opp?.battlefield.find(p => p.instanceId === target.instanceId);
-    return hit ? { card: hit.card, edit: hit.edit } : null;
+    return hit ? { card: hit.card, edit: hit.edit, typeLine: typeLineOf(hit) } : null;
   }, [target, battlefield, opponents]);
 
   // Seeded once per open from whatever the creature is now — an existing edit if
@@ -63,15 +82,25 @@ export function EditCreatureModal() {
   const [form, setForm] = useState(() => {
     const printed = subject ? printedPT(subject.card) : { power: 0, toughness: 0 };
     const existing = subject?.edit;
+    // Pre-animated: opening this on a land seeds "Land Creature — Mutavault", so
+    // becoming a creature is two numbers rather than retyping the line. Held in
+    // pieces because the types are buttons and the subtypes are a field, and a
+    // single string would fight the keystrokes in the latter.
+    const parsed = parseTypeLine(subject ? animatedTypeLine(subject.typeLine) : '');
     return {
       power: String(existing?.power ?? printed.power),
       toughness: String(existing?.toughness ?? printed.toughness),
-      typeLine: existing?.typeLine ?? (subject ? getFrontFaceTypeLine(subject.card) : ''),
+      others: parsed.others,
+      types: parsed.types,
+      subtypes: parsed.subtypes,
       loseAbilities: existing?.loseAbilities ?? false,
     };
   });
 
   if (!target || !subject) return null;
+
+  /** Nothing here is a creature yet — this is an animation, not a rewrite. */
+  const animating = !subject.typeLine.toLowerCase().includes('creature');
 
   const apply = (edit: CardEdit | null) => {
     if (target.side === 'player') setCardEdit(target.instanceId, edit);
@@ -86,27 +115,50 @@ export function EditCreatureModal() {
 
   return (
     <FloatingDialog
-      title={<>Edit creature <span className="text-muted-foreground font-normal ml-1">{subject.card.name}</span></>}
+      title={<>{animating ? 'Make it a creature' : 'Edit creature'} <span className="text-muted-foreground font-normal ml-1">{subject.card.name}</span></>}
       onClose={closeModal}
       width={380}
       storageKey="playtest:dialog-pos:edit-creature"
     >
       <div className="px-4 py-3 space-y-3">
         <div className="space-y-1.5">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">Presets</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+            {animating ? 'Animate as' : 'Presets'}
+          </div>
           <div className="flex flex-wrap gap-1">
-            {PRESETS.map(p => (
-              <Button
-                key={p.label}
-                variant="outline"
-                size="sm"
-                className="h-6 px-2 text-[11px]"
-                // A preset applies straight away — it's the whole point of the row.
-                onClick={() => apply(p.edit)}
-              >
-                {p.label}
-              </Button>
-            ))}
+            {/* The "becomes a" auras rewrite what a creature is, so they carry a
+                type line and strip the abilities. Animating does neither: the
+                land keeps its name, its subtypes and its ability, and only
+                gains a size. */}
+            {animating
+              ? ANIMATE_SIZES.map(([power, toughness]) => (
+                  <Button
+                    key={`${power}/${toughness}`}
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-2 text-[11px] tabular-nums"
+                    onClick={() => apply({
+                      power,
+                      toughness,
+                      typeLine: animatedTypeLine(subject.typeLine),
+                      loseAbilities: false,
+                    })}
+                  >
+                    {power}/{toughness}
+                  </Button>
+                ))
+              : PRESETS.map(p => (
+                  <Button
+                    key={p.label}
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-2 text-[11px]"
+                    // A preset applies straight away — it's the whole point of the row.
+                    onClick={() => apply(p.edit)}
+                  >
+                    {p.label}
+                  </Button>
+                ))}
           </div>
         </div>
 
@@ -132,12 +184,41 @@ export function EditCreatureModal() {
           </label>
         </div>
 
+        <div className="space-y-1.5">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">Card types</div>
+          {/* Toggles rather than a text field because these five words are the
+              only part of the line anything reads: they are what the bots' view
+              of your board is built from, so a typo here is a land they never
+              blow up or a creature they refuse to block. Supertypes and Token
+              ride along untouched in `others`. */}
+          <div className="flex flex-wrap gap-1">
+            {EDITABLE_CARD_TYPES.map(type => {
+              const on = form.types.includes(type);
+              return (
+                <Button
+                  key={type}
+                  variant={on ? 'default' : 'outline'}
+                  size="sm"
+                  aria-pressed={on}
+                  className="h-6 px-2 text-[11px]"
+                  onClick={() => setForm(f => ({
+                    ...f,
+                    types: on ? f.types.filter(t => t !== type) : [...f.types, type],
+                  }))}
+                >
+                  {type}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+
         <label className="block space-y-1">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">Type line</span>
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">Subtypes</span>
           <Input
-            value={form.typeLine}
-            onChange={e => setForm(f => ({ ...f, typeLine: e.target.value }))}
-            placeholder="Creature — Treefolk"
+            value={form.subtypes}
+            onChange={e => setForm(f => ({ ...f, subtypes: e.target.value }))}
+            placeholder="Treefolk"
             className="h-8"
           />
         </label>
@@ -167,7 +248,7 @@ export function EditCreatureModal() {
             onClick={() => apply({
               power: numberOr0(form.power),
               toughness: numberOr0(form.toughness),
-              typeLine: form.typeLine.trim() || undefined,
+              typeLine: composeTypeLine(form) || undefined,
               loseAbilities: form.loseAbilities,
             })}
           >

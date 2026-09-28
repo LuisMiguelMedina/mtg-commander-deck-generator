@@ -10,10 +10,12 @@ import { getFormatRules } from '@/lib/format/formatMode';
 import { fixManaPool } from '@/services/mana/fixManaPool';
 import { getMaxCopies } from '@/lib/utils';
 import { DeckHistory } from '@/components/deck/DeckHistory';
+import { BuyDeckButton } from '@/components/ui/BuyLinks';
 import type { ScryfallCard, DetectedCombo, UserCardList, LoadPhase, UserCombo, CardEdhrecMeta, GeneratedDeck } from '@/types';
 import {
   Copy,
   Check,
+  Share,
   Download,
   X,
   Grid3X3,
@@ -1173,13 +1175,17 @@ interface ExportModalProps {
   /** Card name → the collections holding it, across every binder. Null while loading or
    *  when no collection exists. Drives the per-collection export chips. */
   collectionEntries?: Map<string, { id: string; name: string }[]> | null;
+  /** Copies a share link for the deck. Omitted where there is nothing to link to — an unsaved
+   *  deck has no URL yet — and the option is hidden rather than disabled in that case. */
+  onCopyShareLink?: () => void | Promise<void>;
 }
 
-function ExportModal({ isOpen, onClose, generateDeckList, onExport, onSaveToList, defaultListName, collectionEntries }: ExportModalProps) {
+function ExportModal({ isOpen, onClose, generateDeckList, onExport, onSaveToList, defaultListName, collectionEntries, onCopyShareLink }: ExportModalProps) {
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showListNameInput, setShowListNameInput] = useState(false);
   const [listName, setListName] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const [exportTarget, setExportTarget] = useState<ExportTarget>({ kind: 'all' });
   const [chipMenuOpen, setChipMenuOpen] = useState(false);
@@ -1208,8 +1214,17 @@ function ExportModal({ isOpen, onClose, generateDeckList, onExport, onSaveToList
     if (!isOpen) {
       setExportTarget({ kind: 'all' });
       setChipMenuOpen(false);
+      setLinkCopied(false);
     }
   }, [isOpen]);
+
+  // The parent owns the clipboard write and raises the corner toast; this only mirrors the outcome
+  // on the button, so the dialog doesn't look inert while the confirmation sits across the screen.
+  const handleCopyLink = useCallback(async () => {
+    await onCopyShareLink?.();
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  }, [onCopyShareLink]);
 
   const deckList = useMemo(
     () => (exportTarget.kind === 'all' ? fullList : filterDeckLines(lines, exportTarget, collectionEntries ?? new Map())),
@@ -1285,7 +1300,7 @@ function ExportModal({ isOpen, onClose, generateDeckList, onExport, onSaveToList
         </div>
 
         <div className="p-4 space-y-4">
-          <div className="grid grid-cols-3 gap-2">
+          <div className={`grid gap-2 ${onCopyShareLink ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
             <Button onClick={handleCopy} variant="outline" className="flex-col h-auto py-3" disabled={!deckList.trim()}>
               {copied ? <Check className="w-5 h-5 mb-1 text-green-500" /> : <Copy className="w-5 h-5 mb-1" />}
               <span className="text-xs">{copied ? `Copied ${cardCount} cards!` : 'Copy'}</span>
@@ -1298,6 +1313,12 @@ function ExportModal({ isOpen, onClose, generateDeckList, onExport, onSaveToList
               {saved ? <Check className="w-5 h-5 mb-1 text-green-500" /> : <Bookmark className="w-5 h-5 mb-1" />}
               <span className="text-xs">{saved ? 'Saved!' : 'Save Deck'}</span>
             </Button>
+            {onCopyShareLink && (
+              <Button onClick={handleCopyLink} variant="outline" className="flex-col h-auto py-3">
+                {linkCopied ? <Check className="w-5 h-5 mb-1 text-green-500" /> : <Share className="w-5 h-5 mb-1" />}
+                <span className="text-xs">{linkCopied ? 'Link copied!' : 'Copy Link'}</span>
+              </Button>
+            )}
           </div>
 
           {showListNameInput && (
@@ -2734,6 +2755,8 @@ interface DeckDisplayProps {
   /** Slot rendered immediately before the Export button (e.g. a copy-share-link button).
    *  The owner supplies the whole control so it keeps its own copied/failed state. */
   shareAction?: React.ReactNode;
+  /** Backs the Export dialog's "Copy Link" action — same share link as the toolbar button. */
+  onCopyShareLink?: () => void | Promise<void>;
   /**
    * True when the deck being shown is a saved list, so text-panel edits persist.
    * A generated deck leaves the panel in read-only "Deck View" mode.
@@ -2807,7 +2830,7 @@ function DeckWarningBanner({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerateProgress, regenerateMessage, onRemoveCards, onAddCards, onMoveToSideboard, onMoveToMaybeboard, toolbarExtra, headerBulkAdd, shareAction, savedList, saveNudge, unsavedNotice, boardCounts, cardCountAction, deckFooter, renderHeaderActions, onChangeQuantity, onEditModeChange, sidebarHeader, sidebarLeftActions, sideboardNames, maybeboardNames, onSetSideboard, onSetMaybeboard, phasesDone, spellChromaDeckRef = 'generated', customCombos, onCreateCombo, archetypeBadges = false, children }: DeckDisplayProps) {
+export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerateProgress, regenerateMessage, onRemoveCards, onAddCards, onMoveToSideboard, onMoveToMaybeboard, toolbarExtra, headerBulkAdd, shareAction, onCopyShareLink, savedList, saveNudge, unsavedNotice, boardCounts, cardCountAction, deckFooter, renderHeaderActions, onChangeQuantity, onEditModeChange, sidebarHeader, sidebarLeftActions, sideboardNames, maybeboardNames, onSetSideboard, onSetMaybeboard, phasesDone, spellChromaDeckRef = 'generated', customCombos, onCreateCombo, archetypeBadges = false, children }: DeckDisplayProps) {
   const navigate = useNavigate();
   const { generatedDeck, commander, colorIdentity, customization, swapDeckCard, addDeckCard, setGeneratedDeck, updateCustomization, pushDeckHistory, setModifyMode } = useStore();
   const { lists: userLists, createList, updateList, deleteList } = useUserLists();
@@ -4370,6 +4393,11 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
           {!renderHeaderActions && (
             <div className="flex items-center gap-2">
               {shareAction}
+              <BuyDeckButton
+                cards={allGroupedCards}
+                isOwned={collectionNames ? (c) => isCardOwned(c.name, collectionNames) : undefined}
+                currency={customization.currency}
+              />
               <Button onClick={() => setShowExportModal(true)} className="btn-shimmer">
                 <Copy className="w-4 h-4 mr-2" />
                 Export
@@ -5070,6 +5098,14 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
               Export
             </Button>
           )}
+          {!renderHeaderActions && (
+            <BuyDeckButton
+              cards={allGroupedCards}
+              isOwned={collectionNames ? (c) => isCardOwned(c.name, collectionNames) : undefined}
+              currency={customization.currency}
+              className="order-1 xl:hidden"
+            />
+          )}
           {/* Mobile only: full-width break pushes Sort/Show/Search onto row 2 */}
           <div aria-hidden className="basis-full h-0 order-2 xl:hidden" />
           {/* Sort */}
@@ -5554,6 +5590,7 @@ export function DeckDisplay({ onRegenerate, readOnly, hideRegenerate, regenerate
         onClose={() => setShowExportModal(false)}
         generateDeckList={generateDeckList}
         collectionEntries={showIcons && showOwnedIndicators && showCollectionChecks ? binderEntriesTotal : null}
+        onCopyShareLink={onCopyShareLink}
         onExport={(format, collectionFilter) => {
           if (commander) trackEvent('deck_exported', { commanderName: commander.name, format, collectionFilter });
         }}
