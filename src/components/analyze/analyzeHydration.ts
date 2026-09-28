@@ -86,6 +86,7 @@ function detectCombosInDeck(
 export type HydrateStage = 'fetching-cards' | 'detecting-combos' | 'analyzing-roles' | 'done';
 
 export interface HydrateDeckInput {
+  generatedDeck?: GeneratedDeck;
   cardNames: string[];
   commanderName?: string;
   partnerCommanderName?: string;
