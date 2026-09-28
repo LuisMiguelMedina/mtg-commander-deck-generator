@@ -1974,7 +1974,7 @@ export function DeckOptimizer({
             )}
             {displayThemeNames && displayThemeNames.length > 0
               ? `Theme${displayThemeNames.length > 1 ? 's' : ''}: ${displayThemeNames.join(', ')}`
-              : customization.formatMode === 'brawl100' ? '' : customization.formatMode === 'brawl100' ? '' : 'No themes selected'}
+              : (customization.formatMode as string) === 'brawl100' ? '' : (customization.formatMode as string) === 'brawl100' ? '' : 'No themes selected'}
           </button>
         </PopoverTrigger>
         <PopoverContent side="bottom" align="end" className="w-80 p-0">
@@ -2206,7 +2206,7 @@ export function DeckOptimizer({
             curvePhases={analysis.curvePhases}
             themeCoverage={dashboardThemeCoverage}
             baseSwaps={baseSwaps}
-            needsTheme={customization.formatMode !== 'brawl100' && !primaryThemeSlug && !secondaryThemeSlug}
+            needsTheme={(customization.formatMode as string) !== 'brawl100' && !primaryThemeSlug && !secondaryThemeSlug}
             closestTheme={closestUndeclaredTheme}
             onApplyTheme={handleThemeSelect}
             bentoSlot={
