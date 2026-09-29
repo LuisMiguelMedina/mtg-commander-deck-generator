@@ -1829,6 +1829,7 @@ export interface AnalyzeDeckOptions {
   roleCounts: Record<string, number>;
   roleTargets: Record<string, number>;
   deckSize: number;
+  formatMode?: string;
   cardInclusionMap?: Record<string, number>;
   colorIdentity?: string[];
   overridePacing?: Pacing;
@@ -2752,6 +2753,7 @@ export function analyzeDeck(opts: AnalyzeDeckOptions): DeckAnalysis {
     themeMembership,
     primaryThemeData,
     planName,
+    formatMode: opts.formatMode,
   });
   const rolesSub = computeRolesSubscore(roleBreakdowns);
   const tempoSub = computeTempoSubscore(curvePhases);

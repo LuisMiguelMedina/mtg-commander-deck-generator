@@ -24,12 +24,22 @@ export interface StrategyInputs {
   primaryThemeData?: EDHRECCommanderData | null;
   /** Display name of the detected plan, e.g. "+1/+1 Counters". */
   planName?: string | null;
+  /** Format mode to change missing theme handling (e.g. brawl). */
+  formatMode?: string;
 }
 
 export function computeStrategySubscore(inputs: StrategyInputs): SubScore {
-  const { cards, themeMembership, primaryThemeData, planName } = inputs;
+  const { cards, themeMembership, primaryThemeData, planName, formatMode } = inputs;
 
   if (!themeMembership || themeMembership.themes.length === 0) {
+    if (formatMode === 'brawl100') {
+      return {
+        value: 100, // In Brawl, we don't score strategy explicitly, just give it full marks to not penalize
+        surface: 'Brawl community favorites',
+        bandLabel: 'Standard',
+        partial: false,
+      };
+    }
     return {
       value: 0,
       surface: 'No clear plan detected — set a theme to score strategy.',

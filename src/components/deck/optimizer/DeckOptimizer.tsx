@@ -724,7 +724,7 @@ export function DeckOptimizer({
     secondaryData: import('@/types').EDHRECCommanderData,
     opts: { targets: Parameters<typeof analyzeDeck>[0]['roleTargets']; pacing?: Pacing; landTarget?: number },
   ) => {
-    const secondaryResult = analyzeDeck({
+    const secondaryResult = analyzeDeck({ formatMode: customization.formatMode as string,
       edhrecData: secondaryData, currentCards, roleCounts, roleTargets: opts.targets, deckSize,
       cardInclusionMap: buildInclusionMap(secondaryData), colorIdentity,
       overridePacing: opts.pacing, overrideLandTarget: opts.landTarget,
@@ -777,7 +777,7 @@ export function DeckOptimizer({
     };
 
     const baseInclusionMap = buildInclusionMap(baseData);
-    const baseResult = analyzeDeck({
+    const baseResult = analyzeDeck({ formatMode: customization.formatMode as string,
       edhrecData: baseData, currentCards, roleCounts, roleTargets: opts.targets, deckSize,
       cardInclusionMap: baseInclusionMap, colorIdentity,
       overridePacing: opts.pacing, overrideLandTarget: opts.landTarget,
@@ -789,7 +789,7 @@ export function DeckOptimizer({
     if (!themeData || opts.baseOnly) return baseResult;
 
     const themeInclusionMap = buildInclusionMap(themeData);
-    const themeResult = analyzeDeck({
+    const themeResult = analyzeDeck({ formatMode: customization.formatMode as string,
       edhrecData: themeData, currentCards, roleCounts, roleTargets: opts.targets, deckSize,
       cardInclusionMap: themeInclusionMap, colorIdentity,
       overridePacing: opts.pacing, overrideLandTarget: opts.landTarget,
@@ -919,7 +919,7 @@ export function DeckOptimizer({
       const effectiveInclusionMap = buildInclusionMap(edhrecData);
 
       const storedDeck = useStore.getState().generatedDeck;
-      const analyzeBase = (targets: Record<string, number>) => analyzeDeck({
+      const analyzeBase = (targets: Record<string, number>) => analyzeDeck({ formatMode: customization.formatMode as string,
         edhrecData,
         currentCards,
         roleCounts,
@@ -1170,7 +1170,7 @@ export function DeckOptimizer({
             ? recomputeRoleTargetsForPacing(themeTargetsRaw, baseResult.detectedPacing, userPacing)
             : themeTargetsRaw;
 
-          const themeResult = analyzeDeck({
+          const themeResult = analyzeDeck({ formatMode: customization.formatMode as string,
             edhrecData: bestThemeData,
             currentCards,
             roleCounts,
@@ -1346,7 +1346,7 @@ export function DeckOptimizer({
       themeEnhancedDataRef.current = null;
       const baseInclusionMap = buildInclusionMap(cachedBase);
       const storedDeckForBase = useStore.getState().generatedDeck;
-      const baseResult = analyzeDeck({
+      const baseResult = analyzeDeck({ formatMode: customization.formatMode as string,
         edhrecData: cachedBase, currentCards, roleCounts, roleTargets: effectiveRoleTargets, deckSize,
         cardInclusionMap: baseInclusionMap, colorIdentity,
         overridePacing: userPacing ?? undefined, overrideLandTarget: userLandTarget ?? undefined,
@@ -1374,7 +1374,7 @@ export function DeckOptimizer({
 
     // Base analysis (for staple backfill — only high-inclusion cards leak through)
     const baseInclusionMap = buildInclusionMap(cachedBase);
-    const baseResult = analyzeDeck({
+    const baseResult = analyzeDeck({ formatMode: customization.formatMode as string,
       edhrecData: cachedBase, currentCards, roleCounts, roleTargets: effectiveRoleTargets, deckSize,
       cardInclusionMap: baseInclusionMap, colorIdentity,
       overridePacing: userPacing ?? undefined, overrideLandTarget: userLandTarget ?? undefined,
@@ -1402,7 +1402,7 @@ export function DeckOptimizer({
       const themeMembershipForScore = membershipFor(primaryThemeInfo, secondaryThemeInfo);
       const planNameForScore = primaryThemeInfo?.name ?? null;
 
-      const primaryResult = analyzeDeck({
+      const primaryResult = analyzeDeck({ formatMode: customization.formatMode as string,
         edhrecData: primaryData, currentCards, roleCounts, roleTargets: effectiveRoleTargets, deckSize,
         cardInclusionMap: primaryIncMap, colorIdentity,
         overridePacing: userPacing ?? undefined, overrideLandTarget: userLandTarget ?? undefined,
@@ -2206,7 +2206,12 @@ export function DeckOptimizer({
             curvePhases={analysis.curvePhases}
             themeCoverage={dashboardThemeCoverage}
             baseSwaps={baseSwaps}
-            needsTheme={(customization.formatMode as string) !== 'brawl100' && !primaryThemeSlug && !secondaryThemeSlug}
+            needsTheme={
+              (customization.formatMode as string) !== 'brawl100' && 
+              !primaryThemeSlug && 
+              !secondaryThemeSlug && 
+              (cachedEdhrecDataRef.current?.themes?.length ?? 0) > 0
+            }
             closestTheme={closestUndeclaredTheme}
             onApplyTheme={handleThemeSelect}
             bentoSlot={
