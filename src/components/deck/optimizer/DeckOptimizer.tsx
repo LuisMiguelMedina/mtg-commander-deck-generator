@@ -1955,7 +1955,7 @@ export function DeckOptimizer({
   // Dashboard Render
   // ═════════════════════════════════════════════════════════════════════
   const themePacingStrip = (
-    themeDetection && analysis ? (
+    analysis ? (
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -1974,7 +1974,7 @@ export function DeckOptimizer({
             )}
             {displayThemeNames && displayThemeNames.length > 0
               ? `Theme${displayThemeNames.length > 1 ? 's' : ''}: ${displayThemeNames.join(', ')}`
-              : (customization.formatMode as string) === 'brawl100' ? '' : (customization.formatMode as string) === 'brawl100' ? '' : 'No themes selected'}
+              : (customization.formatMode as string) === 'brawl100' ? '' : 'No themes selected'}
           </button>
         </PopoverTrigger>
         <PopoverContent side="bottom" align="end" className="w-80 p-0">
@@ -2010,7 +2010,7 @@ export function DeckOptimizer({
         )}
         {displayThemeNames && displayThemeNames.length > 0
           ? `Theme${displayThemeNames.length > 1 ? 's' : ''}: ${displayThemeNames.join(', ')}`
-          : 'No themes selected'}
+          : (customization.formatMode as string) === 'brawl100' ? '' : 'No themes selected'}
       </span>
     )
   );
@@ -2176,7 +2176,7 @@ export function DeckOptimizer({
               deckTarget: deckSize,
             })}
             adjustContent={
-              themeDetection && cachedEdhrecDataRef.current?.themes ? (
+              analysis ? (
                 <AdjustPopoverContent
                   analysis={analysis}
                   detection={themeDetection}

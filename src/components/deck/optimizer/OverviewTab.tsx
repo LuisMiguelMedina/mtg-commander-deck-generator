@@ -551,7 +551,7 @@ export function AdjustPopoverContent({
   onPacingChange,
 }: {
   analysis: DeckAnalysis;
-  detection: DetectedThemeResult;
+  detection?: DetectedThemeResult | null;
   allThemes: EDHRECTheme[];
   primaryThemeSlug?: string | null;
   secondaryThemeSlug?: string | null;
@@ -569,10 +569,12 @@ export function AdjustPopoverContent({
 }) {
   const [showAllThemes, setShowAllThemes] = useState(false);
   const chipThemes = useMemo(() => {
-    const evaluatedSlugs = new Set(detection.evaluatedThemes.map(t => t.theme.slug));
+    const evaluatedSlugs = new Set(detection?.evaluatedThemes.map(t => t.theme.slug) || []);
     const chips: Array<{ name: string; slug: string; score?: number }> = [];
-    for (const et of detection.evaluatedThemes) {
-      chips.push({ name: et.theme.name, slug: et.theme.slug, score: et.score });
+    if (detection) {
+      for (const et of detection.evaluatedThemes) {
+        chips.push({ name: et.theme.name, slug: et.theme.slug, score: et.score });
+      }
     }
     for (const theme of allThemes) {
       if (evaluatedSlugs.has(theme.slug)) continue;
