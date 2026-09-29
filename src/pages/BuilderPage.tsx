@@ -1188,7 +1188,7 @@ export function BuilderPage() {
                   <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
                     2
                   </div>
-                  Archetype
+                  {customization.formatMode === 'brawl100' ? 'Most Used Cards' : 'Archetype'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex-1 flex flex-col">

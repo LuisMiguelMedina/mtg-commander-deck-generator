@@ -186,7 +186,7 @@ export function ArchetypeDisplay({}: ArchetypeDisplayProps) {
             </div>
           )}
 
-          {!showOtherDropdown && (
+          {!showOtherDropdown && !isBrawl && (
             <p className="text-xs text-muted-foreground mt-2">
               {selectedThemes.some(t => t.isSelected)
                 ? `Building with: ${selectedThemes.filter(t => t.isSelected).map(t => t.name).join(', ')} · Unselect all for top cards`
