@@ -20,8 +20,9 @@ import {
 import { loadTaggerData } from '@/services/tagger/client';
 import { analyzeDeck, getDeckSummaryData, computeOptimizeSwaps, type DeckAnalysis, type RecommendedCard, type CurvePhase, type OptimizeSwaps } from '@/services/deckBuilder/deckAnalyzer';
 import { recomputeRoleTargetsForPacing, getDynamicRoleTargets, STAPLE_BACKFILL_INCLUSION } from '@/services/deckBuilder/roleTargets';
-import { getCardByName, getCardsByNames, getCardPrice, WUBRG } from '@/services/scryfall/client';
+import { getCardByName, getCardsByNames, getCardPrice, WUBRG, getArenaLegalNames } from '@/services/scryfall/client';
 import { detectDeckThemes } from '@/services/deckBuilder/detectDeckThemes';
+import { usesArenaCardPool } from '@/lib/format/formatMode';
 import { CardPreviewModal } from '@/components/ui/CardPreviewModal';
 import { type CardAction } from '@/components/deck/DeckDisplay';
 import { useStore } from '@/store';
@@ -56,6 +57,25 @@ import { NewCardsTab } from './NewCardsTab';
 // ═══════════════════════════════════════════════════════════════════════
 // Main Component
 // ═══════════════════════════════════════════════════════════════════════
+async function filterEdhrecDataForArena(edhrecData: import('@/types').EDHRECCommanderData) {
+  if (!edhrecData.cardlists) return;
+  const allNames = new Set<string>();
+  for (const list of Object.values(edhrecData.cardlists)) {
+    if (Array.isArray(list)) {
+      for (const c of list) allNames.add(c.name);
+    }
+  }
+  if (allNames.size > 0) {
+    const legalNames = await getArenaLegalNames(Array.from(allNames));
+    for (const key of Object.keys(edhrecData.cardlists)) {
+      const typedKey = key as keyof typeof edhrecData.cardlists;
+      if (Array.isArray(edhrecData.cardlists[typedKey])) {
+        edhrecData.cardlists[typedKey] = (edhrecData.cardlists[typedKey] as any[]).filter(c => legalNames.has(c.name)) as any;
+      }
+    }
+  }
+}
+
 export function DeckOptimizer({
   commanderName,
   partnerCommanderName,
@@ -425,6 +445,9 @@ export function DeckOptimizer({
         } catch {
           data = await fromArchetypePage();
         }
+      }
+      if (usesArenaCardPool(customization.formatMode as string, customization.arenaOnly)) {
+        await filterEdhrecDataForArena(data);
       }
       themeDataCacheRef.current.set(slug, data);
     }
@@ -914,6 +937,11 @@ export function DeckOptimizer({
             console.warn('[DeckOptimizer] Brawl fallback failed', e);
           }
         }
+
+      if (usesArenaCardPool(customization.formatMode as string, customization.arenaOnly)) {
+        await filterEdhrecDataForArena(edhrecData);
+      }
+
       cachedEdhrecDataRef.current = edhrecData;
 
       const effectiveInclusionMap = buildInclusionMap(edhrecData);
