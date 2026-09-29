@@ -2,7 +2,7 @@ import type { ScryfallCard, EDHRECCommanderData, EDHRECCard, DetectedCombo, Plan
 import { hasClassifierThemeEvidence, type ThemeMembership } from '@/components/analyze/themeMembership';
 import { getCardRole, cardMatchesRole, getAllCardRoles, hasTag, getCardSubtype, getProtectionSubtype, isUtilityLand, isTapland, type RoleKey } from '@/services/tagger/client';
 import { getFrontFaceTypeLine, isMdfcLand, isChannelLand, getCachedCard, getCardImageUrl, CHANNEL_LANDS } from '@/services/scryfall/client';
-import { calculateCurvePercentages } from './curveUtils';
+import { calculateCurveTargets, calculateTypeTargets } from './curveUtils';
 import { detectPacing, type Pacing } from './themeDetector';
 import { PACING_CURVE_MULTIPLIERS, ROLE_LABELS } from './roleTargets';
 import {
@@ -1887,17 +1887,22 @@ export function analyzeDeck(opts: AnalyzeDeckOptions): DeckAnalysis {
     currentCurve[cmc] = (currentCurve[cmc] || 0) + 1;
   }
 
-  // Target curve from EDHREC
-  const edhrecCurvePercentages = calculateCurvePercentages(edhrecData.stats.manaCurve);
+  // Pre-detect pacing so we can shift the baseline targets
+  const preliminaryCurve: CurveSlot[] = Object.entries(currentCurve).map(([cmc, current]) => ({
+    cmc: Number(cmc), current, target: 0, delta: 0
+  }));
+  const initialPacing = opts.overridePacing ?? detectPacing(currentCards, preliminaryCurve).pacing;
+
+  // Target curve from EDHREC (or fallback)
+  const curveTargets = calculateCurveTargets(edhrecData.stats.manaCurve || {}, totalNonLand, initialPacing);
   const allCmcKeys = new Set([
     ...Object.keys(currentCurve).map(Number),
-    ...Object.keys(edhrecCurvePercentages).map(Number),
+    ...Object.keys(curveTargets).map(Number),
   ]);
 
   const curveAnalysis: CurveSlot[] = [...allCmcKeys].sort((a, b) => a - b).map(cmc => {
     const current = currentCurve[cmc] || 0;
-    const targetPct = edhrecCurvePercentages[cmc] || 0;
-    const target = Math.round((targetPct / 100) * totalNonLand);
+    const target = curveTargets[cmc] || 0;
     return { cmc, current, target, delta: current - target };
   });
 
@@ -2035,17 +2040,11 @@ export function analyzeDeck(opts: AnalyzeDeckOptions): DeckAnalysis {
     else if (tl.includes('battle')) currentTypes['battle'] = (currentTypes['battle'] || 0) + 1;
   }
 
-  const edhrecTotalNonLand = Object.entries(edhrecData.stats.typeDistribution)
-    .filter(([k]) => k !== 'land')
-    .reduce((sum, [, v]) => sum + v, 0);
-
+  const typeTargets = calculateTypeTargets(edhrecData.stats, totalNonLand);
   const typeAnalysis: TypeSlot[] = ['creature', 'instant', 'sorcery', 'artifact', 'enchantment', 'planeswalker']
     .map(type => {
       const current = currentTypes[type] || 0;
-      const edhrecPct = edhrecTotalNonLand > 0
-        ? (edhrecData.stats.typeDistribution[type as keyof typeof edhrecData.stats.typeDistribution] || 0) / edhrecTotalNonLand
-        : 0;
-      const target = Math.round(edhrecPct * totalNonLand);
+      const target = typeTargets[type] || 0;
       return { type, current, target, delta: current - target };
     })
     .filter(t => t.target > 0 || t.current > 0);
